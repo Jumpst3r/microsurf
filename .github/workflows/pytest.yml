@@ -15,6 +15,7 @@ jobs:
           python-version: "3.9"
       - name: Install virtual env
         run: |
+          pip3 install --upgrade pip3
           pip3 install virtualenv 
           virtualenv env
           pip3 install -r requirements.txt
