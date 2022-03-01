@@ -1,6 +1,6 @@
 import logging
 
-LOGGING_LEVEL = logging.INFO
+LOGGING_LEVEL = logging.DEBUG
 
 from rich.logging import RichHandler
 from rich.console import Console

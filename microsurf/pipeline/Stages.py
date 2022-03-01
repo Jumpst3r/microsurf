@@ -12,7 +12,7 @@ from capstone.arm_const import *
 from capstone.x86_const import *
 from qiling import Qiling
 from qiling.const import *
-from utils.logger import getConsole, getLogger
+from utils.logger import getConsole, getLogger, LOGGING_LEVEL, logging
 
 from .tracetools.Trace import MemTrace, MemTraceCollection
 
@@ -120,7 +120,6 @@ class MemTracer(Stage):
                         #console.print(st, end="\r", overflow='ellipsis')
                         self.bl.asm[hex(address)] = i.mnemonic + " " + i.op_str
                         self.currenttrace.add(address, memaddr)
-        
     
 
     def __str__(self) -> str:
@@ -183,7 +182,7 @@ class DistributionAnalyzer(Stage):
                 continue
             _,p_value = stats.mannwhitneyu(addrSetFixed, addrSetRnd)
             
-            if log.level == 'DEBUG':
+            if LOGGING_LEVEL == logging.DEBUG:
                 fig, ax = plt.subplots(1, 1)
                 fig.suptitle(f'IP={hex(leakAddr)} ({self.asm[hex(leakAddr)]}) MWU p={p_value:e}')
                 sns.distplot(addrSetFixed, ax=ax, hist=False, kde=True, 
@@ -198,7 +197,7 @@ class DistributionAnalyzer(Stage):
                     kde_kws={'linewidth': 1},
                     label="Random secret input"
                     )
-                plt.show()
+                plt.savefig(f'{hex(leakAddr)}.png')
           
             if p_value < 0.01:
                 results.append(leakAddr)
