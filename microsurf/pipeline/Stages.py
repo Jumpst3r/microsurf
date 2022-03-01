@@ -7,10 +7,10 @@ import magic
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 import seaborn as sns
-from capstone import *
+from capstone import Cs, CS_ARCH_ARM, CS_ARCH_X86, CS_MODE_ARM, CS_MODE_32, CS_MODE_64
 from capstone.arm_const import *
 from capstone.x86_const import *
-from qiling import *
+from qiling import Qiling
 from qiling.const import *
 from utils.logger import getConsole, getLogger
 
@@ -110,8 +110,8 @@ class MemTracer(Stage):
                     if i.operands[1].type in [ARM_OP_MEM, X86_OP_MEM]:
                         memop_src = i.operands[1].mem
                         memaddr = hex(
-                            ql.reg.read(memop_src.base)
-                            + ql.reg.read(memop_src.index) * memop_src.scale
+                            ql.arch.regs.read(memop_src.base)
+                            + ql.arch.regs.read(memop_src.index) * memop_src.scale
                             + memop_src.disp
                         )
                         st = f"-> tracing \t {i.mnemonic} \t [{memaddr}]".ljust(
