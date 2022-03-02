@@ -1,3 +1,4 @@
+from collections import defaultdict
 import os
 import tempfile
 from abc import abstractmethod
@@ -19,18 +20,22 @@ from .tracetools.Trace import MemTrace, MemTraceCollection
 console = getConsole()
 log = getLogger()
 
+
 class Stage:
     @abstractmethod
-    def exec(*args,**kwargs):
+    def exec(*args, **kwargs):
         pass
+
     @abstractmethod
-    def finalize(*args,**kwargs):
+    def finalize(*args, **kwargs):
         pass
+
 
 class BinaryLoader(Stage):
     def __init__(self, path: str, args: list, dryRunOnly=False) -> None:
         self.binPath = Path(path)
         self.asm = {}
+        self.mem_ip_map = defaultdict(set)
         self.moduleroot = Path(__file__).parent.parent.parent
         self.dryRunOnly = dryRunOnly
         if not os.path.exists(self.binPath):
@@ -62,12 +67,16 @@ class BinaryLoader(Stage):
             log.error("Target architecture not implemented")
             exit(-1)
         if "dynamic" in fileinfo:
-            log.warn(f"Detected dynamically linked binary, ensure that the appropriate shared objects are available in {self.rootfs}")
+            log.warn(
+                f"Detected dynamically linked binary, ensure that the appropriate shared objects are available in {self.rootfs}"
+            )
         else:
             self.rootfs = tempfile.mkdtemp()
             log.info(f"detected static binary, jailing to {self.rootfs}")
         try:
-            self.QLEngine = Qiling([str(self.binPath), *args], str(self.rootfs), console=False, verbose=-1)
+            self.QLEngine = Qiling(
+                [str(self.binPath), *args], str(self.rootfs), console=False, verbose=-1
+            )
             self.QLEngine.add_fs_mapper("/dev/urandom", "/dev/urandom")
 
         except Exception as e:
@@ -85,128 +94,192 @@ class BinaryLoader(Stage):
         log.info(f"Emulating {self.QLEngine._argv} (dry run)")
         self.QLEngine.run()
         self.refreshQLEngine([0])
-        if self.dryRunOnly: return 0
+        if self.dryRunOnly:
+            return 0
 
-    def refreshQLEngine(self, args)-> Qiling:
-        self.QLEngine = Qiling([str(self.binPath), *[str(a) for a in args]], str(self.rootfs), console=False, verbose=-1)
+    def refreshQLEngine(self, args) -> Qiling:
+        self.QLEngine = Qiling(
+            [str(self.binPath), *[str(a) for a in args]],
+            str(self.rootfs),
+            console=False,
+            verbose=-1,
+        )
         self.QLEngine.add_fs_mapper("/dev/urandom", "/dev/urandom")
 
-class MemTracer(Stage):
-    def __init__(self, binaryLoader: BinaryLoader, coarse=True, possibleLeaks=None) -> None:
+
+class FindMemOps(Stage):
+    """
+    Hooks all code and records any oerands which likely perform memory accesses along with a computation of the target memory address
+    Will likely return false positives (lea eax, [..]) but the target addresses are then watched for memory accesses in phase II
+    (Class MemWatcher) and these false positives will be filtered.
+    """
+
+    def __init__(self, binaryLoader: BinaryLoader) -> None:
         self.traces = []
         self.bl = binaryLoader
         self.md = binaryLoader.md
-        self.possibleLeaks = possibleLeaks
-        if not coarse:
-            self.stageName = "LeakConfirm"
-        else:
-            self.stageName = "LeakDetection"
 
-    def _trace_mem_op(self, ql: Qiling, address, size, user_data=None):
-        if (user_data != None and user_data == address) or user_data == None:
-            buf = ql.mem.read(address, size)
-            for i in self.md.disasm(buf, address):
-                if len(i.operands) == 2:
-                    if i.operands[1].type in [ARM_OP_MEM, X86_OP_MEM]:
-                        memop_src = i.operands[1].mem
-                        memaddr = hex(
-                            ql.arch.regs.read(memop_src.base)
-                            + ql.arch.regs.read(memop_src.index) * memop_src.scale
-                            + memop_src.disp
-                        )
-                        st = f"-> tracing \t {i.mnemonic} \t [{memaddr}]".ljust(
-                            80, " "
-                        )
-                        #console.print(st, end="\r", overflow='ellipsis')
-                        self.bl.asm[hex(address)] = i.mnemonic + " " + i.op_str
-                        self.currenttrace.add(address, memaddr)
-    
-
-    def __str__(self) -> str:
-        return self.stageName
+    def _trace_mem_op(self, ql: Qiling, address, size):
+        buf = ql.mem.read(address, size)
+        for i in self.md.disasm(buf, address):
+            if len(i.operands) == 2:
+                if i.operands[1].type in [ARM_OP_MEM, X86_OP_MEM]:
+                    # We cannot directly trace memory reads for ARM
+                    # though this is not a prob since only LDR performs
+                    # a memory read !
+                    if self.md.arch == CS_ARCH_ARM and i.mnemonic != "ldr":
+                        continue
+                    memop_src = i.operands[1].mem
+                    memaddr = hex(
+                        ql.arch.regs.read(memop_src.base)
+                        + ql.arch.regs.read(memop_src.index) * memop_src.scale
+                        + memop_src.disp
+                    )
+                    self.bl.asm[hex(address)] = i.mnemonic + " " + i.op_str
+                    self.currenttrace.add(address, memaddr)
 
     def exec(self, secret):
         self.bl.refreshQLEngine([secret])
-        if self.stageName == "LeakDetection":
-            self.bl.QLEngine.hook_code(self._trace_mem_op)
-        if self.stageName == "LeakConfirm":
-            if len(self.possibleLeaks) == 0:
-                log.error(f"Stage {self.stageName} failed: No possible leaks found")
-                exit(-1)
-            for addr in self.possibleLeaks:
-                self.bl.QLEngine.hook_code(self._trace_mem_op, addr)
+        self.bl.QLEngine.hook_code(self._trace_mem_op)
         self.currenttrace = MemTrace(secret)
         self.bl.QLEngine.run()
         self.traces.append(self.currenttrace)
-    
+
     def finalize(self):
-        if self.stageName == "LeakDetection":
-            assert len(self.traces) > 0
-            self.memTraceDetectionCollection = MemTraceCollection(self.traces, self.bl, prune=True)
-            self.possibleLeaks = self.memTraceDetectionCollection.possibleLeaks
-            return self.possibleLeaks
-        if self.stageName == "LeakConfirm":
-            assert len(self.traces) > 0
-            self.memTraceDetectionCollection = MemTraceCollection(self.traces, self.bl)
-            return self.memTraceDetectionCollection
+        assert len(self.traces) > 0
+        self.memTraceDetectionCollection = MemTraceCollection(self.traces, self.bl)
+        return self.memTraceDetectionCollection
+
+
+class MemWatcher(Stage):
+    """
+    Hooks memory reads for a set of addresses returned by the FindMemOps class.
+    """
+
+    def __init__(
+        self, binaryLoader: BinaryLoader, memTraceCollection: MemTraceCollection
+    ) -> None:
+        self.traces = []
+        self.bl = binaryLoader
+        self.memTraceDetectionCollection = memTraceCollection
+        self.md = self.bl.md
+
+    def _trace_mem_read(self, ql: Qiling, access, addr, size, value):
+        if ql.arch.regs.arch_pc in self.memTraceDetectionCollection.possibleLeaks:
+            self.currenttrace.add(ql.arch.regs.arch_pc, addr)
+
+    def _trace_mem_op_fast(self, ql: Qiling, address, size):
+        # The unicorn emulation framework might not support reading the pc in a read_mem hook for ARM !
+        # https://github.com/unicorn-engine/unicorn/issues/358#issuecomment-169214744
+        # so for ARM we use a code hook similar to phase I
+        # TODO: Patch Unicorn / Qiling if time permits
+
+        # Only process potential leaks:
+        if address not in self.memTraceDetectionCollection.possibleLeaks:
+            return
+        buf = ql.mem.read(address, size)
+        for i in self.md.disasm(buf, address):
+            if len(i.operands) == 2:
+                if i.operands[1].type in [ARM_OP_MEM, X86_OP_MEM]:
+                    memop_src = i.operands[1].mem
+                    memaddr = hex(
+                        ql.arch.regs.read(memop_src.base)
+                        + ql.arch.regs.read(memop_src.index) * memop_src.scale
+                        + memop_src.disp
+                    )
+                    self.currenttrace.add(address, int(memaddr, 16))
+
+    def exec(self, secret):
+        self.bl.refreshQLEngine([secret])
+        if self.bl.md.arch != CS_ARCH_ARM:
+            # Unicorn supports reading PC in mem hook
+            self.bl.QLEngine.hook_mem_read(self._trace_mem_read)
+        else:
+            self.bl.QLEngine.hook_code(self._trace_mem_op_fast)
+        self.currenttrace = MemTrace(secret)
+        self.bl.QLEngine.run()
+        self.traces.append(self.currenttrace)
+
+    def finalize(self):
+        assert len(self.traces) > 0
+        self.memTraceDetectionCollection = MemTraceCollection(self.traces, self.bl)
+        mtc = MemTraceCollection(self.traces, self.bl)
+        return mtc
+
 
 class DistributionAnalyzer(Stage):
-    def __init__(self, fixedTraceCollection : MemTraceCollection, rndTraceCollection :MemTraceCollection, possibleLeaks, binaryLoader : BinaryLoader):
+    def __init__(
+        self,
+        fixedTraceCollection: MemTraceCollection,
+        rndTraceCollection: MemTraceCollection,
+        binaryLoader: BinaryLoader,
+    ):
         self.fixedTraceCollection = fixedTraceCollection
         self.rndTraceCollection = rndTraceCollection
-        self.possibleLeaks = possibleLeaks
         self.asm = binaryLoader.asm
+
     def analyze(self):
         results = []
-        for leakAddr in self.possibleLeaks:
+        for leakAddr in self.fixedTraceCollection.possibleLeaks:
             addrSetFixed = []
             addrSetRnd = []
             for t in self.fixedTraceCollection.traces:
                 vset = t.trace[leakAddr]
                 for v in vset:
-                    addrSetFixed.append(int(v, 16))
+                    addrSetFixed.append(v)
             for t in self.rndTraceCollection.traces:
                 vset = t.trace[leakAddr]
                 for v in vset:
-                    addrSetRnd.append(int(v, 16))
+                    addrSetRnd.append(v)
             # Due to non determinism, it is possible that addresses are not present in both sets
-            if (len(addrSetFixed) == 0 or len(addrSetRnd) == 0):
-                log.warning(f"Skipping {hex(leakAddr)}, not present in both sets")
+            if len(addrSetFixed) == 0 or len(addrSetRnd) == 0:
+                log.debug(f"Skipping {hex(leakAddr)}, not present in both sets")
                 continue
             # Skip obviously non secret dependent case:
-            if (addrSetFixed == addrSetRnd):
+            if set(addrSetFixed) == set(addrSetRnd):
                 continue
             # Skip obviously secret dependent, zero variance case:
             if len(set(addrSetFixed)) == 1:
                 results.append(leakAddr)
                 continue
-            _,p_value = stats.mannwhitneyu(addrSetFixed, addrSetRnd)
-            
+            _, p_value = stats.mannwhitneyu(addrSetFixed, addrSetRnd)
+
             if LOGGING_LEVEL == logging.DEBUG:
                 fig, ax = plt.subplots(1, 1)
-                fig.suptitle(f'IP={hex(leakAddr)} ({self.asm[hex(leakAddr)]}) MWU p={p_value:e}')
-                sns.distplot(addrSetFixed, ax=ax, hist=False, kde=True, 
-                    bins=int(180/5),
-                    hist_kws={'edgecolor':'black'},
-                    kde_kws={'linewidth': 1},
+                fig.suptitle(
+                    f"IP={hex(leakAddr)} ({self.asm[hex(leakAddr)]}) MWU p={p_value:e}"
+                )
+                sns.distplot(
+                    addrSetFixed,
+                    ax=ax,
+                    hist=False,
+                    kde=True,
+                    bins=int(180 / 5),
+                    hist_kws={"edgecolor": "black"},
+                    kde_kws={"linewidth": 1},
                     label="Fixed secret input",
-                    )
-                sns.distplot(addrSetRnd, ax=ax, hist=False, kde=True, 
-                    bins=int(180/5),
-                    hist_kws={'edgecolor':'black'},
-                    kde_kws={'linewidth': 1},
-                    label="Random secret input"
-                    )
-                plt.savefig(f'{hex(leakAddr)}.png')
-          
+                )
+                sns.distplot(
+                    addrSetRnd,
+                    ax=ax,
+                    hist=False,
+                    kde=True,
+                    bins=int(180 / 5),
+                    hist_kws={"edgecolor": "black"},
+                    kde_kws={"linewidth": 1},
+                    label="Random secret input",
+                )
+                plt.savefig(f"{hex(leakAddr)}.png")
+
             if p_value < 0.01:
                 results.append(leakAddr)
-        log.info(f"filtered {len(self.possibleLeaks) - len(results)} false positives")
+        log.info(
+            f"filtered {len(self.fixedTraceCollection.possibleLeaks) - len(results)} false positives"
+        )
         self.results = results
-            
 
     def exec(self, *args, **kwargs):
-        self.analyze() 
+        self.analyze()
 
     def finalize(self, *args, **kwargs):
         return self.results

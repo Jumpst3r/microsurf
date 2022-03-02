@@ -2,6 +2,7 @@
 
 
 # MicroSurf: An architecture independent side channel detection framework
+[![tests](https://github.com/Jumpst3r/msc-thesis-work/actions/workflows/pytest.yml/badge.svg?branch=main)](https://github.com/Jumpst3r/msc-thesis-work/actions/workflows/pytest.yml)
 
 We have a title + a silly logo now
 
