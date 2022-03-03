@@ -28,10 +28,7 @@ class PipeLineExecutor:
 
         # run with varying secrets, hooks every mem op
         for i, arg in enumerate(self.secrets):
-            with yaspin(
-                text=f"Executing Leak Detection ({i}/{len(self.secrets)})", timer=True
-            ):
-                memCheckStage_leak.exec(secret=str(arg))
+            memCheckStage_leak.exec(secret=str(arg))
 
         memTraceCollection = memCheckStage_leak.finalize()
         memCheckStage_detect1 = MemWatcher(
@@ -46,11 +43,7 @@ class PipeLineExecutor:
         # run multiple times with a fixed secret
         FIXED_ITER_CNT = 10
         for idx, i in enumerate(range(FIXED_ITER_CNT)):
-            with yaspin(
-                text=f"Executing Leak Confirm [fixed] ({idx}/{FIXED_ITER_CNT})",
-                timer=True,
-            ):
-                memCheckStage_detect1.exec(secret=str(0))
+            memCheckStage_detect1.exec(secret=str(0))
 
         fixedTraceCollection = memCheckStage_detect1.finalize()
 
@@ -58,11 +51,7 @@ class PipeLineExecutor:
         # run multiple times with random secrets
 
         for idx, i in enumerate(range(FIXED_ITER_CNT)):
-            with yaspin(
-                text=f"Executing Leak Confirm [random] ({idx}/{FIXED_ITER_CNT})",
-                timer=True,
-            ):
-                memCheckStage_detect2.exec(secret=str(random.randint(0x00, 0xFF)))
+            memCheckStage_detect2.exec(secret=str(random.randint(0x00, 0xFF)))
 
         rndTraceCollection = memCheckStage_detect2.finalize()
         distAnalyzer = DistributionAnalyzer(

@@ -31,13 +31,21 @@ def main():
         required=True,
         help="analyze for data or control flow SCs",
     )
+    parser.add_argument(
+        "--norandom",
+        action="store_true",
+        required=False,
+        help="Force deterministic execution by controlling possible sources of randomness",
+    )
     args = parser.parse_args()
 
     console.print(figlet_format("microSurf", font="slant") + "v0.0.0.0")
     console.rule(f"[b]binary target:[/b] {args.binary}")
     log.info(f"Anaylzing: {args.sc} side channels")
 
-    binLoader = BinaryLoader(path=args.binary, args=["1"], dryRunOnly=False)
+    binLoader = BinaryLoader(
+        path=args.binary, args=["1"], dryRunOnly=False, deterministic=args.norandom
+    )
 
     pipeline = PipeLineExecutor(loader=binLoader)
     pipeline.run()

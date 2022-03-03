@@ -28,5 +28,18 @@ def getLogger():
     return logging.getLogger("rich")
 
 
+def getQillingLogger():
+    l = logging.getLogger("asdf")
+    l.setLevel(logging.WARNING)
+    FORMAT = "%(message)s"
+    logging.basicConfig(
+        level="WARNING",
+        format=FORMAT,
+        datefmt="[%X]",
+    )
+
+    return l
+
+
 def getConsole():
     return Console()

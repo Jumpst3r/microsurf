@@ -13,8 +13,8 @@ from capstone.arm_const import *
 from capstone.x86_const import *
 from qiling import Qiling
 from qiling.const import *
-from utils.logger import getConsole, getLogger, LOGGING_LEVEL, logging
-
+from utils.logger import getConsole, getLogger, LOGGING_LEVEL, logging, getQillingLogger
+from utils.hijack import device_random
 from .tracetools.Trace import MemTrace, MemTraceCollection
 
 console = getConsole()
@@ -32,12 +32,18 @@ class Stage:
 
 
 class BinaryLoader(Stage):
-    def __init__(self, path: str, args: list, dryRunOnly=False) -> None:
+    def __init__(self, path: str, args: list, **kwargs) -> None:
         self.binPath = Path(path)
         self.asm = {}
         self.mem_ip_map = defaultdict(set)
         self.moduleroot = Path(__file__).parent.parent.parent
-        self.dryRunOnly = dryRunOnly
+        self.dryRunOnly = kwargs["dryRunOnly"]
+        try:
+            self.deterministic = kwargs["deterministic"]
+        except KeyError:
+            self.deterministic = False
+        if self.deterministic:
+            log.info("hooking sources of randomness")
         if not os.path.exists(self.binPath):
             log.error(f"target path {str(self.binPath)} not found")
         fileinfo = magic.from_file(path)
@@ -75,10 +81,12 @@ class BinaryLoader(Stage):
             log.info(f"detected static binary, jailing to {self.rootfs}")
         try:
             self.QLEngine = Qiling(
-                [str(self.binPath), *args], str(self.rootfs), console=False, verbose=-1
+                [str(self.binPath), *args],
+                str(self.rootfs),
+                log_override=getQillingLogger(),
+                verbose=0,
             )
-            self.QLEngine.add_fs_mapper("/dev/urandom", "/dev/urandom")
-
+            self.fixRandomness(self.deterministic)
         except Exception as e:
             log.error(f"Qilling initialization failed: {str(e)}")
             exit(-1)
@@ -89,6 +97,7 @@ class BinaryLoader(Stage):
             log.error(f"Emulation dry run failed: {str(e)}")
             exit(-1)
         self.md.detail = True
+        self.QLEngine.os.stdout
 
     def exec(self) -> None:
         log.info(f"Emulating {self.QLEngine._argv} (dry run)")
@@ -104,7 +113,17 @@ class BinaryLoader(Stage):
             console=False,
             verbose=-1,
         )
-        self.QLEngine.add_fs_mapper("/dev/urandom", "/dev/urandom")
+        self.fixRandomness(self.deterministic)
+
+    def fixRandomness(self, bool):
+        if bool:
+            self.QLEngine.add_fs_mapper("/dev/urandom", device_random)
+            self.QLEngine.add_fs_mapper("/dev/random", device_random)
+            self.QLEngine.add_fs_mapper("/dev/arandom", device_random)
+        else:
+            self.QLEngine.add_fs_mapper("/dev/urandom", "/dev/urandom")
+            self.QLEngine.add_fs_mapper("/dev/random", "/dev/random")
+            self.QLEngine.add_fs_mapper("/dev/arandom", "/dev/arandom")
 
 
 class FindMemOps(Stage):
