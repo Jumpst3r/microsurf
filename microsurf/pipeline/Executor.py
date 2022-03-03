@@ -8,7 +8,13 @@ from qiling.const import *
 from utils.logger import getConsole, getLogger
 from yaspin import yaspin
 
-from pipeline.Stages import BinaryLoader, DistributionAnalyzer, FindMemOps, MemWatcher, LeakageClassification
+from pipeline.Stages import (
+    BinaryLoader,
+    DistributionAnalyzer,
+    FindMemOps,
+    MemWatcher,
+    LeakageClassification,
+)
 
 log = getLogger()
 console = getConsole()
@@ -62,7 +68,10 @@ class PipeLineExecutor:
         for ip in possibleLeaks:
             log.info(f"[{hex(ip)}] {self.loader.asm[hex(ip)]}")
 
-        lc = LeakageClassification(rndTraceCollection, self.loader, possibleLeaks,lambda x: x)
+        lc = LeakageClassification(
+            rndTraceCollection, self.loader, possibleLeaks, lambda x: x
+        )
         lc.exec()
+
     def finalize(self):
         return self.results
