@@ -8,7 +8,7 @@ from qiling.const import *
 from utils.logger import getConsole, getLogger
 from yaspin import yaspin
 
-from pipeline.Stages import BinaryLoader, DistributionAnalyzer, FindMemOps, MemWatcher
+from pipeline.Stages import BinaryLoader, DistributionAnalyzer, FindMemOps, MemWatcher, LeakageClassification
 
 log = getLogger()
 console = getConsole()
@@ -38,7 +38,6 @@ class PipeLineExecutor:
             binaryLoader=self.loader, memTraceCollection=memTraceCollection
         )
         log.info(f"Running stage Leak Confirm")
-        log.info(f"Collecting fixed secret traces")
 
         # run multiple times with a fixed secret
         FIXED_ITER_CNT = 10
@@ -47,7 +46,6 @@ class PipeLineExecutor:
 
         fixedTraceCollection = memCheckStage_detect1.finalize()
 
-        log.info(f"Collecting variable secret traces")
         # run multiple times with random secrets
 
         for idx, i in enumerate(range(FIXED_ITER_CNT)):
@@ -57,13 +55,14 @@ class PipeLineExecutor:
         distAnalyzer = DistributionAnalyzer(
             fixedTraceCollection, rndTraceCollection, self.loader
         )
-        log.info("Filtering false positives")
         distAnalyzer.exec()
-        self.results = distAnalyzer.finalize()
-
-        log.info(f"Indentified {len(self.results)} leaks:")
-        for ip in self.results:
+        possibleLeaks = distAnalyzer.finalize()
+        self.results = possibleLeaks
+        log.info(f"Indentified {len(possibleLeaks)} leaks:")
+        for ip in possibleLeaks:
             log.info(f"[{hex(ip)}] {self.loader.asm[hex(ip)]}")
 
+        lc = LeakageClassification(rndTraceCollection, self.loader, possibleLeaks,lambda x: x)
+        lc.exec()
     def finalize(self):
         return self.results

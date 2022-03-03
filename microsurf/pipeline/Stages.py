@@ -242,6 +242,7 @@ class DistributionAnalyzer(Stage):
         for leakAddr in self.fixedTraceCollection.possibleLeaks:
             addrSetFixed = []
             addrSetRnd = []
+            # Convert traces to trace per IP/PC
             for t in self.fixedTraceCollection.traces:
                 vset = t.trace[leakAddr]
                 for v in vset:
@@ -296,6 +297,66 @@ class DistributionAnalyzer(Stage):
             f"filtered {len(self.fixedTraceCollection.possibleLeaks) - len(results)} false positives"
         )
         self.results = results
+
+    def exec(self, *args, **kwargs):
+        self.analyze()
+
+    def finalize(self, *args, **kwargs):
+        return self.results
+
+# FIXME: This clearly does not work. Investigate tommorow
+class LeakageClassification(Stage):
+    def __init__(
+        self,
+        rndTraceCollection: MemTraceCollection,
+        binaryLoader: BinaryLoader,
+        possibleLeaks,
+        leakageModelFunction
+    ):
+        self.rndTraceCollection = rndTraceCollection
+        self.possibleLeaks = possibleLeaks
+        # The leakage function can return one dimensional data (ex. hamm. dist.) or multidimensional data (bit/byte slices)
+        self.leakageModelFunction = leakageModelFunction
+        self.asm = binaryLoader.asm
+        self.results = {}
+
+    def analyze(self):
+        import numpy as np
+        from sklearn.feature_selection import mutual_info_regression
+        secrets = set()
+        # Convert traces to trace per IP/PC
+        for leakAddr in self.possibleLeaks:
+            addList = []
+            # Store the secret according to the given leakage model
+            secretList = []
+            for t in self.rndTraceCollection.traces:
+                # Only consider traces with different secrets
+                if t.secret in secrets: continue
+                secretList.append(self.leakageModelFunction(t.secret))
+                addList.append(t.trace[leakAddr])
+            # get the number of different addresses:
+            distinctAdd = set()
+            for t in addList:
+                for a in t:
+                    distinctAdd.add(a)
+            # Build matrix with entries (i,j) being with # of times that address a_i as been accessed in trace j
+            mat = np.zeros((len(distinctAdd), len(addList)) , dtype=np.int8)
+            for i,addr in enumerate(distinctAdd):
+                for j,trace in enumerate(addList):
+                    mat[i][j] = trace.count(addr)
+                
+            # Build a matrix containing the masked secret (according to the given leakage model)
+            secretMat = np.matrix(secretList)
+            log.debug(f"secretMat = {secretMat}")
+            
+            # For now, let's work with the mutual information instead of the more complex RDC
+            # We'll switch to the RDC stat. when we understand the nitty gritty math behind it.
+
+            mival = np.sum(mutual_info_regression(mat.T, secretMat.T.A1))
+
+            log.info(f"MI score for {hex(leakAddr)}: {mival}")
+           
+            self.results[hex(leakAddr)] = mival
 
     def exec(self, *args, **kwargs):
         self.analyze()
