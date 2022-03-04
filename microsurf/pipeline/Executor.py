@@ -46,7 +46,7 @@ class PipeLineExecutor:
         log.info(f"Running stage Leak Confirm")
 
         # run multiple times with a fixed secret
-        FIXED_ITER_CNT = 10
+        FIXED_ITER_CNT = 100
         for idx, i in enumerate(range(FIXED_ITER_CNT)):
             memCheckStage_detect1.exec(secret=str(0))
 

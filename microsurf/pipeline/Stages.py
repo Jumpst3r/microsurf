@@ -341,7 +341,7 @@ class LeakageClassification(Stage):
                     distinctAdd.add(a)
             distinctAdd = sorted(list(distinctAdd))
             # Build matrix with entries (i,j) being with # of times that address a_i as been accessed in trace j
-            mat = np.zeros((len(addList), len(distinctAdd)), dtype=np.int8)
+            mat = np.zeros((len(addList), 1), dtype=np.int64)
             if not self.leakageModelFunction(
                 self.rndTraceCollection.traces[0].secret
             ).shape:
@@ -353,11 +353,7 @@ class LeakageClassification(Stage):
             secretMat = np.zeros((len(addList.keys()), secretFeatureShape))
             addList = OrderedDict(sorted(addList.items(), key=lambda t: t[0]))
             for idx, k in enumerate(addList):
-                log.info(k)
-                vsorted = sorted(addList[k])
-                # log.info(f"{k}: {vsorted}")
-                for add in vsorted:
-                    mat[idx][distinctAdd.index(add)] = vsorted.count(add)
+                mat[idx] = np.array(np.mean(addList[k]))
                 secretMat[idx] = self.leakageModelFunction(k)
 
             # Build a matrix containing the masked secret (according to the given leakage model)
@@ -366,8 +362,8 @@ class LeakageClassification(Stage):
             # We'll switch to the RDC stat. when we understand the nitty gritty math behind it.
 
             mival = np.sum(mutual_info_regression(mat, secretMat))
-            #log.info(f"mat{hex(leakAddr)} = {mat}")
-            #log.info(f"secretMat = {secretMat}")
+            # log.info(f"mat{hex(leakAddr)} = {mat}")
+            # log.info(f"secretMat = {secretMat}")
             log.info(f"MI score for {hex(leakAddr)}: {mival:2f}")
 
             self.results[hex(leakAddr)] = mival
