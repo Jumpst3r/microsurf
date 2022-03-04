@@ -53,6 +53,10 @@ class MemTraceCollection:
             for k in t.trace.keys():
                 self.possibleLeaks.add(k)
 
+    def remove(self, indices):
+        for index in sorted(indices, reverse=True):
+            del self.traces[index]
+
     def jsonRep(self):
         _traceList = []
         for t in self.traces:

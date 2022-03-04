@@ -37,6 +37,7 @@ class PipeLineExecutor:
             memCheckStage_leak.exec(secret=str(arg))
 
         memTraceCollection = memCheckStage_leak.finalize()
+        oldleaks = memTraceCollection.possibleLeaks
         memCheckStage_detect1 = MemWatcher(
             binaryLoader=self.loader, memTraceCollection=memTraceCollection
         )
@@ -55,7 +56,8 @@ class PipeLineExecutor:
         # run multiple times with random secrets
 
         for idx, i in enumerate(range(FIXED_ITER_CNT)):
-            memCheckStage_detect2.exec(secret=str(random.randint(0x00, 0xFF)))
+            # memCheckStage_detect2.exec(secret=str(random.randint(0x00, 0xFF)))
+            memCheckStage_detect2.exec(secret=str(idx))
 
         rndTraceCollection = memCheckStage_detect2.finalize()
         distAnalyzer = DistributionAnalyzer(
@@ -64,6 +66,19 @@ class PipeLineExecutor:
         distAnalyzer.exec()
         possibleLeaks = distAnalyzer.finalize()
         self.results = possibleLeaks
+        for e in possibleLeaks:
+            assert e in oldleaks
+        degenerateCases = (
+            set()
+        )  # traces which, for non-deterministic reasons, do not contain meaningful info
+        for idx, t in enumerate(rndTraceCollection.traces):
+            for l in possibleLeaks:
+                if len(t.trace[l]) == 0:
+                    degenerateCases.add(idx)
+        rndTraceCollection.remove(degenerateCases)
+        for idx, t in enumerate(rndTraceCollection.traces):
+            for l in possibleLeaks:
+                assert len(t.trace[l]) > 0
         log.info(f"Indentified {len(possibleLeaks)} leaks:")
         for ip in possibleLeaks:
             log.info(f"[{hex(ip)}] {self.loader.asm[hex(ip)]}")
