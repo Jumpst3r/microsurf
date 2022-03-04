@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 import os
 import tempfile
 from abc import abstractmethod
@@ -324,40 +324,51 @@ class LeakageClassification(Stage):
     def analyze(self):
         import numpy as np
         from sklearn.feature_selection import mutual_info_regression
+        from sklearn.feature_selection import mutual_info_classif
 
         secrets = set()
         # Convert traces to trace per IP/PC
         for leakAddr in self.possibleLeaks:
-            addList = []
+            addList = {}
             # Store the secret according to the given leakage model
-            secretList = []
             for t in self.rndTraceCollection.traces:
-                # Only consider traces with different secrets
-                if t.secret in secrets:
-                    continue
-                secretList.append(self.leakageModelFunction(t.secret))
-                addList.append(t.trace[leakAddr])
+                secrets.add(t.secret)
+                addList[int(t.secret)] = t.trace[leakAddr]
             # get the number of different addresses:
             distinctAdd = set()
-            for t in addList:
+            for _, t in addList.items():
                 for a in t:
                     distinctAdd.add(a)
+            distinctAdd = sorted(list(distinctAdd))
             # Build matrix with entries (i,j) being with # of times that address a_i as been accessed in trace j
-            mat = np.zeros((len(distinctAdd), len(addList)), dtype=np.int8)
-            for i, addr in enumerate(distinctAdd):
-                for j, trace in enumerate(addList):
-                    mat[i][j] = trace.count(addr)
+            mat = np.zeros((len(addList), len(distinctAdd)), dtype=np.int8)
+            if not self.leakageModelFunction(
+                self.rndTraceCollection.traces[0].secret
+            ).shape:
+                secretFeatureShape = 1
+            else:
+                secretFeatureShape = self.leakageModelFunction(
+                    self.rndTraceCollection.traces[0].secret
+                ).shape
+            secretMat = np.zeros((len(addList.keys()), secretFeatureShape))
+            addList = OrderedDict(sorted(addList.items(), key=lambda t: t[0]))
+            for idx, k in enumerate(addList):
+                log.info(k)
+                vsorted = sorted(addList[k])
+                # log.info(f"{k}: {vsorted}")
+                for add in vsorted:
+                    mat[idx][distinctAdd.index(add)] = vsorted.count(add)
+                secretMat[idx] = self.leakageModelFunction(k)
 
             # Build a matrix containing the masked secret (according to the given leakage model)
-            secretMat = np.matrix(secretList)
-            log.debug(f"secretMat = {secretMat}")
 
             # For now, let's work with the mutual information instead of the more complex RDC
             # We'll switch to the RDC stat. when we understand the nitty gritty math behind it.
 
-            mival = np.sum(mutual_info_regression(mat.T, secretMat.T.A1))
-
-            log.info(f"MI score for {hex(leakAddr)}: {mival}")
+            mival = np.sum(mutual_info_regression(mat, secretMat))
+            #log.info(f"mat{hex(leakAddr)} = {mat}")
+            #log.info(f"secretMat = {secretMat}")
+            log.info(f"MI score for {hex(leakAddr)}: {mival:2f}")
 
             self.results[hex(leakAddr)] = mival
 

@@ -6,7 +6,7 @@ from capstone.x86_const import *
 from qiling import *
 from qiling.const import *
 from utils.logger import getConsole, getLogger
-from yaspin import yaspin
+from pipeline.LeakageModels import identity, hamming
 
 from pipeline.Stages import (
     BinaryLoader,
@@ -69,7 +69,7 @@ class PipeLineExecutor:
             log.info(f"[{hex(ip)}] {self.loader.asm[hex(ip)]}")
 
         lc = LeakageClassification(
-            rndTraceCollection, self.loader, possibleLeaks, lambda x: x
+            rndTraceCollection, self.loader, possibleLeaks, identity
         )
         lc.exec()
 
