@@ -356,8 +356,6 @@ class LeakageClassification(Stage):
                 mat[idx] = np.mean(addList[k])
                 secretMat[idx] = self.leakageModelFunction(k)
 
-            # FIXME this isn't a cache issue - something is majorly wrong.
-            mat[np.isnan(mat)] = 0
             # Build a matrix containing the masked secret (according to the given leakage model)
 
             # For now, let's work with the mutual information instead of the more complex RDC
