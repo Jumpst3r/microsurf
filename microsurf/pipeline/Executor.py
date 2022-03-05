@@ -56,8 +56,8 @@ class PipeLineExecutor:
         # run multiple times with random secrets
 
         for idx, i in enumerate(range(FIXED_ITER_CNT)):
-            # memCheckStage_detect2.exec(secret=str(random.randint(0x00, 0xFF)))
-            memCheckStage_detect2.exec(secret=str(idx))
+            memCheckStage_detect2.exec(secret=str(random.randint(0x00, 0xFF)))
+            # memCheckStage_detect2.exec(secret=str(idx))
 
         rndTraceCollection = memCheckStage_detect2.finalize()
         distAnalyzer = DistributionAnalyzer(

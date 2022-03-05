@@ -1,6 +1,6 @@
 """
-Tests if address based side channel detection works on the binary sample `secret1.bin`
-For more information about the given binary, refer to binaries/secret1/readme.md
+Tests if address based side channel detection works on the binary sample `nosecret.bin`
+For more information about the given binary, refer to binaries/nosecret/readme.md
 @author nicolas
 """
 
@@ -13,7 +13,7 @@ import json
 
 def test_analyze_arm():
     binPath = PurePath(
-        Path(__file__).parent.parent.parent, Path("binaries/secret1/secret-arm.bin")
+        Path(__file__).parent.parent.parent, Path("binaries/nosecret/nosecret-arm.bin")
     )
     armTargetAddr = []
     armTargetPath = PurePath(binPath.parent, Path("secret-dep.json"))
@@ -25,13 +25,12 @@ def test_analyze_arm():
     pipeline.run()
     res = pipeline.finalize()
     armTargetAddr = [int(a, 16) for a in armTargetAddr]
-    for a in armTargetAddr:
-        assert a in res
+    assert res == armTargetAddr
 
 
 def test_analyze_ia32():
     binPath = PurePath(
-        Path(__file__).parent.parent.parent, Path("binaries/secret1/secret-x86-32.bin")
+        Path(__file__).parent.parent.parent, Path("binaries/nosecret/nosecret-x86-32.bin")
     )
     armTargetAddr = []
     armTargetPath = PurePath(binPath.parent, Path("secret-dep.json"))
@@ -43,13 +42,12 @@ def test_analyze_ia32():
     pipeline.run()
     res = pipeline.finalize()
     armTargetAddr = [int(a, 16) for a in armTargetAddr]
-    for a in armTargetAddr:
-        assert a in res
+    assert res == armTargetAddr
 
 
 def test_analyze_x86_64():
     binPath = PurePath(
-        Path(__file__).parent.parent.parent, Path("binaries/secret1/secret-x86-64.bin")
+        Path(__file__).parent.parent.parent, Path("binaries/nosecret/nosecret-x86-64.bin")
     )
     armTargetAddr = []
     armTargetPath = PurePath(binPath.parent, Path("secret-dep.json"))
@@ -61,5 +59,4 @@ def test_analyze_x86_64():
     pipeline.run()
     res = pipeline.finalize()
     armTargetAddr = [int(a, 16) for a in armTargetAddr]
-    for a in armTargetAddr:
-        assert a in res
+    assert res == armTargetAddr

@@ -1,6 +1,6 @@
 """
-Tests if address based side channel detection works on the binary sample `secret1.bin`
-For more information about the given binary, refer to binaries/secret1/readme.md
+Tests if address based side channel detection works on the binary sample `secret0.bin`
+For more information about the given binary, refer to binaries/secret0/readme.md
 @author nicolas
 """
 
@@ -13,7 +13,7 @@ import json
 
 def test_analyze_arm():
     binPath = PurePath(
-        Path(__file__).parent.parent.parent, Path("binaries/secret1/secret-arm.bin")
+        Path(__file__).parent.parent.parent, Path("binaries/secret0/secret-arm.bin")
     )
     armTargetAddr = []
     armTargetPath = PurePath(binPath.parent, Path("secret-dep.json"))
@@ -31,7 +31,7 @@ def test_analyze_arm():
 
 def test_analyze_ia32():
     binPath = PurePath(
-        Path(__file__).parent.parent.parent, Path("binaries/secret1/secret-x86-32.bin")
+        Path(__file__).parent.parent.parent, Path("binaries/secret0/secret-x86-32.bin")
     )
     armTargetAddr = []
     armTargetPath = PurePath(binPath.parent, Path("secret-dep.json"))
@@ -49,7 +49,7 @@ def test_analyze_ia32():
 
 def test_analyze_x86_64():
     binPath = PurePath(
-        Path(__file__).parent.parent.parent, Path("binaries/secret1/secret-x86-64.bin")
+        Path(__file__).parent.parent.parent, Path("binaries/secret0/secret-x86-64.bin")
     )
     armTargetAddr = []
     armTargetPath = PurePath(binPath.parent, Path("secret-dep.json"))

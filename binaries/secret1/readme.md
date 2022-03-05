@@ -23,3 +23,5 @@ val2 = M[branch];
 The following adresses are secret dependent (`secret-x86-32.bin`):
 
 - `0x804985b`: `mov eax, dword ptr [eax]` in `main()` (`val = T[secret + (branch % 20)];`)
+
+Note that it seems that `____strtol_l_internal` (called by `atoi`) is also subject to some leaks, though these adresses are not included in the json file.

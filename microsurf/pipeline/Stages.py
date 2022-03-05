@@ -1,3 +1,4 @@
+from argparse import ArgumentError
 from collections import defaultdict, OrderedDict
 import os
 import tempfile
@@ -16,6 +17,7 @@ from qiling.const import *
 from utils.logger import getConsole, getLogger, LOGGING_LEVEL, logging, getQillingLogger
 from utils.hijack import device_random
 from .tracetools.Trace import MemTrace, MemTraceCollection
+import re
 
 console = getConsole()
 log = getLogger()
@@ -137,6 +139,7 @@ class FindMemOps(Stage):
         self.traces = []
         self.bl = binaryLoader
         self.md = binaryLoader.md
+        self.secret = None
 
     def _trace_mem_op(self, ql: Qiling, address, size):
         buf = ql.mem.read(address, size)
@@ -144,22 +147,37 @@ class FindMemOps(Stage):
             if len(i.operands) == 2:
                 if i.operands[1].type in [ARM_OP_MEM, X86_OP_MEM]:
                     # We cannot directly trace memory reads for ARM
-                    # though this is not a prob since only LDR performs
+                    # though this is not a prob since only LDR* ops performs
                     # a memory read !
-                    if self.md.arch == CS_ARCH_ARM and i.mnemonic != "ldr":
+                    if self.md.arch == CS_ARCH_ARM and not re.compile("^ldr.*").match(
+                        i.mnemonic
+                    ):
                         continue
                     memop_src = i.operands[1].mem
-                    memaddr = hex(
-                        ql.arch.regs.read(memop_src.base)
-                        + ql.arch.regs.read(memop_src.index) * memop_src.scale
-                        + memop_src.disp
-                    )
+                    try:
+                        memaddr = hex(
+                            ql.arch.regs.read(i.reg_name(memop_src.base))
+                            + (
+                                0
+                                if not memop_src.index
+                                else ql.arch.regs.read(i.reg_name(memop_src.index))
+                            )
+                            * memop_src.scale
+                            + memop_src.disp
+                        )
+                    except Exception as e:
+                        # The above computation will fail if the value between [.] is not a real
+                        # memory address. In that case we just ignore it anyways.
+                        continue
                     self.bl.asm[hex(address)] = i.mnemonic + " " + i.op_str
+                    if self.bl.asm[hex(address)] == "movzx  eax, BYTE PTR [rax + rdx]":
+                        log.info(f"{self.secret}, {memaddr}")
                     self.currenttrace.add(address, memaddr)
 
     def exec(self, secret):
         self.bl.refreshQLEngine([secret])
         self.bl.QLEngine.hook_code(self._trace_mem_op)
+        self.secret = secret
         self.currenttrace = MemTrace(secret)
         self.bl.QLEngine.run()
         self.traces.append(self.currenttrace)
