@@ -364,8 +364,10 @@ class LeakageClassification(Stage):
             mival = np.sum(mutual_info_regression(mat, secretMat, random_state=42))
             # log.info(f"mat{hex(leakAddr)} = {mat}")
             # log.info(f"secretMat = {secretMat}")
-            log.info(f"MI score for {hex(leakAddr)}: {mival:.2f}")
-
+            log.debug(f"MI score for {hex(leakAddr)}: {mival:.2f}")
+            if mival < 0.1:
+                # filter bad scores
+                continue
             self.results[hex(leakAddr)] = mival
 
     def exec(self, *args, **kwargs):

@@ -79,14 +79,18 @@ class PipeLineExecutor:
         for idx, t in enumerate(rndTraceCollection.traces):
             for l in possibleLeaks:
                 assert len(t.trace[l]) > 0
-        log.info(f"Indentified {len(possibleLeaks)} leaks:")
-        for ip in possibleLeaks:
-            log.info(f"[{hex(ip)}] {self.loader.asm[hex(ip)]}")
 
         lc = LeakageClassification(
             rndTraceCollection, self.loader, possibleLeaks, identity
         )
         lc.exec()
+        res = lc.finalize()
+
+        log.info(f"Ignoring {len(possibleLeaks) - len(res)} leaks with low score")
+        log.info(f"Indentified {len(res)} leak with good MI score:")
+        for ip in res.keys():
+            log.info(f"[{ip}] [MI score: {res[ip]:.2f}] {self.loader.asm[ip]} ")
+        self.results = [int(k, 16) for k in res.keys()]
 
     def finalize(self):
         return self.results
