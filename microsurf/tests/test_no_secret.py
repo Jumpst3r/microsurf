@@ -30,7 +30,8 @@ def test_analyze_arm():
 
 def test_analyze_ia32():
     binPath = PurePath(
-        Path(__file__).parent.parent.parent, Path("binaries/nosecret/nosecret-x86-32.bin")
+        Path(__file__).parent.parent.parent,
+        Path("binaries/nosecret/nosecret-x86-32.bin"),
     )
     armTargetAddr = []
     armTargetPath = PurePath(binPath.parent, Path("secret-dep.json"))
@@ -47,7 +48,8 @@ def test_analyze_ia32():
 
 def test_analyze_x86_64():
     binPath = PurePath(
-        Path(__file__).parent.parent.parent, Path("binaries/nosecret/nosecret-x86-64.bin")
+        Path(__file__).parent.parent.parent,
+        Path("binaries/nosecret/nosecret-x86-64.bin"),
     )
     armTargetAddr = []
     armTargetPath = PurePath(binPath.parent, Path("secret-dep.json"))

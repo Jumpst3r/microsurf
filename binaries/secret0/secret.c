@@ -9,5 +9,6 @@ int main(int argc, char *argv[]) {
     int *T= malloc(2000 * sizeof(int));
     int val = T[secret];
     //printf("%c\n", val);
+    free(T);
     return (int) val;
 }

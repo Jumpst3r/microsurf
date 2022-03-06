@@ -38,6 +38,6 @@ int main(int argc, char *argv[]) {
     if (res < 5){
         printf("FAIL\n");
     }
-   
+    close(randomData);
     return 0;
 }

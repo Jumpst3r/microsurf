@@ -104,6 +104,7 @@ class BinaryLoader(Stage):
     def exec(self) -> None:
         log.info(f"Emulating {self.QLEngine._argv} (dry run)")
         self.QLEngine.run()
+        self.QLEngine.stop()
         self.refreshQLEngine([0])
         if self.dryRunOnly:
             return 0
@@ -180,6 +181,7 @@ class FindMemOps(Stage):
         self.secret = secret
         self.currenttrace = MemTrace(secret)
         self.bl.QLEngine.run()
+        self.bl.QLEngine.stop()
         self.traces.append(self.currenttrace)
 
     def finalize(self):
@@ -236,6 +238,7 @@ class MemWatcher(Stage):
         self.currenttrace = MemTrace(secret)
         self.bl.QLEngine.run()
         self.traces.append(self.currenttrace)
+        self.bl.QLEngine.stop()
 
     def finalize(self):
         assert len(self.traces) > 0
@@ -383,7 +386,7 @@ class LeakageClassification(Stage):
             # log.info(f"mat{hex(leakAddr)} = {mat}")
             # log.info(f"secretMat = {secretMat}")
             log.debug(f"MI score for {hex(leakAddr)}: {mival:.2f}")
-            if mival < 0.1:
+            if mival < 0.2:
                 # filter bad scores
                 continue
             self.results[hex(leakAddr)] = mival

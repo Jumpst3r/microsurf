@@ -39,6 +39,7 @@ int main(int argc, char *argv[]) {
         }
     }
     
-
+    free(T);
+    free(M);
     return val2;
 }

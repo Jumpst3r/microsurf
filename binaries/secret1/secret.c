@@ -32,6 +32,8 @@ int main(int argc, char *argv[]) {
     
     // random memory access
     val2 = M[branch];
-
+    close(randomData);
+    free(T);
+    free(M);
     return val;
 }

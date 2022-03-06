@@ -1,3 +1,6 @@
+SUBDIRS = $(shell ls -d binaries/*)
+
+
 init:
 	pip3 install -r requirements.txt
 tests:
@@ -7,4 +10,8 @@ profile:
 	snakeviz microsurf.pof
 clean:
 	rm *.pof *.png
-.PHONY: init tests profile clean
+binaries:
+	for dir in $(SUBDIRS); do \
+		make -C $$dir all; \
+	done
+.PHONY: init tests profile clean binaries
