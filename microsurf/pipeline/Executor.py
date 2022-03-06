@@ -24,7 +24,7 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results = {}
-        self.secrets = [random.randint(0x00, 0xff) for _ in range(10)]
+        self.secrets = [random.randint(0x00, 0xFF) for _ in range(10)]
 
     def run(self):
 
@@ -56,7 +56,7 @@ class PipeLineExecutor:
         # run multiple times with random secrets
 
         for idx, i in enumerate(range(FIXED_ITER_CNT)):
-            memCheckStage_detect2.exec(secret=str(random.randint(0x00, 0xff)))
+            memCheckStage_detect2.exec(secret=str(random.randint(0x00, 0xFF)))
             # memCheckStage_detect2.exec(secret=str(idx))
 
         rndTraceCollection = memCheckStage_detect2.finalize()
