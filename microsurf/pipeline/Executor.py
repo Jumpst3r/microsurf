@@ -81,7 +81,7 @@ class PipeLineExecutor:
                 assert len(t.trace[l]) > 0
 
         lc = LeakageClassification(
-            rndTraceCollection, self.loader, possibleLeaks, identity
+            rndTraceCollection, self.loader, possibleLeaks, hamming
         )
         lc.exec()
         res = lc.finalize()

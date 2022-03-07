@@ -14,8 +14,15 @@ from capstone.arm_const import *
 from capstone.x86_const import *
 from qiling import Qiling
 from qiling.const import *
-from utils.logger import getConsole, getLogger, LOGGING_LEVEL, logging, getQillingLogger
-from utils.hijack import device_random
+from utils.logger import (
+    getConsole,
+    getLogger,
+    LOGGING_LEVEL,
+    logging,
+    getQillingLogger,
+    QILING_VERBOSE,
+)
+from utils.hijack import *
 from .tracetools.Trace import MemTrace, MemTraceCollection
 import re
 
@@ -86,7 +93,7 @@ class BinaryLoader(Stage):
                 [str(self.binPath), *args],
                 str(self.rootfs),
                 log_override=getQillingLogger(),
-                verbose=0,
+                verbose=QILING_VERBOSE,
             )
             self.fixRandomness(self.deterministic)
         except Exception as e:
@@ -123,6 +130,22 @@ class BinaryLoader(Stage):
             self.QLEngine.add_fs_mapper("/dev/urandom", device_random)
             self.QLEngine.add_fs_mapper("/dev/random", device_random)
             self.QLEngine.add_fs_mapper("/dev/arandom", device_random)
+            # ref https://marcin.juszkiewicz.com.pl/download/tables/syscalls.html
+            if self.md.arch == CS_ARCH_ARM:
+                self.QLEngine.os.set_syscall(403, const_time)
+                self.QLEngine.os.set_syscall(384, const_getrandom)
+                self.QLEngine.os.set_syscall(78, const_clock_gettimeofday)
+                self.QLEngine.os.set_syscall(263, const_clock_gettime)
+            if self.md.arch == CS_ARCH_X86 and self.md.mode == CS_MODE_64:
+                self.QLEngine.os.set_syscall(318, const_getrandom)
+                self.QLEngine.os.set_syscall(96, const_clock_gettimeofday)
+                self.QLEngine.os.set_syscall(228, const_clock_gettime)
+            if self.md.arch == CS_ARCH_X86 and self.md.mode == CS_MODE_32:
+                self.QLEngine.os.set_syscall(403, const_time)
+                self.QLEngine.os.set_syscall(13, const_time)
+                self.QLEngine.os.set_syscall(355, const_getrandom)
+                self.QLEngine.os.set_syscall(78, const_clock_gettimeofday)
+                self.QLEngine.os.set_syscall(265, const_clock_gettime)
         else:
             self.QLEngine.add_fs_mapper("/dev/urandom", "/dev/urandom")
             self.QLEngine.add_fs_mapper("/dev/random", "/dev/random")

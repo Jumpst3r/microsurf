@@ -9,6 +9,8 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
+QILING_VERBOSE = 0
+
 
 def getLogger():
     root = logging.getLogger()
