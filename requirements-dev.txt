@@ -1,5 +1,0 @@
-pytest==7.0.1
-pytest-rerunfailures==10.2
-flake8==3.9.2
-tox==3.24.3
-mypy===0.910

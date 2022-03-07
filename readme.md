@@ -15,12 +15,21 @@ virtualenv env
 source env/bin/activate
 ```
 
+2. Install the package locally:
+
+```
+pip install -e .
+```
+
 2. Run a sample:
 
 ```
-python microsurf/microsurf.py --binary binaries/secret1/secret-x86-64.bin --sc data
+python -m microsurf --binary test/binaries/secret1/secret-x86-64.bin --sc data
 ```
 
-# Tests
+# Tests 
 
-`make tests`
+- Unit / Integration tests: `pytest`
+- Type checking: `mypy src`
+- Linting: `flake8 src`
+
