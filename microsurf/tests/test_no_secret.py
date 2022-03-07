@@ -20,7 +20,7 @@ def test_analyze_arm():
     with open(armTargetPath) as f:
         data = json.load(f)
         armTargetAddr = data["secret-arm.bin"]
-    bl = BinaryLoader(binPath, ["1", "2", "3"], dryRunOnly=False)
+    bl = BinaryLoader(binPath, ["@"], dryRunOnly=False)
     pipeline = PipeLineExecutor(loader=bl)
     pipeline.run()
     res = pipeline.finalize()
@@ -38,7 +38,7 @@ def test_analyze_ia32():
     with open(armTargetPath) as f:
         data = json.load(f)
         armTargetAddr = data["secret-x86-32.bin"]
-    bl = BinaryLoader(binPath, ["1", "2", "3"], dryRunOnly=False)
+    bl = BinaryLoader(binPath, ["@"], dryRunOnly=False)
     pipeline = PipeLineExecutor(loader=bl)
     pipeline.run()
     res = pipeline.finalize()
@@ -56,7 +56,7 @@ def test_analyze_x86_64():
     with open(armTargetPath) as f:
         data = json.load(f)
         armTargetAddr = data["secret-x86-64.bin"]
-    bl = BinaryLoader(binPath, ["1", "2", "3"], dryRunOnly=False)
+    bl = BinaryLoader(binPath, ["@"], dryRunOnly=False)
     pipeline = PipeLineExecutor(loader=bl)
     pipeline.run()
     res = pipeline.finalize()

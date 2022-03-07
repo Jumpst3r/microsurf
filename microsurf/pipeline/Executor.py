@@ -24,7 +24,6 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results = {}
-        self.secrets = [random.randint(0x00, 0xFF) for _ in range(10)]
 
     def run(self):
 
@@ -33,8 +32,8 @@ class PipeLineExecutor:
         log.info(f"Running stage Leak Detection")
 
         # run with varying secrets, hooks every mem op
-        for i, arg in enumerate(self.secrets):
-            memCheckStage_leak.exec(secret=str(arg))
+        for _ in range(10):
+            memCheckStage_leak.exec(self.loader.rndArg)
 
         memTraceCollection = memCheckStage_leak.finalize()
         oldleaks = memTraceCollection.possibleLeaks
@@ -48,18 +47,17 @@ class PipeLineExecutor:
 
         # run multiple times with a fixed secret
         FIXED_ITER_CNT = 100
-        for idx, i in enumerate(range(FIXED_ITER_CNT)):
-            memCheckStage_detect1.exec(secret=str(0))
+        for _ in range(FIXED_ITER_CNT):
+            memCheckStage_detect1.exec(self.loader.fixedArg)
 
         fixedTraceCollection = memCheckStage_detect1.finalize()
 
         # run multiple times with random secrets
-
-        for idx, i in enumerate(range(FIXED_ITER_CNT)):
-            memCheckStage_detect2.exec(secret=str(random.randint(0x00, 0xFF)))
-            # memCheckStage_detect2.exec(secret=str(idx))
+        for _ in range(FIXED_ITER_CNT):
+            memCheckStage_detect2.exec(self.loader.rndArg)
 
         rndTraceCollection = memCheckStage_detect2.finalize()
+
         distAnalyzer = DistributionAnalyzer(
             fixedTraceCollection, rndTraceCollection, self.loader
         )
@@ -81,7 +79,7 @@ class PipeLineExecutor:
                 assert len(t.trace[l]) > 0
 
         lc = LeakageClassification(
-            rndTraceCollection, self.loader, possibleLeaks, hamming
+            rndTraceCollection, self.loader, possibleLeaks, identity
         )
         lc.exec()
         res = lc.finalize()

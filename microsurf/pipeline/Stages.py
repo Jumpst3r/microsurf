@@ -1,4 +1,3 @@
-from argparse import ArgumentError
 from collections import defaultdict, OrderedDict
 import os
 import tempfile
@@ -25,6 +24,7 @@ from utils.logger import (
 from utils.hijack import *
 from .tracetools.Trace import MemTrace, MemTraceCollection
 import re
+import random
 
 console = getConsole()
 log = getLogger()
@@ -47,10 +47,25 @@ class BinaryLoader(Stage):
         self.mem_ip_map = defaultdict(set)
         self.moduleroot = Path(__file__).parent.parent.parent
         self.dryRunOnly = kwargs["dryRunOnly"]
+        self.args = args
         try:
             self.deterministic = kwargs["deterministic"]
         except KeyError:
             self.deterministic = False
+        try:
+            self.rndGen = kwargs["rndGen"]
+            self.fixGen = kwargs["fixGen"]
+            self.asFile = kwargs["asFile"]
+        except KeyError:
+            # secret as argument, default to random integer.
+            self.asFile = False
+            self.rndGen = None
+            self.fixGen = None
+        try:
+            self.secretArgIndex = args.index("@")
+        except IndexError as e:
+            log.error("No argument marked as secret dependent (@) !")
+            raise ValueError()
         if self.deterministic:
             log.info("hooking sources of randomness")
         if not os.path.exists(self.binPath):
@@ -108,17 +123,69 @@ class BinaryLoader(Stage):
         self.md.detail = True
         self.QLEngine.os.stdout
 
+    def _rand(self):
+        if self.rndGen:
+            val = self.rndGen()
+            if self.asFile:
+                tmpfile, path = tempfile.mkstemp()
+                os.write(tmpfile, val)
+                os.close(tmpfile)
+                self.args[self.secretArgIndex] = path
+            else:
+                self.args[self.secretArgIndex] = str(val)
+        else:
+            if self.asFile:
+                val = random.randint(0x00, 0xFF).to_bytes()
+                tmpfile, path = tempfile.mkstemp()
+                os.write(tmpfile, val)
+                os.close(tmpfile)
+                self.args[self.secretArgIndex] = path
+            else:
+                val = random.randint(0x00, 0xFF)
+                self.args[self.secretArgIndex] = str(val)
+        return val
+
+    def _fixed(self):
+        if self.fixGen:
+            val = self.fixGen()
+            if self.asFile:
+                tmpfile, path = tempfile.mkstemp()
+                os.write(tmpfile, val)
+                os.close(tmpfile)
+                self.args[self.secretArgIndex] = path
+            else:
+                self.args[self.secretArgIndex] = str(val)
+        else:
+            val = 42
+            if self.asFile:
+                tmpfile, path = tempfile.mkstemp()
+                os.write(tmpfile, val)
+                os.close(tmpfile)
+                self.args[self.secretArgIndex] = path
+            else:
+                self.args[self.secretArgIndex] = str(val)
+        return val
+
+    def rndArg(self):
+        val = self._rand()
+        return val
+
+    def fixedArg(self):
+        val = self._fixed()
+        return val
+
     def exec(self) -> None:
+        self.fixedArg()
         log.info(f"Emulating {self.QLEngine._argv} (dry run)")
         self.QLEngine.run()
         self.QLEngine.stop()
-        self.refreshQLEngine([0])
+        self.refreshQLEngine()
         if self.dryRunOnly:
             return 0
 
-    def refreshQLEngine(self, args) -> Qiling:
+    def refreshQLEngine(self) -> Qiling:
         self.QLEngine = Qiling(
-            [str(self.binPath), *[str(a) for a in args]],
+            [str(self.binPath), *[str(a) for a in self.args]],
             str(self.rootfs),
             console=False,
             verbose=-1,
@@ -198,8 +265,9 @@ class FindMemOps(Stage):
                         log.info(f"{self.secret}, {memaddr}")
                     self.currenttrace.add(address, memaddr)
 
-    def exec(self, secret):
-        self.bl.refreshQLEngine([secret])
+    def exec(self, generator):
+        secret = generator()  # updates the secret
+        self.bl.refreshQLEngine()
         self.bl.QLEngine.hook_code(self._trace_mem_op)
         self.secret = secret
         self.currenttrace = MemTrace(secret)
@@ -251,8 +319,9 @@ class MemWatcher(Stage):
                     )
                     self.currenttrace.add(address, int(memaddr, 16))
 
-    def exec(self, secret):
-        self.bl.refreshQLEngine([secret])
+    def exec(self, generator):
+        secret = generator()  # updates the secret
+        self.bl.refreshQLEngine()
         if self.bl.md.arch != CS_ARCH_ARM:
             # Unicorn supports reading PC in mem hook
             self.bl.QLEngine.hook_mem_read(self._trace_mem_read)
