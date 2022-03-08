@@ -52,6 +52,7 @@ class BinaryLoader(Stage):
         self.dryRunOnly = kwargs["dryRunOnly"]
         self.args = args
         self.rootfs = PurePath("/")
+        self.QLEngine: Qiling = None
         try:
             self.deterministic = kwargs["deterministic"]
         except KeyError:
@@ -91,22 +92,19 @@ class BinaryLoader(Stage):
 
         if "dynamic" in fileinfo:
             log.warn(
-                f"Detected dynamically linked binary, ensure that the appropriate shared objects are available"
+                "Detected dynamically linked binary, ensure that the appropriate shared objects are available"
             )
         else:
             self.rootfs = PurePath(tempfile.mkdtemp())
             log.info(f"detected static binary, jailing to {self.rootfs}")
-        try:
-            self.QLEngine = Qiling(
-                [str(self.binPath), *args],
-                str(self.rootfs),
-                log_override=getQillingLogger(),
-                verbose=QILING_VERBOSE,
-            )
-            self.fixRandomness(self.deterministic)
-        except Exception as e:
-            log.error(f"Qilling initialization failed: {str(e)}")
-            exit(-1)
+        self.QLEngine = Qiling(
+            [str(self.binPath), *args],
+            str(self.rootfs),
+            log_override=getQillingLogger(),
+            verbose=QILING_VERBOSE,
+            console=False
+        )
+        self.fixRandomness(self.deterministic)
         try:
             self.exec()
             log.info("Looks like binary is supported")

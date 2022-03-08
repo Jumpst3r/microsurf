@@ -8,10 +8,11 @@ import pytest
 from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.pipeline.Executor import PipeLineExecutor
 from pathlib import Path, PurePath
-import json
+import json, sys
 
 
-def test_analyze_arm():
+def test_analyze_arm(monkeypatch):
+    monkeypatch.setattr('sys.stdin', sys.stdout)
     binPath = PurePath(Path(__file__).parent, Path("binaries/secret1/secret-arm.bin"))
     armTargetAddr = []
     armTargetPath = PurePath(binPath.parent, Path("secret-dep.json"))
@@ -27,7 +28,8 @@ def test_analyze_arm():
         assert a in res
 
 
-def test_analyze_ia32():
+def test_analyze_ia32(monkeypatch):
+    monkeypatch.setattr('sys.stdin', sys.stdout)
     binPath = PurePath(
         Path(__file__).parent, Path("binaries/secret1/secret-x86-32.bin")
     )
@@ -45,7 +47,8 @@ def test_analyze_ia32():
         assert a in res
 
 
-def test_analyze_x86_64():
+def test_analyze_x86_64(monkeypatch):
+    monkeypatch.setattr('sys.stdin', sys.stdout)
     binPath = PurePath(
         Path(__file__).parent, Path("binaries/secret1/secret-x86-64.bin")
     )

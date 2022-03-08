@@ -8,10 +8,11 @@ import pytest
 from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.pipeline.Executor import PipeLineExecutor
 from pathlib import Path, PurePath
-import json
+import json, sys
 
 
-def test_analyze_arm():
+def test_analyze_arm(monkeypatch):
+    monkeypatch.setattr('sys.stdin', sys.stdout)
     binPath = PurePath(
         Path(__file__).parent, Path("binaries/nosecret/nosecret-arm.bin")
     )
@@ -28,7 +29,8 @@ def test_analyze_arm():
     assert res == armTargetAddr
 
 
-def test_analyze_ia32():
+def test_analyze_ia32(monkeypatch):
+    monkeypatch.setattr('sys.stdin', sys.stdout)
     binPath = PurePath(
         Path(__file__).parent,
         Path("binaries/nosecret/nosecret-x86-32.bin"),
@@ -46,7 +48,8 @@ def test_analyze_ia32():
     assert res == armTargetAddr
 
 
-def test_analyze_x86_64():
+def test_analyze_x86_64(monkeypatch):
+    monkeypatch.setattr('sys.stdin', sys.stdout)
     binPath = PurePath(
         Path(__file__).parent,
         Path("binaries/nosecret/nosecret-x86-64.bin"),

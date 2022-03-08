@@ -8,10 +8,13 @@ import pytest
 from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.pipeline.Executor import PipeLineExecutor
 from pathlib import Path, PurePath
-import json
+import json, sys, tempfile
 
 
-def test_norandom_arm(capfd):
+def test_norandom_arm(capfd, monkeypatch):
+    fp = tempfile.TemporaryFile()
+    monkeypatch.setattr('sys.stdin', fp)
+
     binPath = PurePath(
         Path(__file__).parent, Path("binaries/random/checkrandom-arm.bin")
     )
@@ -20,7 +23,9 @@ def test_norandom_arm(capfd):
     assert "FAIL" not in out
 
 
-def test_norandom_ia32(capfd):
+def test_norandom_ia32(capfd, monkeypatch):
+    fp = tempfile.TemporaryFile()
+    monkeypatch.setattr('sys.stdin', fp)
     binPath = PurePath(
         Path(__file__).parent,
         Path("binaries/random/checkrandom-x86-32.bin"),
@@ -30,7 +35,9 @@ def test_norandom_ia32(capfd):
     assert "FAIL" not in out
 
 
-def test_norandom_x86_64(capfd):
+def test_norandom_x86_64(capfd, monkeypatch):
+    fp = tempfile.TemporaryFile()
+    monkeypatch.setattr('sys.stdin', fp)
     binPath = PurePath(
         Path(__file__).parent,
         Path("binaries/random/checkrandom-x86-64.bin"),

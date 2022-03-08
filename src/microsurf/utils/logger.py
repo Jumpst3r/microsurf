@@ -29,7 +29,7 @@ def getLogger():
 
 
 def getQillingLogger():
-    logger = logging.getLogger("asdf")
+    logger = logging.getLogger("Qiling")
     logger.setLevel(logging.WARNING)
     FORMAT = "%(message)s"
     logging.basicConfig(
