@@ -6,7 +6,13 @@
 
 We have a title + a silly logo now
 
-# Quickstart
+## Usage examples and sample results ;)
+
+Head over to
+
+`doc/examples/readme.md`
+
+## Installation
 
 1. Create a virtualenv & activate it:
 
@@ -21,13 +27,10 @@ source env/bin/activate
 pip install -e .
 ```
 
-2. Run a sample:
 
-```
-python -m microsurf --binary test/binaries/secret1/secret-x86-64.bin --sc data
-```
+## Tests 
 
-# Tests 
+(`pip install -r requirements_dev.txt`)
 
 - Unit / Integration tests: `pytest`
 - Type checking: `mypy src`

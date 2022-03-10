@@ -10,6 +10,7 @@ openssl aes-128-cbc -e -in input.bin -out output.bin -nosalt -K hexdata -iv 0
 import os
 from pathlib import Path
 from microsurf.microsurf import SCDetector
+from microsurf.pipeline.LeakageModels import hamming
 
 # length of the key in bits
 KEYLEN = 128
@@ -21,7 +22,7 @@ def genRandom() -> str:
     Returns:
         str: string of the hex rep. of the key
     """
-    kbytes = KEYLEN // 4
+    kbytes = KEYLEN // 8
     rbytes = os.urandom(kbytes)
     return f"{int.from_bytes(rbytes, byteorder='big'):x}"
 
@@ -32,7 +33,7 @@ def genFixed() -> str:
     Returns:
         str: string of the hex rep. of the key
     """
-    kbytes = KEYLEN // 4
+    kbytes = KEYLEN // 8
     fbytes = bytes("A" * kbytes, "utf-8")
     return f"{int.from_bytes(fbytes, byteorder='big'):x}"
 
@@ -43,7 +44,7 @@ if __name__ == "__main__":
     binpath = jailroot + "openssl"
     # openssl args, the secret part is marked with '@'
     opensslArgs = [
-        "aes-256-cbc",
+        "camellia-128-ecb",
         "-e",
         "-in",
         "input.bin",
@@ -52,8 +53,8 @@ if __name__ == "__main__":
         "-nosalt",
         "-K",
         "@",
-        "-iv",
-        "0",
+        # "-iv", no IV for camellia
+        # "0",
     ]
     scd = SCDetector(
         binPath=binpath,
@@ -63,6 +64,6 @@ if __name__ == "__main__":
         deterministic=False,
         asFile=False,
         jail=jailroot,
-        env={},
+        leakageModel=hamming,
     )
     scd.exec()

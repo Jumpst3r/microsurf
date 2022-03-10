@@ -1,0 +1,32 @@
+[15:11:52] WARNING  Detected dynamically linked binary, ensure that the appropriate       Stages.py:102
+                    shared objects are available
+           INFO     rootfs = /home/nicolas/Documents/msc-thesis-work/doc/examples/rootfs/ Stages.py:105
+                    jail-openssl-x8632/
+           INFO     Emulating ['/home/nicolas/Documents/msc-thesis-work/doc/examples/root Stages.py:192
+                    fs/jail-openssl-x8632/openssl', 'camellia-128-ecb', '-e', '-in',
+                    'input.bin', '-out', 'output.bin', '-nosalt', '-K',
+                    '405fda55323f2884c6ac4b574329c1b0'] (dry run)
+           WARNING  prctl code 0x3001 not implemented                                       prctl.py:23
+           INFO     Looks like binary is supported                                        Stages.py:130
+           INFO     L(secret) = 66, leakage model compatible.                            Executor.py:27
+           INFO     Running stage Leak Detection                                         Executor.py:43
+[15:12:09] INFO     Running stage Leak Confirm                                           Executor.py:56
+100%|██████████████████████████████████████████████████████████████████| 40/40 [05:48<00:00,  8.72s/it]
+100%|██████████████████████████████████████████████████████████████████| 40/40 [05:59<00:00,  8.99s/it]
+
+[15:26:30] INFO     filtered 4216 false positives                                         Stages.py:410
+[15:26:41] INFO     Ignoring 3133 leaks with low score                                   Executor.py:97
+           INFO     Indentified 12 leak with good MI score:                              Executor.py:98
+─────────────────────────────────────────────── results ───────────────────────────────────────────────
+           INFO     0003018c - [MI = 0.28] openssl                                      Executor.py:105
+           INFO     00095592 - [MI = 0.12] libcrypto.so.1.1                             Executor.py:105
+           INFO     0009571e - [MI = 0.14] libcrypto.so.1.1                             Executor.py:105
+           INFO     00095768 - [MI = 0.21] libcrypto.so.1.1                             Executor.py:105
+           INFO     0009577b - [MI = 0.15] libcrypto.so.1.1                             Executor.py:105
+           INFO     00095d5e - [MI = 0.14] libcrypto.so.1.1                             Executor.py:105
+           INFO     00095dba - [MI = 0.14] libcrypto.so.1.1                             Executor.py:105
+           INFO     00095e5f - [MI = 0.13] libcrypto.so.1.1                             Executor.py:105
+           INFO     00095ebb - [MI = 0.29] libcrypto.so.1.1                             Executor.py:105
+           INFO     00095edd - [MI = 0.14] libcrypto.so.1.1                             Executor.py:105
+           INFO     00095ef0 - [MI = 0.11] libcrypto.so.1.1                             Executor.py:105
+           INFO     0013f5cf - [MI = 0.16] libcrypto.so.1.1                             Executor.py:105

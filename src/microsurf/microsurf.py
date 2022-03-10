@@ -3,12 +3,13 @@ Microsurf: An architecture independent dynamic side channel detection framework
 @author nicolas
 """
 
-from typing import Callable, Dict
+from typing import Callable
 from .pipeline.Executor import PipeLineExecutor
 from .pipeline.Stages import BinaryLoader
 from .utils.logger import getConsole, getLogger
 import argparse
 from pyfiglet import figlet_format
+import numpy as np
 
 console = getConsole()
 log = getLogger()
@@ -78,7 +79,7 @@ class SCDetector:
         deterministic: bool,
         asFile: bool,
         jail: str,
-        env: Dict[str, str],
+        leakageModel: Callable[[str], np.array],
     ) -> None:
         """Initializes a new SCDetector instance.
 
@@ -103,7 +104,7 @@ class SCDetector:
         self.deterministic = deterministic
         self.asFile = asFile
         self.rootfs = jail
-        self.env = env
+        self.leakageModel = leakageModel
         self._validate()
 
     def _validate(self):
@@ -142,7 +143,7 @@ class SCDetector:
             fixGen=self.fixGen,
             asFile=self.asFile,
             jail=self.rootfs,
-            env=self.env,
+            leakageModel=self.leakageModel,
         )
 
     def exec(self):

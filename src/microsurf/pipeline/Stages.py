@@ -1,4 +1,3 @@
-from concurrent.futures.process import _chain_from_iterable_of_lists
 import logging
 import os
 import random
@@ -15,8 +14,9 @@ import scipy.stats as stats
 import seaborn as sns
 from capstone import CS_ARCH_ARM, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_MODE_ARM, Cs
 from capstone.arm_const import ARM_OP_MEM
-from capstone.x86_const import X86_OP_MEM
 from qiling import Qiling
+
+from microsurf.pipeline.LeakageModels import identity
 
 from ..utils.hijack import (
     const_clock_gettime,
@@ -62,9 +62,9 @@ class BinaryLoader(Stage):
         except KeyError:
             self.deterministic = False
         try:
-            self.env = kwargs["env"]
+            self.leakageModel = kwargs["leakageModel"]
         except KeyError:
-            self.env = {}
+            self.leakageModel = identity
         try:
             self.rndGen = kwargs["rndGen"]
             self.fixGen = kwargs["fixGen"]
@@ -102,8 +102,10 @@ class BinaryLoader(Stage):
             log.warn(
                 "Detected dynamically linked binary, ensure that the appropriate shared objects are available"
             )
+            self.dynamic = True
             log.info(f"rootfs = {self.rootfs}")
         else:
+            self.dynamic = False
             self.rootfs = PurePath(tempfile.mkdtemp())
             log.info(f"detected static binary, jailing to {self.rootfs}")
         try:
@@ -203,7 +205,6 @@ class BinaryLoader(Stage):
             console=False,
             verbose=-1,
             multithread=True,
-            env=self.env,
         )
         self.fixRandomness(self.deterministic)
 
@@ -277,12 +278,10 @@ class FindMemOps(Stage):
 
 class MemWatcher(Stage):
     """
-    Hooks memory reads for a set of addresses returned by the FindMemOps class.
+    Hooks memory reads
     """
 
-    def __init__(
-        self, binaryLoader: BinaryLoader, archPCs = None
-    ) -> None:
+    def __init__(self, binaryLoader: BinaryLoader, archPCs=None) -> None:
         self.traces: List[MemTrace] = []
         self.bl = binaryLoader
         self.md = self.bl.md
@@ -317,7 +316,7 @@ class MemWatcher(Stage):
                         * memop_src.scale
                         + memop_src.disp
                     )
-    
+
                     self.currenttrace.add(address, memaddr)
 
     def exec(self, generator):
@@ -331,6 +330,7 @@ class MemWatcher(Stage):
         self.currenttrace = MemTrace(secret)
         self.bl.QLEngine.run()
         self.traces.append(self.currenttrace)
+
         self.bl.QLEngine.stop()
 
     def finalize(self):
@@ -418,7 +418,6 @@ class DistributionAnalyzer(Stage):
         return self.results
 
 
-# FIXME: This clearly does not work. Investigate tommorow
 class LeakageClassification(Stage):
     def __init__(
         self,
@@ -434,6 +433,9 @@ class LeakageClassification(Stage):
         self.asm = binaryLoader.asm
         self.results: Dict[str, float] = {}
 
+    def _key(self, t):
+        return self.leakageModelFunction(t[0])
+
     def analyze(self):
         import numpy as np
         from sklearn.feature_selection import mutual_info_regression
@@ -441,12 +443,14 @@ class LeakageClassification(Stage):
         secrets = set()
         # Convert traces to trace per IP/PC
         for leakAddr in self.possibleLeaks:
-            addList: Dict[int, List[int]] = {}
+            addList = {}
             # Store the secret according to the given leakage model
             for t in self.rndTraceCollection.traces:
                 secrets.add(t.secret)
-                addList[int(t.secret)] = t.trace[leakAddr]
-
+                try:
+                    addList[int(t.secret)] = t.trace[leakAddr]
+                except ValueError:
+                    addList[t.secret] = t.trace[leakAddr]
             mat = np.zeros((len(addList), 1), dtype=np.uint64)
             if not self.leakageModelFunction(
                 self.rndTraceCollection.traces[0].secret
@@ -457,7 +461,7 @@ class LeakageClassification(Stage):
                     self.rndTraceCollection.traces[0].secret
                 ).shape
             secretMat = np.zeros((len(addList.keys()), secretFeatureShape))
-            addList = OrderedDict(sorted(addList.items(), key=lambda t: t[0]))
+            addList = OrderedDict(sorted(addList.items(), key=self._key))
             for idx, k in enumerate(addList):
                 mat[idx] = np.mean(addList[k])
                 secretMat[idx] = self.leakageModelFunction(k)
@@ -470,9 +474,8 @@ class LeakageClassification(Stage):
             mival = np.sum(mutual_info_regression(mat, secretMat, random_state=42))
             # log.info(f"mat{hex(leakAddr)} = {mat}")
             # log.info(f"secretMat = {secretMat}")
-            log.debug(f"MI score for {hex(leakAddr)}: {mival:.2f}")
-            if mival < 0.2:
-                # filter bad scores
+            # log.debug(f"MI score for {hex(leakAddr)}: {mival:.2f}")
+            if mival < 0.1:
                 continue
             self.results[hex(leakAddr)] = mival
 
