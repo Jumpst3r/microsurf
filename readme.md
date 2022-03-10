@@ -2,10 +2,17 @@
 
 
 # MicroSurf: An architecture independent side channel detection framework
+[![tests](https://github.com/Jumpst3r/msc-thesis-work/actions/workflows/pytest.yml/badge.svg?branch=main)](https://github.com/Jumpst3r/msc-thesis-work/actions/workflows/pytest.yml)
 
 We have a title + a silly logo now
 
-# Quickstart
+## Usage examples and sample results ;)
+
+Head over to
+
+`doc/examples/readme.md`
+
+## Installation
 
 1. Create a virtualenv & activate it:
 
@@ -14,12 +21,18 @@ virtualenv env
 source env/bin/activate
 ```
 
-2. Run a sample:
+2. Install the package locally:
 
 ```
-python microsurf/microsurf.py --binary binaries/secret1/secret-x86-64.bin --sc data
+pip install -e .
 ```
 
-# Tests
 
-`make tests`
+## Tests 
+
+(`pip install -r requirements_dev.txt`)
+
+- Unit / Integration tests: `pytest`
+- Type checking: `mypy src`
+- Linting: `flake8 src`
+
