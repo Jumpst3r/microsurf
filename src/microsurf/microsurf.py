@@ -3,7 +3,7 @@ Microsurf: An architecture independent dynamic side channel detection framework
 @author nicolas
 """
 
-from typing import Callable
+from typing import Callable, Dict
 from .pipeline.Executor import PipeLineExecutor
 from .pipeline.Stages import BinaryLoader
 from .utils.logger import getConsole, getLogger
@@ -73,10 +73,12 @@ class SCDetector:
         self,
         binPath: str,
         args: list[str],
-        randGen: Callable[[], list[bytes]],
-        fixGen: Callable[[], list[bytes]],
+        randGen: Callable[[], str],
+        fixGen: Callable[[], str],
         deterministic: bool,
         asFile: bool,
+        jail: str,
+        env: Dict[str, str],
     ) -> None:
         """Initializes a new SCDetector instance.
 
@@ -85,13 +87,14 @@ class SCDetector:
             args (list[str]): List of arguments to pass to the binary. For a secret argument,
             substitute the value of the argument with @ (for example, ['--encrypt', '<privkeyfile>']
             would become ['--encrypt', '@'] ). Only one argument can be defined as secret.
-            randGen ([],bytearray]): A function that generates random bytes in the format
+            randGen ([],str]): A function that generates random bytes in the format
             expected by the target binary. The SCDetector class will save these bytes
             to a temporary file and substitute the secret placeholder ('@') with the path to the file
-            fixGen ([[],bytearray]): A function that always generates the same bytes
+            fixGen ([[],str]): A function that always generates the same bytes
             deterministic (bool): Force deterministic execution by hooking relevant syscalls
             asFile (bool): Specifies whether the target binary excepts the secret to be read from a file.
             If false, the secret will be passed directly as an argument
+            env (Dict[str,str]): Set environment variables
         """
         self.binPath = binPath
         self.args = args
@@ -99,6 +102,8 @@ class SCDetector:
         self.fixGen = fixGen
         self.deterministic = deterministic
         self.asFile = asFile
+        self.rootfs = jail
+        self.env = env
         self._validate()
 
     def _validate(self):
@@ -115,7 +120,7 @@ class SCDetector:
             resfixed.add(self.fixGen())
         if len(resrnd) != 10:
             raise ValueError("Provided random function does not produce random output.")
-        if len(resrnd) > 1:
+        if len(resfixed) > 1:
             raise ValueError(
                 "Provided fixed function does not produce constant output."
             )
@@ -136,6 +141,8 @@ class SCDetector:
             rndGen=self.randGen,
             fixGen=self.fixGen,
             asFile=self.asFile,
+            jail=self.rootfs,
+            env=self.env,
         )
 
     def exec(self):

@@ -6,6 +6,7 @@ import tempfile
 from collections import OrderedDict
 from pathlib import Path, PurePath
 from typing import Dict, List
+import traceback
 
 import magic
 import matplotlib.pyplot as plt
@@ -25,7 +26,6 @@ from ..utils.hijack import (
 )
 from ..utils.logger import (
     LOGGING_LEVEL,
-    QILING_VERBOSE,
     getConsole,
     getLogger,
     getQillingLogger,
@@ -51,12 +51,19 @@ class BinaryLoader(Stage):
         self.moduleroot = Path(__file__).parent.parent.parent
         self.dryRunOnly = kwargs["dryRunOnly"]
         self.args = args
-        self.rootfs = PurePath("/")
+        try:
+            self.rootfs = kwargs["jail"]
+        except KeyError:
+            pass
         self.QLEngine: Qiling = None
         try:
             self.deterministic = kwargs["deterministic"]
         except KeyError:
             self.deterministic = False
+        try:
+            self.env = kwargs["env"]
+        except KeyError:
+            self.env = {}
         try:
             self.rndGen = kwargs["rndGen"]
             self.fixGen = kwargs["fixGen"]
@@ -94,36 +101,49 @@ class BinaryLoader(Stage):
             log.warn(
                 "Detected dynamically linked binary, ensure that the appropriate shared objects are available"
             )
+            log.info(f"rootfs = {self.rootfs}")
         else:
             self.rootfs = PurePath(tempfile.mkdtemp())
             log.info(f"detected static binary, jailing to {self.rootfs}")
-        self.QLEngine = Qiling(
-            [str(self.binPath), *args],
-            str(self.rootfs),
-            log_override=getQillingLogger(),
-            verbose=QILING_VERBOSE,
-            console=False
-        )
-        self.fixRandomness(self.deterministic)
+        try:
+            # initialize args;
+            val, path = self.rndArg()
+            self.QLEngine = Qiling(
+                [str(self.binPath), *args],
+                str(self.rootfs),
+                log_override=getQillingLogger(),
+                verbose=0,
+                console=True,
+                multithread=True,
+            )
+            if path:
+                self.QLEngine.add_fs_mapper(path.split("/")[-1], path.split("/")[-1])
+            # self.QLEngine.add_fs_mapper('output.bin', 'output.bin')
+            self.fixRandomness(self.deterministic)
+        except FileNotFoundError as e:
+            if ".so" in str(e):
+                log.error(f"Lib {str(e.filename)} not found in jail")
+                exit(1)
         try:
             self.exec()
             log.info("Looks like binary is supported")
         except Exception as e:
             log.error(f"Emulation dry run failed: {str(e)}")
-            exit(-1)
+            log.error(traceback.format_exc())
         self.md.detail = True
-        self.QLEngine.os.stdout
 
     def _rand(self):
+        path = None
         if self.rndGen:
             val = self.rndGen()
             if self.asFile:
-                tmpfile, path = tempfile.mkstemp()
-                os.write(tmpfile, val)
+                tmpfile, path = tempfile.mkstemp(dir=self.rootfs)
+                log.info(f"generated keyfile:{path}")
+                os.write(tmpfile, val.encode())
                 os.close(tmpfile)
-                self.args[self.secretArgIndex] = path
+                self.args[self.secretArgIndex] = path.split("/")[-1]
             else:
-                self.args[self.secretArgIndex] = str(val)
+                self.args[self.secretArgIndex] = val
         else:
             if self.asFile:
                 val = random.randint(0x00, 0xFF)
@@ -134,14 +154,15 @@ class BinaryLoader(Stage):
             else:
                 val = random.randint(0x00, 0xFF)
                 self.args[self.secretArgIndex] = str(val)
-        return val
+        return val, path
 
     def _fixed(self):
+        path = None
         if self.fixGen:
             val = self.fixGen()
             if self.asFile:
                 tmpfile, path = tempfile.mkstemp()
-                os.write(tmpfile, val)
+                os.write(tmpfile, val.encode())
                 os.close(tmpfile)
                 self.args[self.secretArgIndex] = path
             else:
@@ -155,11 +176,11 @@ class BinaryLoader(Stage):
                 self.args[self.secretArgIndex] = path
             else:
                 self.args[self.secretArgIndex] = str(val)
-        return val
+        return val, path
 
     def rndArg(self):
-        val = self._rand()
-        return val
+        val, path = self._rand()
+        return val, path
 
     def fixedArg(self):
         val = self._fixed()
@@ -180,6 +201,8 @@ class BinaryLoader(Stage):
             str(self.rootfs),
             console=False,
             verbose=-1,
+            multithread=True,
+            env=self.env,
         )
         self.fixRandomness(self.deterministic)
 
@@ -252,12 +275,10 @@ class FindMemOps(Stage):
                         # memory address. In that case we just ignore it anyways.
                         continue
                     self.bl.asm[hex(address)] = i.mnemonic + " " + i.op_str
-                    if self.bl.asm[hex(address)] == "movzx  eax, BYTE PTR [rax + rdx]":
-                        log.info(f"{self.secret}, {memaddr}")
                     self.currenttrace.add(address, memaddr)
 
     def exec(self, generator):
-        secret = generator()  # updates the secret
+        secret, path = generator()  # updates the secret
         self.bl.refreshQLEngine()
         self.bl.QLEngine.hook_code(self._trace_mem_op)
         self.secret = secret
@@ -316,7 +337,7 @@ class MemWatcher(Stage):
                     self.currenttrace.add(address, memaddr)
 
     def exec(self, generator):
-        secret = generator()  # updates the secret
+        secret, path = generator()  # updates the secret
         self.bl.refreshQLEngine()
         if self.bl.md.arch != CS_ARCH_ARM:
             # Unicorn supports reading PC in mem hook
