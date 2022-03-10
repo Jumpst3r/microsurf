@@ -1,11 +1,12 @@
+from typing import Any
 import numpy as np
 
 
-def identity(secret) -> np.array:
+def identity(secret) -> Any:
     return np.array(secret)
 
 
-def hamming(secret) -> np.array:
+def hamming(secret) -> Any:
     if isinstance(secret, str):
         # secret decimal
         try:
