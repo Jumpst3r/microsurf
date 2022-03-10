@@ -1,3 +1,4 @@
+from concurrent.futures.process import _chain_from_iterable_of_lists
 import logging
 import os
 import random
@@ -183,8 +184,8 @@ class BinaryLoader(Stage):
         return val, path
 
     def fixedArg(self):
-        val = self._fixed()
-        return val
+        val, path = self._fixed()
+        return val, path
 
     def exec(self):
         self.fixedArg()
@@ -235,22 +236,23 @@ class BinaryLoader(Stage):
 
 class FindMemOps(Stage):
     """
-    Hooks all code and records any oerands which likely perform memory accesses along with a computation of the target memory address
-    Will likely return false positives (lea eax, [..]) but the target addresses are then watched for memory accesses in phase II
-    (Class MemWatcher) and these false positives will be filtered.
+    Hooks all code and records any oerands which likely perform memory accesses. Note that this is an ungly hack
+    because the emulator does not support reading the PC in mem read hooks on ARM. This should not be executed on
+    x86.
     """
 
     def __init__(self, binaryLoader: BinaryLoader) -> None:
-        self.traces: List[MemTrace] = []
+        self.armPCs: set[int] = set()
         self.bl = binaryLoader
         self.md = binaryLoader.md
         self.secret = None
 
     def _trace_mem_op(self, ql: Qiling, address, size):
+        assert self.md.arch == CS_ARCH_ARM
         buf = ql.mem.read(address, size)
         for i in self.md.disasm(buf, address):
             if len(i.operands) == 2:
-                if i.operands[1].type in [ARM_OP_MEM, X86_OP_MEM]:
+                if i.operands[1].type in [ARM_OP_MEM]:
                     # We cannot directly trace memory reads for ARM
                     # though this is not a prob since only LDR* ops performs
                     # a memory read !
@@ -258,39 +260,19 @@ class FindMemOps(Stage):
                         i.mnemonic
                     ):
                         continue
-                    memop_src = i.operands[1].mem
-                    try:
-                        memaddr = (
-                            ql.arch.regs.read(i.reg_name(memop_src.base))
-                            + (
-                                0
-                                if not memop_src.index
-                                else ql.arch.regs.read(i.reg_name(memop_src.index))
-                            )
-                            * memop_src.scale
-                            + memop_src.disp
-                        )
-                    except Exception:
-                        # The above computation will fail if the value between [.] is not a real
-                        # memory address. In that case we just ignore it anyways.
-                        continue
-                    self.bl.asm[hex(address)] = i.mnemonic + " " + i.op_str
-                    self.currenttrace.add(address, memaddr)
+                    self.armPCs.add(address)
 
     def exec(self, generator):
         secret, path = generator()  # updates the secret
         self.bl.refreshQLEngine()
         self.bl.QLEngine.hook_code(self._trace_mem_op)
         self.secret = secret
-        self.currenttrace = MemTrace(secret)
         self.bl.QLEngine.run()
         self.bl.QLEngine.stop()
-        self.traces.append(self.currenttrace)
 
     def finalize(self):
-        assert len(self.traces) > 0
-        self.memTraceDetectionCollection = MemTraceCollection(self.traces, self.bl)
-        return self.memTraceDetectionCollection
+        assert len(self.armPCs) > 0
+        return self.armPCs
 
 
 class MemWatcher(Stage):
@@ -299,16 +281,15 @@ class MemWatcher(Stage):
     """
 
     def __init__(
-        self, binaryLoader: BinaryLoader, memTraceCollection: MemTraceCollection
+        self, binaryLoader: BinaryLoader, archPCs = None
     ) -> None:
         self.traces: List[MemTrace] = []
         self.bl = binaryLoader
-        self.memTraceDetectionCollection = memTraceCollection
         self.md = self.bl.md
+        self.archPCs = archPCs
 
     def _trace_mem_read(self, ql: Qiling, access, addr, size, value):
-        if ql.arch.regs.arch_pc in self.memTraceDetectionCollection.possibleLeaks:
-            self.currenttrace.add(ql.arch.regs.arch_pc, addr)
+        self.currenttrace.add(ql.arch.regs.arch_pc, addr)
 
     def _trace_mem_op_fast(self, ql: Qiling, address, size):
         # The unicorn emulation framework might not support reading the pc in a read_mem hook for ARM !
@@ -317,23 +298,26 @@ class MemWatcher(Stage):
         # TODO: Patch Unicorn / Qiling if time permits
 
         # Only process potential leaks:
-        if address not in self.memTraceDetectionCollection.possibleLeaks:
+        assert self.archPCs is not None
+        if address not in self.archPCs:
             return
         buf = ql.mem.read(address, size)
+
         for i in self.md.disasm(buf, address):
             if len(i.operands) == 2:
-                if i.operands[1].type in [ARM_OP_MEM, X86_OP_MEM]:
+                if i.operands[1].type in [ARM_OP_MEM]:
                     memop_src = i.operands[1].mem
                     memaddr = (
-                        ql.arch.regs.read(i.reg_name(memop_src.base))
+                        ql.arch.regs.read(memop_src.base)
                         + (
                             0
                             if not memop_src.index
-                            else ql.arch.regs.read(i.reg_name(memop_src.index))
+                            else ql.arch.regs.read(memop_src.index)
                         )
                         * memop_src.scale
                         + memop_src.disp
                     )
+    
                     self.currenttrace.add(address, memaddr)
 
     def exec(self, generator):
@@ -352,8 +336,7 @@ class MemWatcher(Stage):
     def finalize(self):
         assert len(self.traces) > 0
         self.memTraceDetectionCollection = MemTraceCollection(self.traces, self.bl)
-        mtc = MemTraceCollection(self.traces, self.bl)
-        return mtc
+        return self.memTraceDetectionCollection
 
 
 class DistributionAnalyzer(Stage):

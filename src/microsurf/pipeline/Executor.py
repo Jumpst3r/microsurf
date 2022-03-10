@@ -1,3 +1,4 @@
+from capstone import CS_ARCH_ARM
 from ..utils.logger import getConsole, getLogger
 from ..pipeline.LeakageModels import identity
 from typing import List
@@ -19,9 +20,17 @@ class PipeLineExecutor:
         self.results: List[int] = []
 
     def run(self):
-
-        memCheckStage_leak = FindMemOps(binaryLoader=self.loader)
-
+        isARCH = False
+        if self.loader.md.arch == CS_ARCH_ARM:
+            isARCH = True
+            memOpFinder = FindMemOps(binaryLoader=self.loader)
+            memOpFinder.exec(self.loader.fixedArg)
+            possibleLeaks = memOpFinder.finalize()
+            memCheckStage_leak = MemWatcher(binaryLoader=self.loader, archPCs=possibleLeaks)
+        else:
+            memCheckStage_leak = MemWatcher(
+                binaryLoader=self.loader
+        )
         log.info("Running stage Leak Detection")
 
         # run with varying secrets, hooks every mem op
@@ -30,11 +39,12 @@ class PipeLineExecutor:
 
         memTraceCollection = memCheckStage_leak.finalize()
         oldleaks = memTraceCollection.possibleLeaks
+
         memCheckStage_detect1 = MemWatcher(
-            binaryLoader=self.loader, memTraceCollection=memTraceCollection
+            binaryLoader=self.loader, archPCs= possibleLeaks if isARCH else None
         )
         memCheckStage_detect2 = MemWatcher(
-            binaryLoader=self.loader, memTraceCollection=memTraceCollection
+            binaryLoader=self.loader, archPCs= possibleLeaks if isARCH else None
         )
         log.info("Running stage Leak Confirm")
 
@@ -79,7 +89,7 @@ class PipeLineExecutor:
         log.info(f"Ignoring {len(possibleLeaks) - len(res)} leaks with low score")
         log.info(f"Indentified {len(res)} leak with good MI score:")
         for ip in res.keys():
-            log.info(f"[{ip}] [MI score: {res[ip]:.2f}] {self.loader.asm[ip]} ")
+            log.info(f"[{ip}] [MI score: {res[ip]:.2f}] ")
         self.results = [int(k, 16) for k in res.keys()]
 
     def finalize(self):

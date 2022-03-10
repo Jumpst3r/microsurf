@@ -21,11 +21,9 @@ def genRandom() -> str:
     Returns:
         str: string of the hex rep. of the key
     """
-    # rbytes = os.urandom(KEYLEN)
-    # return f"{int.from_bytes(rbytes, byteorder='big'):x}"
     kbytes = KEYLEN // 4
-    fmt = "%0" + str(kbytes) + "x"
-    return str.format(fmt % int(os.urandom(kbytes).hex(), 16))
+    rbytes = os.urandom(kbytes)
+    return f"{int.from_bytes(rbytes, byteorder='big'):x}"
 
 
 def genFixed() -> str:
@@ -34,7 +32,8 @@ def genFixed() -> str:
     Returns:
         str: string of the hex rep. of the key
     """
-    fbytes = bytes("A" * KEYLEN, "utf-8")
+    kbytes = KEYLEN // 4
+    fbytes = bytes("A" * kbytes, "utf-8")
     return f"{int.from_bytes(fbytes, byteorder='big'):x}"
 
 
