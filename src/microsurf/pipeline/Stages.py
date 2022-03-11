@@ -52,6 +52,7 @@ class BinaryLoader(Stage):
         self.moduleroot = Path(__file__).parent.parent.parent
         self.dryRunOnly = kwargs["dryRunOnly"]
         self.args = args
+        self.mappings = None
         try:
             self.rootfs = kwargs["jail"]
         except KeyError:
@@ -189,10 +190,19 @@ class BinaryLoader(Stage):
         val, path = self._fixed()
         return val, path
 
+    # we can't call qiling's function (undef mappings), so replicate it here
+    # FIXME there has to be a cleaner way
+    def getlibbase(self, name):
+        return next(
+            (s for s, _, _, info, _ in self.mappings if os.path.split(info)[1] == name),
+            -1,
+        )
+
     def exec(self):
         self.fixedArg()
         log.info(f"Emulating {self.QLEngine._argv} (dry run)")
         self.QLEngine.run()
+        self.mappings = self.QLEngine.mem.get_mapinfo()
         self.QLEngine.stop()
         self.refreshQLEngine()
         if self.dryRunOnly:
@@ -319,7 +329,7 @@ class MemWatcher(Stage):
 
                     self.currenttrace.add(address, memaddr)
 
-    def exec(self, generator):
+    def exec(self, generator, pindex, mt_res):
         secret, path = generator()  # updates the secret
         self.bl.refreshQLEngine()
         if self.bl.md.arch != CS_ARCH_ARM:
@@ -329,8 +339,7 @@ class MemWatcher(Stage):
             self.bl.QLEngine.hook_code(self._trace_mem_op_fast)
         self.currenttrace = MemTrace(secret)
         self.bl.QLEngine.run()
-        self.traces.append(self.currenttrace)
-
+        mt_res[pindex] = self.currenttrace
         self.bl.QLEngine.stop()
 
     def finalize(self):
@@ -379,9 +388,7 @@ class DistributionAnalyzer(Stage):
 
             if LOGGING_LEVEL == logging.DEBUG:
                 fig, ax = plt.subplots(1, 1)
-                fig.suptitle(
-                    f"IP={hex(leakAddr)} ({self.asm[hex(leakAddr)]}) MWU p={p_value:e}"
-                )
+                fig.suptitle(f"IP={hex(leakAddr)} MWU p={p_value:e}")
                 sns.distplot(
                     addrSetFixed,
                     ax=ax,
@@ -474,9 +481,9 @@ class LeakageClassification(Stage):
             mival = np.sum(mutual_info_regression(mat, secretMat, random_state=42))
             # log.info(f"mat{hex(leakAddr)} = {mat}")
             # log.info(f"secretMat = {secretMat}")
-            # log.debug(f"MI score for {hex(leakAddr)}: {mival:.2f}")
             if mival < 0.1:
                 continue
+            log.info(f"MI score for {hex(leakAddr)}: {mival:.2f}")
             self.results[hex(leakAddr)] = mival
 
     def exec(self, *args, **kwargs):

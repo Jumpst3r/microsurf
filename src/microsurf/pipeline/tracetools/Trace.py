@@ -1,5 +1,4 @@
 from typing import Dict, List, Set
-import json
 from collections import defaultdict
 from microsurf.utils.logger import getConsole, getLogger
 
@@ -52,26 +51,6 @@ class MemTraceCollection:
     def remove(self, indices):
         for index in sorted(indices, reverse=True):
             del self.traces[index]
-
-    def jsonRep(self):
-        _traceList = []
-        for t in self.traces:
-            _trace = {}
-            _trace["secret"] = t.secret
-            _evidence = []
-            for k, v in t.trace.items():
-                _evObj = {}
-                _evObj["IP"] = [hex(k)]
-                _evObj["opstr"] = [self.caller.asm[hex(k)]]
-                _evObj["memAddr"] = [hex(e) for e in v]
-                _evidence.append(_evObj)
-
-            _trace["evidence"] = _evidence
-            _traceList.append(_trace)
-
-        jdict = {"stage": "Memtracer", "traces": _traceList}
-
-        return json.dumps(jdict, indent=4)
 
     def __len__(self):
         return len(self.traces)
