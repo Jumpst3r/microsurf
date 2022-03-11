@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import scipy.stats as stats
 import seaborn as sns
 from capstone import CS_ARCH_ARM, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_MODE_ARM, Cs
+
 from capstone.arm_const import ARM_OP_MEM
 from qiling import Qiling
 
@@ -483,7 +484,7 @@ class LeakageClassification(Stage):
             # log.info(f"secretMat = {secretMat}")
             if mival < 0.1:
                 continue
-            log.info(f"MI score for {hex(leakAddr)}: {mival:.2f}")
+            log.debug(f"MI score for {hex(leakAddr)}: {mival:.2f}")
             self.results[hex(leakAddr)] = mival
 
     def exec(self, *args, **kwargs):

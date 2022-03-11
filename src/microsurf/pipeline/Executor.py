@@ -13,6 +13,7 @@ from ..pipeline.Stages import (
     MemWatcher,
 )
 from ..utils.logger import getConsole, getLogger
+from ..utils.elf import getfnname
 
 log = getLogger()
 console = getConsole()
@@ -50,9 +51,11 @@ class PipeLineExecutor:
         manager = multiprocessing.Manager()
         tracesFixed = manager.dict()
         tracesRandom = manager.dict()
-        FIXED_ITER_CNT = 30
+        FIXED_ITER_CNT = 60
         # TODO let the user define how many cores.
-        nbCores = 1  # if multiprocessing.cpu_count() == 1 else multiprocessing.cpu_count() // 2
+        nbCores = (
+            1 if multiprocessing.cpu_count() == 1 else multiprocessing.cpu_count() // 2
+        )
         for i in range(FIXED_ITER_CNT):
             pfixed = multiprocessing.Process(
                 target=memWatcherFixed.exec, args=(self.loader.fixedArg, i, tracesFixed)
@@ -104,13 +107,7 @@ class PipeLineExecutor:
         self.results = [int(k, 16) for k in res.keys()]
 
         console.rule("results")
-        if self.loader.dynamic:
-            log.info("Target binary dynamically linked, reporting offsets")
-        else:
-            log.info("Target binary is static")
 
-        self.loader.refreshQLEngine()
-        self.loader.exec()
         # Pinpoint where the leak occured - for dyn. bins report only the offset:
         for (
             lbound,
@@ -122,12 +119,15 @@ class PipeLineExecutor:
             for k in self.results:
                 if lbound < k < ubound:
                     if self.loader.dynamic:
+                        offset = k - self.loader.getlibbase(label.split("/")[-1])
+                        symbname = getfnname(label.split(" ")[-1], offset)
                         log.info(
-                            f'{k-self.loader.getlibbase(label.split("/")[-1]):08x} - [MI = {self.mivals[hex(k)]:.2f}] {label.split("/")[-1]}'
+                            f'{offset:08x} - [MI = {self.mivals[hex(k)]:.2f}] \t at {symbname if symbname else "??":<30} {label.split("/")[-1]}'
                         )
                     else:
+                        symbname = getfnname(label.split(" ")[-1], k)
                         log.info(
-                            f'{k:08x} - [MI = {self.mivals[hex(k)]:.2f}] {label.split("/")[-1]}'
+                            f'{k:08x} [MI={self.mivals[hex(k)]:.2f}] \t at {symbname if symbname else "??":<30} {label.split("/")[-1]}'
                         )
 
     def finalize(self):
