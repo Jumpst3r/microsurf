@@ -319,7 +319,8 @@ class MemWatcher(Stage):
 
                     self.currenttrace.add(address, memaddr)
 
-    def exec(self, generator):
+    def exec(self, generator, pindex, mt_res):
+        log.debug(f"Spawned new process w. PID {os.getpid()}")
         secret, path = generator()  # updates the secret
         self.bl.refreshQLEngine()
         if self.bl.md.arch != CS_ARCH_ARM:
@@ -329,8 +330,7 @@ class MemWatcher(Stage):
             self.bl.QLEngine.hook_code(self._trace_mem_op_fast)
         self.currenttrace = MemTrace(secret)
         self.bl.QLEngine.run()
-        self.traces.append(self.currenttrace)
-
+        mt_res[pindex] = self.currenttrace
         self.bl.QLEngine.stop()
 
     def finalize(self):

@@ -1,3 +1,4 @@
+import multiprocessing
 from capstone import CS_ARCH_ARM
 from ..utils.logger import getConsole, getLogger
 from ..pipeline.LeakageModels import hamming
@@ -34,40 +35,40 @@ class PipeLineExecutor:
             memOpFinder = FindMemOps(binaryLoader=self.loader)
             memOpFinder.exec(self.loader.fixedArg)
             possibleLeaks = memOpFinder.finalize()
-            memCheckStage_leak = MemWatcher(
-                binaryLoader=self.loader, archPCs=possibleLeaks
-            )
-        else:
-            memCheckStage_leak = MemWatcher(binaryLoader=self.loader)
 
-        log.info("Running stage Leak Detection")
-        for i in range(2):
-            # log.info(f'--{i}/{10}')
-            memCheckStage_leak.exec(self.loader.rndArg)
-
-        memCheckStage_leak.finalize()
-        memCheckStage_detect1 = MemWatcher(
+        memWatcherFixed = MemWatcher(
             binaryLoader=self.loader, archPCs=possibleLeaks if isARCH else None
         )
-        memCheckStage_detect2 = MemWatcher(
+        memWatcherRnd = MemWatcher(
             binaryLoader=self.loader, archPCs=possibleLeaks if isARCH else None
         )
         log.info("Running stage Leak Confirm")
 
-        # run multiple times with a fixed secret
-        FIXED_ITER_CNT = 40
-        for i in tqdm(range(FIXED_ITER_CNT)):
-            # log.info(f'--{i}/{FIXED_ITER_CNT}')
-            memCheckStage_detect1.exec(self.loader.fixedArg)
+        jobs = []
+        manager = multiprocessing.Manager()
+        tracesFixed = manager.dict()
+        tracesRandom = manager.dict()
+        FIXED_ITER_CNT = 10
+        # TODO let the user define how many cores.
+        nbCores = 4
+        for i in range(FIXED_ITER_CNT):
+            pfixed = multiprocessing.Process(target=memWatcherFixed.exec, args=(self.loader.fixedArg, i, tracesFixed))
+            jobs.append(pfixed)
+            prand = multiprocessing.Process(target=memWatcherRnd.exec, args=(self.loader.rndArg, i, tracesRandom))
+            jobs.append(prand)
 
-        fixedTraceCollection = memCheckStage_detect1.finalize()
+        log.info(f"Buffered {len(jobs)} jobs")
+        for i in range(0, len(jobs), nbCores):
+            batch = []
+            for j in jobs[i:i+nbCores]:
+                batch.append(j)
+                j.start()
+            for j in batch: j.join()
 
-        # run multiple times with random secrets
-        for i in tqdm(range(FIXED_ITER_CNT)):
-            # log.info(f'--{i}/{FIXED_ITER_CNT}')
-            memCheckStage_detect2.exec(self.loader.rndArg)
-
-        rndTraceCollection = memCheckStage_detect2.finalize()
+        memWatcherFixed.traces += tracesFixed.values()
+        memWatcherRnd.traces += tracesRandom.values()
+        fixedTraceCollection = memWatcherFixed.finalize()
+        rndTraceCollection = memWatcherRnd.finalize()
 
         distAnalyzer = DistributionAnalyzer(
             fixedTraceCollection, rndTraceCollection, self.loader
@@ -97,6 +98,8 @@ class PipeLineExecutor:
         log.info(f"Indentified {len(res)} leak with good MI score:")
         self.results = [int(k, 16) for k in res.keys()]
         console.rule("results")
+        for j in self.results:
+            log.info(j)
         # Pinpoint where the leak occured - for dyn. bins report only the offset:
         for (
             lbound,
