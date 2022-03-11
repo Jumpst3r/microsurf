@@ -1,16 +1,18 @@
 import multiprocessing
-from capstone import CS_ARCH_ARM
-from ..utils.logger import getConsole, getLogger
-from ..pipeline.LeakageModels import hamming
 from typing import List
+
+from capstone import CS_ARCH_ARM
+from tqdm import tqdm
+
+from ..pipeline.LeakageModels import hamming
 from ..pipeline.Stages import (
     BinaryLoader,
     DistributionAnalyzer,
     FindMemOps,
-    MemWatcher,
     LeakageClassification,
+    MemWatcher,
 )
-from tqdm import tqdm
+from ..utils.logger import getConsole, getLogger
 
 log = getLogger()
 console = getConsole()
@@ -48,22 +50,27 @@ class PipeLineExecutor:
         manager = multiprocessing.Manager()
         tracesFixed = manager.dict()
         tracesRandom = manager.dict()
-        FIXED_ITER_CNT = 10
+        FIXED_ITER_CNT = 30
         # TODO let the user define how many cores.
-        nbCores = 4
+        nbCores = 1  # if multiprocessing.cpu_count() == 1 else multiprocessing.cpu_count() // 2
         for i in range(FIXED_ITER_CNT):
-            pfixed = multiprocessing.Process(target=memWatcherFixed.exec, args=(self.loader.fixedArg, i, tracesFixed))
+            pfixed = multiprocessing.Process(
+                target=memWatcherFixed.exec, args=(self.loader.fixedArg, i, tracesFixed)
+            )
             jobs.append(pfixed)
-            prand = multiprocessing.Process(target=memWatcherRnd.exec, args=(self.loader.rndArg, i, tracesRandom))
+            prand = multiprocessing.Process(
+                target=memWatcherRnd.exec, args=(self.loader.rndArg, i, tracesRandom)
+            )
             jobs.append(prand)
 
-        log.info(f"Buffered {len(jobs)} jobs")
-        for i in range(0, len(jobs), nbCores):
+        log.info(f"Batching {len(jobs)} jobs across {nbCores} cores")
+        for i in tqdm(range(0, len(jobs), nbCores)):
             batch = []
-            for j in jobs[i:i+nbCores]:
+            for j in jobs[i: i + nbCores]:
                 batch.append(j)
                 j.start()
-            for j in batch: j.join()
+            for j in batch:
+                j.join()
 
         memWatcherFixed.traces += tracesFixed.values()
         memWatcherRnd.traces += tracesRandom.values()
@@ -75,10 +82,8 @@ class PipeLineExecutor:
         )
         distAnalyzer.exec()
         possibleLeaks = distAnalyzer.finalize()
-
-        degenerateCases = (
-            set()
-        )  # traces which, for non-deterministic reasons, do not contain meaningful info
+        degenerateCases = set()
+        # traces which, for non-deterministic reasons, do not contain meaningful info
         for idx, t in enumerate(rndTraceCollection.traces):
             for leak in possibleLeaks:
                 if len(t.trace[leak]) == 0:
@@ -97,22 +102,28 @@ class PipeLineExecutor:
         log.info(f"Ignoring {len(possibleLeaks) - len(res)} leaks with low score")
         log.info(f"Indentified {len(res)} leak with good MI score:")
         self.results = [int(k, 16) for k in res.keys()]
+
         console.rule("results")
-        for j in self.results:
-            log.info(j)
+        if self.loader.dynamic:
+            log.info("Target binary dynamically linked, reporting offsets")
+        else:
+            log.info("Target binary is static")
+
+        self.loader.refreshQLEngine()
+        self.loader.exec()
         # Pinpoint where the leak occured - for dyn. bins report only the offset:
         for (
             lbound,
             ubound,
-            perms,
+            _,
             label,
-            container,
-        ) in self.loader.QLEngine.mem.get_mapinfo():
+            _,
+        ) in self.loader.mappings:
             for k in self.results:
                 if lbound < k < ubound:
                     if self.loader.dynamic:
                         log.info(
-                            f'{k-self.loader.QLEngine.mem.get_lib_base(label.split("/")[-1]):08x} - [MI = {self.mivals[hex(k)]:.2f}] {label.split("/")[-1]}'
+                            f'{k-self.loader.getlibbase(label.split("/")[-1]):08x} - [MI = {self.mivals[hex(k)]:.2f}] {label.split("/")[-1]}'
                         )
                     else:
                         log.info(

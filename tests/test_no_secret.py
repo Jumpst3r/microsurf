@@ -4,6 +4,7 @@ For more information about the given binary, refer to binaries/nosecret/readme.m
 @author nicolas
 """
 
+import tempfile
 import pytest
 from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.pipeline.Executor import PipeLineExecutor
@@ -12,7 +13,8 @@ import json, sys
 
 
 def test_analyze_arm(monkeypatch):
-    monkeypatch.setattr('sys.stdin', sys.stdout)
+    fp = tempfile.TemporaryFile()
+    monkeypatch.setattr('sys.stdin', fp)
     binPath = PurePath(
         Path(__file__).parent, Path("binaries/nosecret/nosecret-arm.bin")
     )
@@ -26,11 +28,13 @@ def test_analyze_arm(monkeypatch):
     pipeline.run()
     res = pipeline.finalize()
     armTargetAddr = [int(a, 16) for a in armTargetAddr]
+    fp.close()
     assert res == armTargetAddr
 
 
 def test_analyze_ia32(monkeypatch):
-    monkeypatch.setattr('sys.stdin', sys.stdout)
+    fp = tempfile.TemporaryFile()
+    monkeypatch.setattr('sys.stdin', fp)
     binPath = PurePath(
         Path(__file__).parent,
         Path("binaries/nosecret/nosecret-x86-32.bin"),
@@ -45,11 +49,13 @@ def test_analyze_ia32(monkeypatch):
     pipeline.run()
     res = pipeline.finalize()
     armTargetAddr = [int(a, 16) for a in armTargetAddr]
+    fp.close()
     assert res == armTargetAddr
 
 
 def test_analyze_x86_64(monkeypatch):
-    monkeypatch.setattr('sys.stdin', sys.stdout)
+    fp = tempfile.TemporaryFile()
+    monkeypatch.setattr('sys.stdin', fp)
     binPath = PurePath(
         Path(__file__).parent,
         Path("binaries/nosecret/nosecret-x86-64.bin"),
@@ -64,4 +70,5 @@ def test_analyze_x86_64(monkeypatch):
     pipeline.run()
     res = pipeline.finalize()
     armTargetAddr = [int(a, 16) for a in armTargetAddr]
+    fp.close()
     assert res == armTargetAddr

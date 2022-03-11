@@ -1,5 +1,4 @@
 from typing import Dict, List, Set
-import json
 from collections import defaultdict
 from microsurf.utils.logger import getConsole, getLogger
 
