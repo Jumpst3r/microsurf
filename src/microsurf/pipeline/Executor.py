@@ -2,6 +2,7 @@ import multiprocessing
 from typing import List
 
 from capstone import CS_ARCH_ARM
+from microsurf.pipeline.tracetools.Trace import MemTraceCollection
 from tqdm import tqdm
 
 from ..pipeline.LeakageModels import hamming
@@ -12,8 +13,8 @@ from ..pipeline.Stages import (
     LeakageClassification,
     MemWatcher,
 )
-from ..utils.logger import getConsole, getLogger
 from ..utils.elf import getfnname
+from ..utils.logger import getConsole, getLogger
 
 log = getLogger()
 console = getConsole()
@@ -25,6 +26,9 @@ class PipeLineExecutor:
         self.results: List[int] = []
 
     def run(self):
+        import time
+
+        starttime = time.time()
         try:
             val, _ = self.loader._rand()
             encoded = hamming(val)
@@ -51,10 +55,10 @@ class PipeLineExecutor:
         manager = multiprocessing.Manager()
         tracesFixed = manager.dict()
         tracesRandom = manager.dict()
-        FIXED_ITER_CNT = 60
+        FIXED_ITER_CNT = 100
         # TODO let the user define how many cores.
         nbCores = (
-            1 if multiprocessing.cpu_count() == 1 else multiprocessing.cpu_count() // 2
+            1 if multiprocessing.cpu_count() == 1 else multiprocessing.cpu_count() - 1
         )
         for i in range(FIXED_ITER_CNT):
             pfixed = multiprocessing.Process(
@@ -75,11 +79,12 @@ class PipeLineExecutor:
             for j in batch:
                 j.join()
 
-        memWatcherFixed.traces += tracesFixed.values()
-        memWatcherRnd.traces += tracesRandom.values()
-        fixedTraceCollection = memWatcherFixed.finalize()
-        rndTraceCollection = memWatcherRnd.finalize()
+        fixedTraceCollection = MemTraceCollection(tracesFixed.values())
+        del tracesFixed
+        rndTraceCollection = MemTraceCollection(tracesRandom.values())
+        del tracesRandom
 
+        log.info("Filtering stochastic events")
         distAnalyzer = DistributionAnalyzer(
             fixedTraceCollection, rndTraceCollection, self.loader
         )
@@ -95,7 +100,7 @@ class PipeLineExecutor:
         for idx, t in enumerate(rndTraceCollection.traces):
             for leak in possibleLeaks:
                 assert len(t.trace[leak]) > 0
-
+        log.info("Classifying leaks")
         lc = LeakageClassification(
             rndTraceCollection, self.loader, possibleLeaks, self.loader.leakageModel
         )
@@ -105,8 +110,10 @@ class PipeLineExecutor:
         log.info(f"Ignoring {len(possibleLeaks) - len(res)} leaks with low score")
         log.info(f"Indentified {len(res)} leak with good MI score:")
         self.results = [int(k, 16) for k in res.keys()]
-
-        console.rule("results")
+        endtime = time.time()
+        console.rule(
+            f"results (took {time.strftime('%H:%M:%S', time.gmtime(endtime-starttime))})"
+        )
 
         # Pinpoint where the leak occured - for dyn. bins report only the offset:
         for (
@@ -121,12 +128,12 @@ class PipeLineExecutor:
                     if self.loader.dynamic:
                         offset = k - self.loader.getlibbase(label.split("/")[-1])
                         symbname = getfnname(label.split(" ")[-1], offset)
-                        log.info(
+                        console.print(
                             f'{offset:08x} - [MI = {self.mivals[hex(k)]:.2f}] \t at {symbname if symbname else "??":<30} {label.split("/")[-1]}'
                         )
                     else:
                         symbname = getfnname(label.split(" ")[-1], k)
-                        log.info(
+                        console.print(
                             f'{k:08x} [MI={self.mivals[hex(k)]:.2f}] \t at {symbname if symbname else "??":<30} {label.split("/")[-1]}'
                         )
 

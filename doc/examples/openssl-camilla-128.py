@@ -9,6 +9,7 @@ openssl aes-128-cbc -e -in input.bin -out output.bin -nosalt -K hexdata -iv 0
 
 import os
 from pathlib import Path
+import sys
 from microsurf.microsurf import SCDetector
 from microsurf.pipeline.LeakageModels import hamming
 
@@ -40,7 +41,15 @@ def genFixed() -> str:
 
 if __name__ == "__main__":
     # define lib / bin paths
-    jailroot = "/home/nicolas/Documents/msc-thesis-work/doc/examples/rootfs/jail-openssl-x8632/"
+
+    if len(sys.argv) > 1 and sys.argv[1] == 'arm64':
+        jailroot = "/home/nicolas/Documents/msc-thesis-work/doc/examples/rootfs/jail-openssl-arm64/"
+    elif len(sys.argv) > 1 and sys.argv[1] == 'x8632':
+        jailroot = "/home/nicolas/Documents/msc-thesis-work/doc/examples/rootfs/jail-openssl-x8632/"
+    else:
+        print("usage: openssl-camillia-128.py [arm64, x8632]")
+        exit(0)
+
     binpath = jailroot + "openssl"
     # openssl args, the secret part is marked with '@'
     opensslArgs = [
@@ -61,7 +70,7 @@ if __name__ == "__main__":
         args=opensslArgs,
         randGen=genRandom,
         fixGen=genFixed,
-        deterministic=False,
+        deterministic=True,
         asFile=False,
         jail=jailroot,
         leakageModel=hamming,

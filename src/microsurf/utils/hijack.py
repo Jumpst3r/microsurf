@@ -11,10 +11,13 @@ Original hooks taken from
 TODO Add tests to check how well this works on different platforms !
 """
 
+import os
+import stat
 from typing import Union
 from qiling.os.mapper import QlFsMappedObject
 from .logger import getLogger
 from qiling.const import QL_ARCH
+from qiling.os.posix.stat import Stat
 import ctypes
 
 log = getLogger()
@@ -122,4 +125,39 @@ def const_clock_gettimeofday(ql, gettimeofday_tv, gettimeofday_tz, *args, **kw):
     if gettimeofday_tz != 0:
         ql.mem.write(gettimeofday_tz, b"\x00" * 8)
     regreturn = 0
+    return regreturn
+
+
+"""
+on arm64, openssl calls faccessat to check if it has the permissions needde to manipulate the input and output files.
+
+The original [1] qiling hook for faccessat only works with pipes, it (should ?) also work for real files.
+note that we don't actually check the permissions according to
+https://linux.die.net/man/2/faccessat
+
+TODO: create an issue on the Qiling gh.
+
+[1] qiling/os/posix/syscall/unistd.py
+"""
+
+
+def ql_fixed_syscall_faccessat(ql, dfd: int, filename: int, mode: int):
+    access_path = ql.os.utils.read_cstring(filename)
+    real_path = ql.os.path.transform_to_real_path(access_path)
+
+    if not os.path.exists(real_path):
+        regreturn = -1
+
+    elif stat.S_ISFIFO(Stat(real_path).st_mode):
+        regreturn = 0
+
+    elif stat.S_ISREG(Stat(real_path).st_mode):
+        regreturn = 0
+    else:
+        regreturn = -1
+    if regreturn == -1:
+        ql.log.debug(f"File not found or skipped: {access_path}")
+    else:
+        ql.log.debug(f"File found: {access_path}")
+
     return regreturn

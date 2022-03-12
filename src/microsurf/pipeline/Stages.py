@@ -25,6 +25,7 @@ from ..utils.hijack import (
     const_getrandom,
     const_time,
     device_random,
+    ql_fixed_syscall_faccessat,
 )
 from ..utils.logger import (
     LOGGING_LEVEL,
@@ -57,7 +58,7 @@ class BinaryLoader(Stage):
         try:
             self.rootfs = kwargs["jail"]
         except KeyError:
-            pass
+            self.rootfs = "/"
         self.QLEngine: Qiling = None
         try:
             self.deterministic = kwargs["deterministic"]
@@ -117,13 +118,12 @@ class BinaryLoader(Stage):
                 [str(self.binPath), *args],
                 str(self.rootfs),
                 log_override=getQillingLogger(),
-                verbose=0,
+                verbose=4,
                 console=True,
                 multithread=True,
             )
             if path:
                 self.QLEngine.add_fs_mapper(path.split("/")[-1], path.split("/")[-1])
-            # self.QLEngine.add_fs_mapper('output.bin', 'output.bin')
             self.fixRandomness(self.deterministic)
         except FileNotFoundError as e:
             if ".so" in str(e):
@@ -135,6 +135,7 @@ class BinaryLoader(Stage):
         except Exception as e:
             log.error(f"Emulation dry run failed: {str(e)}")
             log.error(traceback.format_exc())
+            exit(1)
         self.md.detail = True
 
     def _rand(self):
@@ -191,6 +192,16 @@ class BinaryLoader(Stage):
         val, path = self._fixed()
         return val, path
 
+    def getlibname(self, addr):
+        return next(
+            (
+                os.path.split(info)[1]
+                for s, e, _, info, _ in self.mappings
+                if s < addr < e
+            ),
+            -1,
+        )
+
     # we can't call qiling's function (undef mappings), so replicate it here
     # FIXME there has to be a cleaner way
     def getlibbase(self, name):
@@ -219,6 +230,7 @@ class BinaryLoader(Stage):
         )
         self.fixRandomness(self.deterministic)
 
+    # TODO rename - as it now inlcudes fixes for broken qiling syscall hooks
     def fixRandomness(self, bool):
         if bool:
             self.QLEngine.add_fs_mapper("/dev/urandom", device_random)
@@ -244,6 +256,9 @@ class BinaryLoader(Stage):
             self.QLEngine.add_fs_mapper("/dev/urandom", "/dev/urandom")
             self.QLEngine.add_fs_mapper("/dev/random", "/dev/random")
             self.QLEngine.add_fs_mapper("/dev/arandom", "/dev/arandom")
+
+        # replace broken qiling hooks with working ones:
+        self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
 
 
 class FindMemOps(Stage):
@@ -332,21 +347,16 @@ class MemWatcher(Stage):
 
     def exec(self, generator, pindex, mt_res):
         secret, path = generator()  # updates the secret
+        self.currenttrace = MemTrace(secret)
         self.bl.refreshQLEngine()
         if self.bl.md.arch != CS_ARCH_ARM:
             # Unicorn supports reading PC in mem hook
             self.bl.QLEngine.hook_mem_read(self._trace_mem_read)
         else:
             self.bl.QLEngine.hook_code(self._trace_mem_op_fast)
-        self.currenttrace = MemTrace(secret)
         self.bl.QLEngine.run()
         mt_res[pindex] = self.currenttrace
         self.bl.QLEngine.stop()
-
-    def finalize(self):
-        assert len(self.traces) > 0
-        self.memTraceDetectionCollection = MemTraceCollection(self.traces, self.bl)
-        return self.memTraceDetectionCollection
 
 
 class DistributionAnalyzer(Stage):
@@ -358,7 +368,7 @@ class DistributionAnalyzer(Stage):
     ):
         self.fixedTraceCollection = fixedTraceCollection
         self.rndTraceCollection = rndTraceCollection
-        self.asm = binaryLoader.asm
+        self.loader = binaryLoader
 
     def analyze(self):
         results = []
@@ -389,7 +399,9 @@ class DistributionAnalyzer(Stage):
 
             if LOGGING_LEVEL == logging.DEBUG:
                 fig, ax = plt.subplots(1, 1)
-                fig.suptitle(f"IP={hex(leakAddr)} MWU p={p_value:e}")
+                fig.suptitle(
+                    f"IP={hex(leakAddr)} in {self.loader.getlibname(leakAddr)} MWU p={p_value:e}"
+                )
                 sns.distplot(
                     addrSetFixed,
                     ax=ax,
@@ -410,9 +422,10 @@ class DistributionAnalyzer(Stage):
                     kde_kws={"linewidth": 1},
                     label="Random secret input",
                 )
-                plt.savefig(f"{hex(leakAddr)}.png")
+                plt.savefig(f"debug/{hex(leakAddr)}.png")
 
             if p_value < 0.01:
+                log.info("Exectuted MWU analysis")
                 results.append(leakAddr)
         log.info(
             f"filtered {len(self.fixedTraceCollection.possibleLeaks) - len(results)} false positives"
@@ -438,7 +451,7 @@ class LeakageClassification(Stage):
         self.possibleLeaks = possibleLeaks
         # The leakage function can return one dimensional data (ex. hamm. dist.) or multidimensional data (bit/byte slices)
         self.leakageModelFunction = leakageModelFunction
-        self.asm = binaryLoader.asm
+        self.loader = binaryLoader
         self.results: Dict[str, float] = {}
 
     def _key(self, t):

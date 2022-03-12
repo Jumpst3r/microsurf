@@ -157,3 +157,6 @@ env/**
 
 # coverage files
 *.pof
+
+# debug dir (MPL figures)
+debug/*

@@ -20,15 +20,10 @@ class MemTrace:
 
 
 class MemTraceCollection:
-    def __init__(self, traces: list[MemTrace], caller):
+    def __init__(self, traces: list[MemTrace]):
         self.traces = traces
-        # FIXME Bad design
-        self.caller = caller
         self.possibleLeaks: Set[int] = set()
         self.prune()
-        # for t in traces:
-        #    for k in t.trace.keys():
-        #        self.possibleLeaks.add(k)
 
     def prune(self):
         commonItems = set()
