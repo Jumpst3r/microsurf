@@ -1,7 +1,6 @@
 import logging
 import os
 import random
-import re
 import tempfile
 from collections import OrderedDict
 from pathlib import Path, PurePath
@@ -14,7 +13,6 @@ import scipy.stats as stats
 import seaborn as sns
 from capstone import CS_ARCH_ARM, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_MODE_ARM, Cs
 
-from capstone.arm_const import ARM_OP_MEM
 from qiling import Qiling
 
 from microsurf.pipeline.LeakageModels import identity
@@ -261,99 +259,24 @@ class BinaryLoader(Stage):
         self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
 
 
-class FindMemOps(Stage):
-    """
-    Hooks all code and records any oerands which likely perform memory accesses. Note that this is an ungly hack
-    because the emulator does not support reading the PC in mem read hooks on ARM. This should not be executed on
-    x86.
-    """
-
-    def __init__(self, binaryLoader: BinaryLoader) -> None:
-        self.armPCs: set[int] = set()
-        self.bl = binaryLoader
-        self.md = binaryLoader.md
-        self.secret = None
-
-    def _trace_mem_op(self, ql: Qiling, address, size):
-        assert self.md.arch == CS_ARCH_ARM
-        buf = ql.mem.read(address, size)
-        for i in self.md.disasm(buf, address):
-            if len(i.operands) == 2:
-                if i.operands[1].type in [ARM_OP_MEM]:
-                    # We cannot directly trace memory reads for ARM
-                    # though this is not a prob since only LDR* ops performs
-                    # a memory read !
-                    if self.md.arch == CS_ARCH_ARM and not re.compile("^ldr.*").match(
-                        i.mnemonic
-                    ):
-                        continue
-                    self.armPCs.add(address)
-
-    def exec(self, generator):
-        secret, path = generator()  # updates the secret
-        self.bl.refreshQLEngine()
-        self.bl.QLEngine.hook_code(self._trace_mem_op)
-        self.secret = secret
-        self.bl.QLEngine.run()
-        self.bl.QLEngine.stop()
-
-    def finalize(self):
-        assert len(self.armPCs) > 0
-        return self.armPCs
-
-
 class MemWatcher(Stage):
     """
     Hooks memory reads
     """
 
-    def __init__(self, binaryLoader: BinaryLoader, archPCs=None) -> None:
+    def __init__(self, binaryLoader: BinaryLoader) -> None:
         self.traces: List[MemTrace] = []
         self.bl = binaryLoader
         self.md = self.bl.md
-        self.archPCs = archPCs
 
     def _trace_mem_read(self, ql: Qiling, access, addr, size, value):
         self.currenttrace.add(ql.arch.regs.arch_pc, addr)
-
-    def _trace_mem_op_fast(self, ql: Qiling, address, size):
-        # The unicorn emulation framework might not support reading the pc in a read_mem hook for ARM !
-        # https://github.com/unicorn-engine/unicorn/issues/358#issuecomment-169214744
-        # so for ARM we use a code hook similar to phase I
-        # TODO: Patch Unicorn / Qiling if time permits
-
-        # Only process potential leaks:
-        assert self.archPCs is not None
-        if address not in self.archPCs:
-            return
-        buf = ql.mem.read(address, size)
-
-        for i in self.md.disasm(buf, address):
-            if len(i.operands) == 2:
-                if i.operands[1].type in [ARM_OP_MEM]:
-                    memop_src = i.operands[1].mem
-                    memaddr = (
-                        ql.arch.regs.read(memop_src.base)
-                        + (
-                            0
-                            if not memop_src.index
-                            else ql.arch.regs.read(memop_src.index)
-                        )
-                        * memop_src.scale
-                        + memop_src.disp
-                    )
-
-                    self.currenttrace.add(address, memaddr)
 
     def exec(self, generator, pindex, mt_res):
         secret, path = generator()  # updates the secret
         self.currenttrace = MemTrace(secret)
         self.bl.refreshQLEngine()
-        if self.bl.md.arch != CS_ARCH_ARM:
-            # Unicorn supports reading PC in mem hook
-            self.bl.QLEngine.hook_mem_read(self._trace_mem_read)
-        else:
-            self.bl.QLEngine.hook_code(self._trace_mem_op_fast)
+        self.bl.QLEngine.hook_mem_read(self._trace_mem_read)
         self.bl.QLEngine.run()
         mt_res[pindex] = self.currenttrace
         self.bl.QLEngine.stop()

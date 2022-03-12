@@ -1,7 +1,6 @@
 import multiprocessing
 from typing import List
 
-from capstone import CS_ARCH_ARM
 from microsurf.pipeline.tracetools.Trace import MemTraceCollection
 from tqdm import tqdm
 
@@ -9,7 +8,6 @@ from ..pipeline.LeakageModels import hamming
 from ..pipeline.Stages import (
     BinaryLoader,
     DistributionAnalyzer,
-    FindMemOps,
     LeakageClassification,
     MemWatcher,
 )
@@ -36,18 +34,12 @@ class PipeLineExecutor:
         except ValueError:
             log.error(f"leakage model does not suppport input {val}")
             exit(1)
-        isARCH = False
-        if self.loader.md.arch == CS_ARCH_ARM:
-            isARCH = True
-            memOpFinder = FindMemOps(binaryLoader=self.loader)
-            memOpFinder.exec(self.loader.fixedArg)
-            possibleLeaks = memOpFinder.finalize()
 
         memWatcherFixed = MemWatcher(
-            binaryLoader=self.loader, archPCs=possibleLeaks if isARCH else None
+            binaryLoader=self.loader
         )
         memWatcherRnd = MemWatcher(
-            binaryLoader=self.loader, archPCs=possibleLeaks if isARCH else None
+            binaryLoader=self.loader
         )
         log.info("Running stage Leak Confirm")
 
@@ -55,7 +47,7 @@ class PipeLineExecutor:
         manager = multiprocessing.Manager()
         tracesFixed = manager.dict()
         tracesRandom = manager.dict()
-        FIXED_ITER_CNT = 100
+        FIXED_ITER_CNT = 60
         # TODO let the user define how many cores.
         nbCores = (
             1 if multiprocessing.cpu_count() == 1 else multiprocessing.cpu_count() - 1
