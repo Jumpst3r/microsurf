@@ -23,7 +23,6 @@ class MemTraceCollection:
     def __init__(self, traces: list[MemTrace]):
         self.traces = traces
         self.possibleLeaks: Set[int] = set()
-        self.prune()
 
     def prune(self):
         commonItems = set()
@@ -39,9 +38,10 @@ class MemTraceCollection:
                     commonItems.add(k1)
                     common = 0
         for t in self.traces:
-            t.remove(commonItems)
-            for k in t.trace.keys():
-                self.possibleLeaks.add(k)
+            if len(commonItems) > 0:
+                t.remove(commonItems)
+                for k in t.trace.keys():
+                    self.possibleLeaks.add(k)
 
     def remove(self, indices):
         for index in sorted(indices, reverse=True):

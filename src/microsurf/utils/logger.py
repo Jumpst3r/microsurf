@@ -6,38 +6,29 @@ from rich.logging import RichHandler
 
 warnings.filterwarnings("ignore")
 
-QILING_VERBOSE = 0
 LOGGING_LEVEL = logging.INFO
+
+logging.basicConfig(
+    level="INFO",
+    format="[%(name)s]  %(message)s",
+    datefmt="[%X]",
+    handlers=[
+        RichHandler(
+            rich_tracebacks=True,
+        )
+    ],
+)
 
 
 def getLogger():
-    root = logging.getLogger()
-    root.setLevel(LOGGING_LEVEL)
-    FORMAT = "%(message)s"
-    logging.basicConfig(
-        level="INFO",
-        format=FORMAT,
-        datefmt="[%X]",
-        handlers=[
-            RichHandler(
-                rich_tracebacks=True,
-            )
-        ],
-    )
-
-    return logging.getLogger("rich")
+    logger = logging.getLogger("MICROSURF")
+    logger.setLevel(LOGGING_LEVEL)
+    return logger
 
 
-def getQillingLogger():
-    logger = logging.getLogger("Qiling")
-    logger.setLevel(logging.WARNING)
-    FORMAT = "%(message)s"
-    logging.basicConfig(
-        level="WARNING",
-        format=FORMAT,
-        datefmt="[%X]",
-    )
-
+def getQilingLogger():
+    logger = logging.getLogger("EMULATOR")
+    logger.setLevel(LOGGING_LEVEL)
     return logger
 
 

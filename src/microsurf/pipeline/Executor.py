@@ -4,7 +4,6 @@ from typing import List
 from microsurf.pipeline.tracetools.Trace import MemTraceCollection
 from tqdm import tqdm
 
-from ..pipeline.LeakageModels import hamming
 from ..pipeline.Stages import (
     BinaryLoader,
     DistributionAnalyzer,
@@ -22,37 +21,26 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results: List[int] = []
+        self.ITER_COUNT = 40
 
     def run(self):
         import time
 
         starttime = time.time()
-        try:
-            val, _ = self.loader._rand()
-            encoded = hamming(val)
-            log.info(f"L(secret) = {encoded}, leakage model compatible.")
-        except ValueError:
-            log.error(f"leakage model does not suppport input {val}")
-            exit(1)
 
-        memWatcherFixed = MemWatcher(
-            binaryLoader=self.loader
-        )
-        memWatcherRnd = MemWatcher(
-            binaryLoader=self.loader
-        )
+        memWatcherFixed = MemWatcher(binaryLoader=self.loader)
+        memWatcherRnd = MemWatcher(binaryLoader=self.loader)
         log.info("Running stage Leak Confirm")
 
         jobs = []
         manager = multiprocessing.Manager()
         tracesFixed = manager.dict()
         tracesRandom = manager.dict()
-        FIXED_ITER_CNT = 60
         # TODO let the user define how many cores.
         nbCores = (
             1 if multiprocessing.cpu_count() == 1 else multiprocessing.cpu_count() - 1
         )
-        for i in range(FIXED_ITER_CNT):
+        for i in range(self.ITER_COUNT):
             pfixed = multiprocessing.Process(
                 target=memWatcherFixed.exec, args=(self.loader.fixedArg, i, tracesFixed)
             )
@@ -72,9 +60,12 @@ class PipeLineExecutor:
                 j.join()
 
         fixedTraceCollection = MemTraceCollection(tracesFixed.values())
+        assert len(fixedTraceCollection.possibleLeaks) == 0
         del tracesFixed
         rndTraceCollection = MemTraceCollection(tracesRandom.values())
         del tracesRandom
+
+        rndTraceCollection.prune()  # populates .possibleLeaks
 
         log.info("Filtering stochastic events")
         distAnalyzer = DistributionAnalyzer(

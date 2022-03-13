@@ -5,7 +5,6 @@ import tempfile
 from collections import OrderedDict
 from pathlib import Path, PurePath
 from typing import Dict, List
-import traceback
 
 import magic
 import matplotlib.pyplot as plt
@@ -25,12 +24,7 @@ from ..utils.hijack import (
     device_random,
     ql_fixed_syscall_faccessat,
 )
-from ..utils.logger import (
-    LOGGING_LEVEL,
-    getConsole,
-    getLogger,
-    getQillingLogger,
-)
+from ..utils.logger import LOGGING_LEVEL, getConsole, getLogger, getQilingLogger
 from .tracetools.Trace import MemTrace, MemTraceCollection
 
 console = getConsole()
@@ -49,10 +43,11 @@ class BinaryLoader(Stage):
     def __init__(self, path: str, args: List[str], **kwargs) -> None:
         self.binPath = Path(path)
         self.asm: Dict[str, str] = {}
-        self.moduleroot = Path(__file__).parent.parent.parent
         self.dryRunOnly = kwargs["dryRunOnly"]
         self.args = args
         self.mappings = None
+        self.OLDVAL = None
+        self.OLDPATH = None
         try:
             self.rootfs = kwargs["jail"]
         except KeyError:
@@ -68,13 +63,10 @@ class BinaryLoader(Stage):
             self.leakageModel = identity
         try:
             self.rndGen = kwargs["rndGen"]
-            self.fixGen = kwargs["fixGen"]
             self.asFile = kwargs["asFile"]
         except KeyError:
-            # secret as argument, default to random integer.
             self.asFile = False
             self.rndGen = None
-            self.fixGen = None
         try:
             self.secretArgIndex = args.index("@")
         except IndexError as e:
@@ -86,10 +78,7 @@ class BinaryLoader(Stage):
             log.error(f"target path {str(self.binPath)} not found")
         fileinfo = magic.from_file(path)
         if "80386" in fileinfo:
-            if "Linux" in fileinfo:
-                self.md = Cs(CS_ARCH_X86, CS_MODE_32)
-            elif "Windows" in fileinfo:
-                self.md = Cs(CS_ARCH_X86, CS_MODE_32)
+            self.md = Cs(CS_ARCH_X86, CS_MODE_32)
         elif "x86" in fileinfo:
             self.md = Cs(CS_ARCH_X86, CS_MODE_64)
         elif "ARM" in fileinfo:
@@ -98,7 +87,13 @@ class BinaryLoader(Stage):
             log.info(fileinfo)
             log.error("Target architecture not implemented")
             exit(-1)
-
+        try:
+            val, _ = self._rand()
+            encoded = self.leakageModel(val)
+            log.info(f"L({val}) = {encoded}, leakage model compatible.")
+        except ValueError:
+            log.error(f"leakage model does not suppport input {val}")
+            exit(1)
         if "dynamic" in fileinfo:
             log.warn(
                 "Detected dynamically linked binary, ensure that the appropriate shared objects are available"
@@ -115,8 +110,8 @@ class BinaryLoader(Stage):
             self.QLEngine = Qiling(
                 [str(self.binPath), *args],
                 str(self.rootfs),
-                log_override=getQillingLogger(),
-                verbose=4,
+                log_override=getQilingLogger(),
+                verbose=1,
                 console=True,
                 multithread=True,
             )
@@ -129,10 +124,9 @@ class BinaryLoader(Stage):
                 exit(1)
         try:
             self.exec()
-            log.info("Looks like binary is supported")
+            console.rule("Looks like binary is supported")
         except Exception as e:
             log.error(f"Emulation dry run failed: {str(e)}")
-            log.error(traceback.format_exc())
             exit(1)
         self.md.detail = True
 
@@ -161,34 +155,15 @@ class BinaryLoader(Stage):
         return val, path
 
     def _fixed(self):
-        path = None
-        if self.fixGen:
-            val = self.fixGen()
-            if self.asFile:
-                tmpfile, path = tempfile.mkstemp()
-                os.write(tmpfile, val.encode())
-                os.close(tmpfile)
-                self.args[self.secretArgIndex] = path
-            else:
-                self.args[self.secretArgIndex] = str(val)
-        else:
-            val = 42
-            if self.asFile:
-                tmpfile, path = tempfile.mkstemp()
-                os.write(tmpfile, val)
-                os.close(tmpfile)
-                self.args[self.secretArgIndex] = path
-            else:
-                self.args[self.secretArgIndex] = str(val)
-        return val, path
+        if not self.OLDVAL:
+            self.OLDVAL, self.OLDPATH = self.rndArg()
+        return self.OLDVAL, self.OLDPATH
 
     def rndArg(self):
-        val, path = self._rand()
-        return val, path
+        return self._rand()
 
     def fixedArg(self):
-        val, path = self._fixed()
-        return val, path
+        return self._fixed()
 
     def getlibname(self, addr):
         return next(
@@ -210,7 +185,7 @@ class BinaryLoader(Stage):
 
     def exec(self):
         self.fixedArg()
-        log.info(f"Emulating {self.QLEngine._argv} (dry run)")
+        console.rule(f"Emulating {self.QLEngine._argv} (dry run)")
         self.QLEngine.run()
         self.mappings = self.QLEngine.mem.get_mapinfo()
         self.QLEngine.stop()
@@ -222,7 +197,8 @@ class BinaryLoader(Stage):
         self.QLEngine = Qiling(
             [str(self.binPath), *[str(a) for a in self.args]],
             str(self.rootfs),
-            console=False,
+            console=True,
+            log_override=getQilingLogger(),
             verbose=-1,
             multithread=True,
         )
@@ -292,10 +268,14 @@ class DistributionAnalyzer(Stage):
         self.fixedTraceCollection = fixedTraceCollection
         self.rndTraceCollection = rndTraceCollection
         self.loader = binaryLoader
+        log.info(
+            f"possible leaks in rndTraceCollection: {len(self.rndTraceCollection.possibleLeaks)}"
+        )
 
     def analyze(self):
         results = []
-        for leakAddr in self.fixedTraceCollection.possibleLeaks:
+        skipped = 0
+        for leakAddr in self.rndTraceCollection.possibleLeaks:
             addrSetFixed = []
             addrSetRnd = []
             # Convert traces to trace per IP/PC
@@ -310,6 +290,7 @@ class DistributionAnalyzer(Stage):
             # Due to non determinism, it is possible that addresses are not present in both sets
             if len(addrSetFixed) == 0 or len(addrSetRnd) == 0:
                 log.debug(f"Skipping {hex(leakAddr)}, not present in both sets")
+                skipped += 1
                 continue
             # Skip obviously non secret dependent case:
             if set(addrSetFixed) == set(addrSetRnd):
@@ -348,10 +329,10 @@ class DistributionAnalyzer(Stage):
                 plt.savefig(f"debug/{hex(leakAddr)}.png")
 
             if p_value < 0.01:
-                log.info("Exectuted MWU analysis")
                 results.append(leakAddr)
+        log.info(f"skipped {skipped} entries")
         log.info(
-            f"filtered {len(self.fixedTraceCollection.possibleLeaks) - len(results)} false positives"
+            f"filtered {len(self.rndTraceCollection.possibleLeaks) - len(results)} false positives"
         )
         self.results = results
 
@@ -407,20 +388,20 @@ class LeakageClassification(Stage):
             secretMat = np.zeros((len(addList.keys()), secretFeatureShape))
             addList = OrderedDict(sorted(addList.items(), key=self._key))
             for idx, k in enumerate(addList):
-                mat[idx] = np.mean(addList[k])
+                addr = np.mean(addList[k])
+                mat[idx] = addr - self.loader.getlibbase(self.loader.getlibname(addr))
                 secretMat[idx] = self.leakageModelFunction(k)
 
             # Build a matrix containing the masked secret (according to the given leakage model)
 
             # For now, let's work with the mutual information instead of the more complex RDC
             # We'll switch to the RDC stat. when we understand the nitty gritty math behind it.
-
             mival = np.sum(mutual_info_regression(mat, secretMat, random_state=42))
             # log.info(f"mat{hex(leakAddr)} = {mat}")
             # log.info(f"secretMat = {secretMat}")
+            # log.info(f"MI score for {hex(leakAddr)}: {mival:.2f}")
             if mival < 0.1:
                 continue
-            log.debug(f"MI score for {hex(leakAddr)}: {mival:.2f}")
             self.results[hex(leakAddr)] = mival
 
     def exec(self, *args, **kwargs):

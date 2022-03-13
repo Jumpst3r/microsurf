@@ -1,14 +1,13 @@
 """
-@file example-openssl.py
+@file openssl-camilla-128.py
 
 This is an example on how to use the microsurf library
-to test the openssl aes-128-ecb 128 implementation for secret dependent memory accesses
+to test the openssl camellia-128-ecbb 128 implementation for secret dependent memory accesses
 
-openssl aes-128-cbc -e -in input.bin -out output.bin -nosalt -K hexdata -iv 0
+openssl camellia-128-ecb -e -in input.bin -out output.bin -nosalt -K hexdata
 """
 
 import os
-from pathlib import Path
 import sys
 from microsurf.microsurf import SCDetector
 from microsurf.pipeline.LeakageModels import hamming
@@ -26,17 +25,6 @@ def genRandom() -> str:
     kbytes = KEYLEN // 8
     rbytes = os.urandom(kbytes)
     return f"{int.from_bytes(rbytes, byteorder='big'):x}"
-
-
-def genFixed() -> str:
-    """Generate fixed key material
-
-    Returns:
-        str: string of the hex rep. of the key
-    """
-    kbytes = KEYLEN // 8
-    fbytes = bytes("A" * kbytes, "utf-8")
-    return f"{int.from_bytes(fbytes, byteorder='big'):x}"
 
 
 if __name__ == "__main__":
@@ -69,8 +57,7 @@ if __name__ == "__main__":
         binPath=binpath,
         args=opensslArgs,
         randGen=genRandom,
-        fixGen=genFixed,
-        deterministic=True,
+        deterministic=False,
         asFile=False,
         jail=jailroot,
         leakageModel=hamming,

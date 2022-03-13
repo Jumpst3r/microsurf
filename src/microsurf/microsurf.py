@@ -74,7 +74,6 @@ class SCDetector:
         binPath: str,
         args: list[str],
         randGen: Callable[[], str],
-        fixGen: Callable[[], str],
         deterministic: bool,
         asFile: bool,
         jail: str,
@@ -90,16 +89,13 @@ class SCDetector:
             randGen ([],str]): A function that generates random bytes in the format
             expected by the target binary. The SCDetector class will save these bytes
             to a temporary file and substitute the secret placeholder ('@') with the path to the file
-            fixGen ([[],str]): A function that always generates the same bytes
             deterministic (bool): Force deterministic execution by hooking relevant syscalls
             asFile (bool): Specifies whether the target binary excepts the secret to be read from a file.
             If false, the secret will be passed directly as an argument
-            env (Dict[str,str]): Set environment variables
         """
         self.binPath = binPath
         self.args = args
         self.randGen = randGen
-        self.fixGen = fixGen
         self.deterministic = deterministic
         self.asFile = asFile
         self.rootfs = jail
@@ -110,20 +106,13 @@ class SCDetector:
         """
         Validate that:
         - randGen is a function which generates random bytes at each invocation
-        - fixGen is a function which always generates the same data
         - the binary can be emulated with the provided arguments
         """
         resrnd = set()
-        resfixed = set()
         for _ in range(10):
             resrnd.add(self.randGen())
-            resfixed.add(self.fixGen())
         if len(resrnd) != 10:
             raise ValueError("Provided random function does not produce random output.")
-        if len(resfixed) > 1:
-            raise ValueError(
-                "Provided fixed function does not produce constant output."
-            )
         count = 0
         # Check that we only have a single secret marker
         for arg in self.args:
@@ -139,7 +128,6 @@ class SCDetector:
             dryRunOnly=True,
             deterministic=self.deterministic,
             rndGen=self.randGen,
-            fixGen=self.fixGen,
             asFile=self.asFile,
             jail=self.rootfs,
             leakageModel=self.leakageModel,
