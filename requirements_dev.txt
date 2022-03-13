@@ -1,5 +1,8 @@
 pytest==7.0.1
-pytest-rerunfailures==10.2
 flake8==3.9.2
 tox==3.24.3
 mypy===0.910
+sphinx==4.4.0
+myst-parser==0.17.0
+ipdb==0.13.9
+sphinx-autodoc-typehints==1.17.0

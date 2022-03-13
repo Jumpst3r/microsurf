@@ -53,7 +53,7 @@ class PipeLineExecutor:
         log.info(f"Batching {len(jobs)} jobs across {nbCores} cores")
         for i in tqdm(range(0, len(jobs), nbCores)):
             batch = []
-            for j in jobs[i: i + nbCores]:
+            for j in jobs[i : i + nbCores]:
                 batch.append(j)
                 j.start()
             for j in batch:
@@ -104,20 +104,20 @@ class PipeLineExecutor:
             ubound,
             _,
             label,
-            _,
+            container,
         ) in self.loader.mappings:
             for k in self.results:
                 if lbound < k < ubound:
                     if self.loader.dynamic:
-                        offset = k - self.loader.getlibbase(label.split("/")[-1])
-                        symbname = getfnname(label.split(" ")[-1], offset)
+                        offset = k - self.loader.getlibbase(label)
+                        symbname = getfnname(container, offset)
                         console.print(
-                            f'{offset:08x} - [MI = {self.mivals[hex(k)]:.2f}] \t at {symbname if symbname else "??":<30} {label.split("/")[-1]}'
+                            f'{offset:08x} - [MI = {self.mivals[hex(k)]:.2f}] \t at {symbname if symbname else "??":<30} {label}'
                         )
                     else:
-                        symbname = getfnname(label.split(" ")[-1], k)
+                        symbname = getfnname(container, k)
                         console.print(
-                            f'{k:08x} [MI={self.mivals[hex(k)]:.2f}] \t at {symbname if symbname else "??":<30} {label.split("/")[-1]}'
+                            f'{k:08x} [MI={self.mivals[hex(k)]:.2f}] \t at {symbname if symbname else "??":<30} {label}'
                         )
 
     def finalize(self):

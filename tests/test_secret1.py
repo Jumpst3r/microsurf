@@ -23,7 +23,7 @@ def test_analyze_arm(monkeypatch):
         armTargetAddr = data["secret-arm.bin"]
     bl = BinaryLoader(binPath, ["@"], dryRunOnly=False)
     pipeline = PipeLineExecutor(loader=bl)
-    pipeline.ITER_COUNT = 100
+    pipeline.ITER_COUNT = 150
     pipeline.run()
     res = pipeline.finalize()
     armTargetAddr = [int(a, 16) for a in armTargetAddr]
@@ -45,7 +45,7 @@ def test_analyze_ia32(monkeypatch):
         armTargetAddr = data["secret-x86-32.bin"]
     bl = BinaryLoader(binPath, ["@"], dryRunOnly=False)
     pipeline = PipeLineExecutor(loader=bl)
-    pipeline.ITER_COUNT = 100
+    pipeline.ITER_COUNT = 150
     pipeline.run()
     res = pipeline.finalize()
     armTargetAddr = [int(a, 16) for a in armTargetAddr]
@@ -67,7 +67,7 @@ def test_analyze_x86_64(monkeypatch):
         armTargetAddr = data["secret-x86-64.bin"]
     bl = BinaryLoader(binPath, ["@"], dryRunOnly=False)
     pipeline = PipeLineExecutor(loader=bl)
-    pipeline.ITER_COUNT = 100
+    pipeline.ITER_COUNT = 150
     pipeline.run()
     res = pipeline.finalize()
     armTargetAddr = [int(a, 16) for a in armTargetAddr]

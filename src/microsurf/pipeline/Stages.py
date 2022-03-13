@@ -168,8 +168,8 @@ class BinaryLoader(Stage):
     def getlibname(self, addr):
         return next(
             (
-                os.path.split(info)[1]
-                for s, e, _, info, _ in self.mappings
+                label
+                for s, e, _, label, _ in self.mappings
                 if s < addr < e
             ),
             -1,
@@ -179,7 +179,7 @@ class BinaryLoader(Stage):
     # FIXME there has to be a cleaner way
     def getlibbase(self, name):
         return next(
-            (s for s, _, _, info, _ in self.mappings if os.path.split(info)[1] == name),
+            (s for s, _, _, label, _ in self.mappings if label == name),
             -1,
         )
 
@@ -327,9 +327,12 @@ class DistributionAnalyzer(Stage):
                     label="Random secret input",
                 )
                 plt.savefig(f"debug/{hex(leakAddr)}.png")
-
+            # TODO for highly non. det pathing it is possible that we do
+            # not gather enough traces for MWU to be stat. sig.
             if p_value < 0.01:
                 results.append(leakAddr)
+            else:
+                log.debug(f"{leakAddr} skipped (p={p_value})")
         log.info(f"skipped {skipped} entries")
         log.info(
             f"filtered {len(self.rndTraceCollection.possibleLeaks) - len(results)} false positives"

@@ -65,9 +65,24 @@ if __name__ == "__main__":
 
 
 class SCDetector:
-    """The SCDetector class should be imported when testing binaries
-    for which the secret is in a well defined format at passed to the target
-    binary as a path (openssl, mbedtls etc)"""
+    """The SCDetector class can be used to detect side channels in generic applications
+
+    Args:
+        binPath: Path to the target binary
+        args: List of arguments to pass to the binary. For a secret argument,
+            substitute the value of the argument with @ (for example, ['--encrypt', '<privkeyfile>']
+            would become ['--encrypt', '@'] ). Only one argument can be defined as secret.
+        randGen: A function that generates random bytes in the format
+            expected by the target binary. The SCDetector class will save these bytes
+            to a temporary file and substitute the secret placeholder ('@') with the path to the file
+        deterministic: Force deterministic execution by hooking relevant syscalls
+        asFile: Specifies whether the target binary excepts the secret to be read from a file.
+            If false, the secret will be passed directly as an argument
+        jail: Specifies the a directory to which the binary will be jailed during emulation.
+            For dynamic binaries, the user must ensure that the appropriate shared objects are present.
+        leakageModel: (Callable[[str], Any]): Function which applies a leakage model to the secret.
+            Example under microsurf.pipeline.LeakageModels
+    """
 
     def __init__(
         self,
@@ -79,20 +94,6 @@ class SCDetector:
         jail: str,
         leakageModel: Callable[[str], Any],
     ) -> None:
-        """Initializes a new SCDetector instance.
-
-        Args:
-            binPath (str): Path to the target binary
-            args (list[str]): List of arguments to pass to the binary. For a secret argument,
-            substitute the value of the argument with @ (for example, ['--encrypt', '<privkeyfile>']
-            would become ['--encrypt', '@'] ). Only one argument can be defined as secret.
-            randGen ([],str]): A function that generates random bytes in the format
-            expected by the target binary. The SCDetector class will save these bytes
-            to a temporary file and substitute the secret placeholder ('@') with the path to the file
-            deterministic (bool): Force deterministic execution by hooking relevant syscalls
-            asFile (bool): Specifies whether the target binary excepts the secret to be read from a file.
-            If false, the secret will be passed directly as an argument
-        """
         self.binPath = binPath
         self.args = args
         self.randGen = randGen
@@ -103,11 +104,6 @@ class SCDetector:
         self._validate()
 
     def _validate(self):
-        """
-        Validate that:
-        - randGen is a function which generates random bytes at each invocation
-        - the binary can be emulated with the provided arguments
-        """
         resrnd = set()
         for _ in range(10):
             resrnd.add(self.randGen())
@@ -134,5 +130,6 @@ class SCDetector:
         )
 
     def exec(self):
+        """Runs the side channel detection analysis"""
         pipeline = PipeLineExecutor(loader=self.bl)
         pipeline.run()
