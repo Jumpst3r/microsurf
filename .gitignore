@@ -157,3 +157,9 @@ env/**
 
 # coverage files
 *.pof
+
+# debug dir (MPL figures)
+debug/*
+
+# openssl dir (compile versions are in rootfs. no need to keep the source)
+test/binaries/openssl/**

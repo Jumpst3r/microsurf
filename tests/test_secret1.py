@@ -4,6 +4,7 @@ For more information about the given binary, refer to binaries/secret1/readme.md
 @author nicolas
 """
 
+import tempfile
 import pytest
 from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.pipeline.Executor import PipeLineExecutor
@@ -12,7 +13,8 @@ import json, sys
 
 
 def test_analyze_arm(monkeypatch):
-    monkeypatch.setattr('sys.stdin', sys.stdout)
+    fp = tempfile.TemporaryFile()
+    monkeypatch.setattr('sys.stdin', fp)
     binPath = PurePath(Path(__file__).parent, Path("binaries/secret1/secret-arm.bin"))
     armTargetAddr = []
     armTargetPath = PurePath(binPath.parent, Path("secret-dep.json"))
@@ -21,15 +23,18 @@ def test_analyze_arm(monkeypatch):
         armTargetAddr = data["secret-arm.bin"]
     bl = BinaryLoader(binPath, ["@"], dryRunOnly=False)
     pipeline = PipeLineExecutor(loader=bl)
+    pipeline.ITER_COUNT = 150
     pipeline.run()
     res = pipeline.finalize()
     armTargetAddr = [int(a, 16) for a in armTargetAddr]
+    fp.close()
     for a in armTargetAddr:
         assert a in res
 
 
 def test_analyze_ia32(monkeypatch):
-    monkeypatch.setattr('sys.stdin', sys.stdout)
+    fp = tempfile.TemporaryFile()
+    monkeypatch.setattr('sys.stdin', fp)
     binPath = PurePath(
         Path(__file__).parent, Path("binaries/secret1/secret-x86-32.bin")
     )
@@ -40,15 +45,18 @@ def test_analyze_ia32(monkeypatch):
         armTargetAddr = data["secret-x86-32.bin"]
     bl = BinaryLoader(binPath, ["@"], dryRunOnly=False)
     pipeline = PipeLineExecutor(loader=bl)
+    pipeline.ITER_COUNT = 150
     pipeline.run()
     res = pipeline.finalize()
     armTargetAddr = [int(a, 16) for a in armTargetAddr]
+    fp.close()
     for a in armTargetAddr:
         assert a in res
 
 
 def test_analyze_x86_64(monkeypatch):
-    monkeypatch.setattr('sys.stdin', sys.stdout)
+    fp = tempfile.TemporaryFile()
+    monkeypatch.setattr('sys.stdin', fp)
     binPath = PurePath(
         Path(__file__).parent, Path("binaries/secret1/secret-x86-64.bin")
     )
@@ -59,8 +67,10 @@ def test_analyze_x86_64(monkeypatch):
         armTargetAddr = data["secret-x86-64.bin"]
     bl = BinaryLoader(binPath, ["@"], dryRunOnly=False)
     pipeline = PipeLineExecutor(loader=bl)
+    pipeline.ITER_COUNT = 150
     pipeline.run()
     res = pipeline.finalize()
     armTargetAddr = [int(a, 16) for a in armTargetAddr]
+    fp.close()
     for a in armTargetAddr:
         assert a in res

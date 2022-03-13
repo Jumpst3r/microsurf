@@ -4,6 +4,7 @@ For more information about the given binary, refer to binaries/secret0/readme.md
 @author nicolas
 """
 
+import tempfile
 import pytest
 from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.pipeline.Executor import PipeLineExecutor
@@ -12,7 +13,8 @@ import json, sys
 
 
 def test_analyze_arm(monkeypatch):
-    monkeypatch.setattr('sys.stdin', sys.stdin)
+    fp = tempfile.TemporaryFile()
+    monkeypatch.setattr('sys.stdin', fp)
     binPath = PurePath(Path(__file__).parent, Path("binaries/secret0/secret-arm.bin"))
     armTargetAddr = []
     armTargetPath = PurePath(binPath.parent, Path("secret-dep.json"))
@@ -24,12 +26,14 @@ def test_analyze_arm(monkeypatch):
     pipeline.run()
     res = pipeline.finalize()
     armTargetAddr = [int(a, 16) for a in armTargetAddr]
+    fp.close()
     for a in armTargetAddr:
         assert a in res
 
 
 def test_analyze_ia32(monkeypatch):
-    monkeypatch.setattr('sys.stdin', sys.stdin)
+    fp = tempfile.TemporaryFile()
+    monkeypatch.setattr('sys.stdin', fp)
     binPath = PurePath(
         Path(__file__).parent, Path("binaries/secret0/secret-x86-32.bin")
     )
@@ -43,12 +47,14 @@ def test_analyze_ia32(monkeypatch):
     pipeline.run()
     res = pipeline.finalize()
     armTargetAddr = [int(a, 16) for a in armTargetAddr]
+    fp.close()
     for a in armTargetAddr:
         assert a in res
 
 
 def test_analyze_x86_64(monkeypatch):
-    monkeypatch.setattr('sys.stdin', sys.stdout)
+    fp = tempfile.TemporaryFile()
+    monkeypatch.setattr('sys.stdin', fp)
     binPath = PurePath(
         Path(__file__).parent, Path("binaries/secret0/secret-x86-64.bin")
     )
@@ -62,5 +68,6 @@ def test_analyze_x86_64(monkeypatch):
     pipeline.run()
     res = pipeline.finalize()
     armTargetAddr = [int(a, 16) for a in armTargetAddr]
+    fp.close()
     for a in armTargetAddr:
         assert a in res

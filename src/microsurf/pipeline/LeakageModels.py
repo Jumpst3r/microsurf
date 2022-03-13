@@ -6,7 +6,17 @@ def identity(secret) -> Any:
     return np.array(secret)
 
 
-def hamming(secret) -> Any:
+def hamming(secret: str) -> np.ndarray:
+    """Computes the hamming distance of the secret
+
+    Args:
+        secret: A base 10 or base 16 string representation
+            of the secret
+
+    Returns:
+        a numpy array containing the hamming distance
+        of the secret.
+    """
     if isinstance(secret, str):
         # secret decimal
         try:

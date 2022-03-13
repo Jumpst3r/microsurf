@@ -6,11 +6,13 @@
 
 We have a title + a silly logo now
 
-## Usage examples and sample results ;)
+## Usage examples 
 
-Head over to
+Documentation can be found [here](USAGE.pdf)
 
-`doc/examples/readme.md`
+Usage examples:
+
+- [openssl-camellia128](doc/examples/openssl-camellia-128.py)
 
 ## Installation
 

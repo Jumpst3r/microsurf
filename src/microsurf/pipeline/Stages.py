@@ -1,19 +1,17 @@
 import logging
 import os
 import random
-import re
 import tempfile
 from collections import OrderedDict
 from pathlib import Path, PurePath
 from typing import Dict, List
-import traceback
 
 import magic
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 import seaborn as sns
 from capstone import CS_ARCH_ARM, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_MODE_ARM, Cs
-from capstone.arm_const import ARM_OP_MEM
+
 from qiling import Qiling
 
 from microsurf.pipeline.LeakageModels import identity
@@ -24,13 +22,9 @@ from ..utils.hijack import (
     const_getrandom,
     const_time,
     device_random,
+    ql_fixed_syscall_faccessat,
 )
-from ..utils.logger import (
-    LOGGING_LEVEL,
-    getConsole,
-    getLogger,
-    getQillingLogger,
-)
+from ..utils.logger import LOGGING_LEVEL, getConsole, getLogger, getQilingLogger
 from .tracetools.Trace import MemTrace, MemTraceCollection
 
 console = getConsole()
@@ -49,13 +43,15 @@ class BinaryLoader(Stage):
     def __init__(self, path: str, args: List[str], **kwargs) -> None:
         self.binPath = Path(path)
         self.asm: Dict[str, str] = {}
-        self.moduleroot = Path(__file__).parent.parent.parent
         self.dryRunOnly = kwargs["dryRunOnly"]
         self.args = args
+        self.mappings = None
+        self.OLDVAL = None
+        self.OLDPATH = None
         try:
             self.rootfs = kwargs["jail"]
         except KeyError:
-            pass
+            self.rootfs = "/"
         self.QLEngine: Qiling = None
         try:
             self.deterministic = kwargs["deterministic"]
@@ -67,13 +63,10 @@ class BinaryLoader(Stage):
             self.leakageModel = identity
         try:
             self.rndGen = kwargs["rndGen"]
-            self.fixGen = kwargs["fixGen"]
             self.asFile = kwargs["asFile"]
         except KeyError:
-            # secret as argument, default to random integer.
             self.asFile = False
             self.rndGen = None
-            self.fixGen = None
         try:
             self.secretArgIndex = args.index("@")
         except IndexError as e:
@@ -85,10 +78,7 @@ class BinaryLoader(Stage):
             log.error(f"target path {str(self.binPath)} not found")
         fileinfo = magic.from_file(path)
         if "80386" in fileinfo:
-            if "Linux" in fileinfo:
-                self.md = Cs(CS_ARCH_X86, CS_MODE_32)
-            elif "Windows" in fileinfo:
-                self.md = Cs(CS_ARCH_X86, CS_MODE_32)
+            self.md = Cs(CS_ARCH_X86, CS_MODE_32)
         elif "x86" in fileinfo:
             self.md = Cs(CS_ARCH_X86, CS_MODE_64)
         elif "ARM" in fileinfo:
@@ -97,7 +87,13 @@ class BinaryLoader(Stage):
             log.info(fileinfo)
             log.error("Target architecture not implemented")
             exit(-1)
-
+        try:
+            val, _ = self._rand()
+            encoded = self.leakageModel(val)
+            log.info(f"L({val}) = {encoded}, leakage model compatible.")
+        except ValueError:
+            log.error(f"leakage model does not suppport input {val}")
+            exit(1)
         if "dynamic" in fileinfo:
             log.warn(
                 "Detected dynamically linked binary, ensure that the appropriate shared objects are available"
@@ -114,14 +110,13 @@ class BinaryLoader(Stage):
             self.QLEngine = Qiling(
                 [str(self.binPath), *args],
                 str(self.rootfs),
-                log_override=getQillingLogger(),
-                verbose=0,
+                log_override=getQilingLogger(),
+                verbose=1,
                 console=True,
                 multithread=True,
             )
             if path:
                 self.QLEngine.add_fs_mapper(path.split("/")[-1], path.split("/")[-1])
-            # self.QLEngine.add_fs_mapper('output.bin', 'output.bin')
             self.fixRandomness(self.deterministic)
         except FileNotFoundError as e:
             if ".so" in str(e):
@@ -129,10 +124,10 @@ class BinaryLoader(Stage):
                 exit(1)
         try:
             self.exec()
-            log.info("Looks like binary is supported")
+            console.rule("Looks like binary is supported")
         except Exception as e:
             log.error(f"Emulation dry run failed: {str(e)}")
-            log.error(traceback.format_exc())
+            exit(1)
         self.md.detail = True
 
     def _rand(self):
@@ -160,39 +155,39 @@ class BinaryLoader(Stage):
         return val, path
 
     def _fixed(self):
-        path = None
-        if self.fixGen:
-            val = self.fixGen()
-            if self.asFile:
-                tmpfile, path = tempfile.mkstemp()
-                os.write(tmpfile, val.encode())
-                os.close(tmpfile)
-                self.args[self.secretArgIndex] = path
-            else:
-                self.args[self.secretArgIndex] = str(val)
-        else:
-            val = 42
-            if self.asFile:
-                tmpfile, path = tempfile.mkstemp()
-                os.write(tmpfile, val)
-                os.close(tmpfile)
-                self.args[self.secretArgIndex] = path
-            else:
-                self.args[self.secretArgIndex] = str(val)
-        return val, path
+        if not self.OLDVAL:
+            self.OLDVAL, self.OLDPATH = self.rndArg()
+        return self.OLDVAL, self.OLDPATH
 
     def rndArg(self):
-        val, path = self._rand()
-        return val, path
+        return self._rand()
 
     def fixedArg(self):
-        val, path = self._fixed()
-        return val, path
+        return self._fixed()
+
+    def getlibname(self, addr):
+        return next(
+            (
+                label
+                for s, e, _, label, _ in self.mappings
+                if s < addr < e
+            ),
+            -1,
+        )
+
+    # we can't call qiling's function (undef mappings), so replicate it here
+    # FIXME there has to be a cleaner way
+    def getlibbase(self, name):
+        return next(
+            (s for s, _, _, label, _ in self.mappings if label == name),
+            -1,
+        )
 
     def exec(self):
         self.fixedArg()
-        log.info(f"Emulating {self.QLEngine._argv} (dry run)")
+        console.rule(f"Emulating {self.QLEngine._argv} (dry run)")
         self.QLEngine.run()
+        self.mappings = self.QLEngine.mem.get_mapinfo()
         self.QLEngine.stop()
         self.refreshQLEngine()
         if self.dryRunOnly:
@@ -202,12 +197,14 @@ class BinaryLoader(Stage):
         self.QLEngine = Qiling(
             [str(self.binPath), *[str(a) for a in self.args]],
             str(self.rootfs),
-            console=False,
+            console=True,
+            log_override=getQilingLogger(),
             verbose=-1,
             multithread=True,
         )
         self.fixRandomness(self.deterministic)
 
+    # TODO rename - as it now inlcudes fixes for broken qiling syscall hooks
     def fixRandomness(self, bool):
         if bool:
             self.QLEngine.add_fs_mapper("/dev/urandom", device_random)
@@ -234,46 +231,8 @@ class BinaryLoader(Stage):
             self.QLEngine.add_fs_mapper("/dev/random", "/dev/random")
             self.QLEngine.add_fs_mapper("/dev/arandom", "/dev/arandom")
 
-
-class FindMemOps(Stage):
-    """
-    Hooks all code and records any oerands which likely perform memory accesses. Note that this is an ungly hack
-    because the emulator does not support reading the PC in mem read hooks on ARM. This should not be executed on
-    x86.
-    """
-
-    def __init__(self, binaryLoader: BinaryLoader) -> None:
-        self.armPCs: set[int] = set()
-        self.bl = binaryLoader
-        self.md = binaryLoader.md
-        self.secret = None
-
-    def _trace_mem_op(self, ql: Qiling, address, size):
-        assert self.md.arch == CS_ARCH_ARM
-        buf = ql.mem.read(address, size)
-        for i in self.md.disasm(buf, address):
-            if len(i.operands) == 2:
-                if i.operands[1].type in [ARM_OP_MEM]:
-                    # We cannot directly trace memory reads for ARM
-                    # though this is not a prob since only LDR* ops performs
-                    # a memory read !
-                    if self.md.arch == CS_ARCH_ARM and not re.compile("^ldr.*").match(
-                        i.mnemonic
-                    ):
-                        continue
-                    self.armPCs.add(address)
-
-    def exec(self, generator):
-        secret, path = generator()  # updates the secret
-        self.bl.refreshQLEngine()
-        self.bl.QLEngine.hook_code(self._trace_mem_op)
-        self.secret = secret
-        self.bl.QLEngine.run()
-        self.bl.QLEngine.stop()
-
-    def finalize(self):
-        assert len(self.armPCs) > 0
-        return self.armPCs
+        # replace broken qiling hooks with working ones:
+        self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
 
 
 class MemWatcher(Stage):
@@ -281,62 +240,22 @@ class MemWatcher(Stage):
     Hooks memory reads
     """
 
-    def __init__(self, binaryLoader: BinaryLoader, archPCs=None) -> None:
+    def __init__(self, binaryLoader: BinaryLoader) -> None:
         self.traces: List[MemTrace] = []
         self.bl = binaryLoader
         self.md = self.bl.md
-        self.archPCs = archPCs
 
     def _trace_mem_read(self, ql: Qiling, access, addr, size, value):
         self.currenttrace.add(ql.arch.regs.arch_pc, addr)
 
-    def _trace_mem_op_fast(self, ql: Qiling, address, size):
-        # The unicorn emulation framework might not support reading the pc in a read_mem hook for ARM !
-        # https://github.com/unicorn-engine/unicorn/issues/358#issuecomment-169214744
-        # so for ARM we use a code hook similar to phase I
-        # TODO: Patch Unicorn / Qiling if time permits
-
-        # Only process potential leaks:
-        assert self.archPCs is not None
-        if address not in self.archPCs:
-            return
-        buf = ql.mem.read(address, size)
-
-        for i in self.md.disasm(buf, address):
-            if len(i.operands) == 2:
-                if i.operands[1].type in [ARM_OP_MEM]:
-                    memop_src = i.operands[1].mem
-                    memaddr = (
-                        ql.arch.regs.read(memop_src.base)
-                        + (
-                            0
-                            if not memop_src.index
-                            else ql.arch.regs.read(memop_src.index)
-                        )
-                        * memop_src.scale
-                        + memop_src.disp
-                    )
-
-                    self.currenttrace.add(address, memaddr)
-
-    def exec(self, generator):
+    def exec(self, generator, pindex, mt_res):
         secret, path = generator()  # updates the secret
-        self.bl.refreshQLEngine()
-        if self.bl.md.arch != CS_ARCH_ARM:
-            # Unicorn supports reading PC in mem hook
-            self.bl.QLEngine.hook_mem_read(self._trace_mem_read)
-        else:
-            self.bl.QLEngine.hook_code(self._trace_mem_op_fast)
         self.currenttrace = MemTrace(secret)
+        self.bl.refreshQLEngine()
+        self.bl.QLEngine.hook_mem_read(self._trace_mem_read)
         self.bl.QLEngine.run()
-        self.traces.append(self.currenttrace)
-
+        mt_res[pindex] = self.currenttrace
         self.bl.QLEngine.stop()
-
-    def finalize(self):
-        assert len(self.traces) > 0
-        self.memTraceDetectionCollection = MemTraceCollection(self.traces, self.bl)
-        return self.memTraceDetectionCollection
 
 
 class DistributionAnalyzer(Stage):
@@ -348,11 +267,15 @@ class DistributionAnalyzer(Stage):
     ):
         self.fixedTraceCollection = fixedTraceCollection
         self.rndTraceCollection = rndTraceCollection
-        self.asm = binaryLoader.asm
+        self.loader = binaryLoader
+        log.info(
+            f"possible leaks in rndTraceCollection: {len(self.rndTraceCollection.possibleLeaks)}"
+        )
 
     def analyze(self):
         results = []
-        for leakAddr in self.fixedTraceCollection.possibleLeaks:
+        skipped = 0
+        for leakAddr in self.rndTraceCollection.possibleLeaks:
             addrSetFixed = []
             addrSetRnd = []
             # Convert traces to trace per IP/PC
@@ -367,6 +290,7 @@ class DistributionAnalyzer(Stage):
             # Due to non determinism, it is possible that addresses are not present in both sets
             if len(addrSetFixed) == 0 or len(addrSetRnd) == 0:
                 log.debug(f"Skipping {hex(leakAddr)}, not present in both sets")
+                skipped += 1
                 continue
             # Skip obviously non secret dependent case:
             if set(addrSetFixed) == set(addrSetRnd):
@@ -380,7 +304,7 @@ class DistributionAnalyzer(Stage):
             if LOGGING_LEVEL == logging.DEBUG:
                 fig, ax = plt.subplots(1, 1)
                 fig.suptitle(
-                    f"IP={hex(leakAddr)} ({self.asm[hex(leakAddr)]}) MWU p={p_value:e}"
+                    f"IP={hex(leakAddr)} in {self.loader.getlibname(leakAddr)} MWU p={p_value:e}"
                 )
                 sns.distplot(
                     addrSetFixed,
@@ -402,12 +326,16 @@ class DistributionAnalyzer(Stage):
                     kde_kws={"linewidth": 1},
                     label="Random secret input",
                 )
-                plt.savefig(f"{hex(leakAddr)}.png")
-
+                plt.savefig(f"debug/{hex(leakAddr)}.png")
+            # TODO for highly non. det pathing it is possible that we do
+            # not gather enough traces for MWU to be stat. sig.
             if p_value < 0.01:
                 results.append(leakAddr)
+            else:
+                log.debug(f"{leakAddr} skipped (p={p_value})")
+        log.info(f"skipped {skipped} entries")
         log.info(
-            f"filtered {len(self.fixedTraceCollection.possibleLeaks) - len(results)} false positives"
+            f"filtered {len(self.rndTraceCollection.possibleLeaks) - len(results)} false positives"
         )
         self.results = results
 
@@ -430,7 +358,7 @@ class LeakageClassification(Stage):
         self.possibleLeaks = possibleLeaks
         # The leakage function can return one dimensional data (ex. hamm. dist.) or multidimensional data (bit/byte slices)
         self.leakageModelFunction = leakageModelFunction
-        self.asm = binaryLoader.asm
+        self.loader = binaryLoader
         self.results: Dict[str, float] = {}
 
     def _key(self, t):
@@ -463,18 +391,18 @@ class LeakageClassification(Stage):
             secretMat = np.zeros((len(addList.keys()), secretFeatureShape))
             addList = OrderedDict(sorted(addList.items(), key=self._key))
             for idx, k in enumerate(addList):
-                mat[idx] = np.mean(addList[k])
+                addr = np.mean(addList[k])
+                mat[idx] = addr - self.loader.getlibbase(self.loader.getlibname(addr))
                 secretMat[idx] = self.leakageModelFunction(k)
 
             # Build a matrix containing the masked secret (according to the given leakage model)
 
             # For now, let's work with the mutual information instead of the more complex RDC
             # We'll switch to the RDC stat. when we understand the nitty gritty math behind it.
-
             mival = np.sum(mutual_info_regression(mat, secretMat, random_state=42))
             # log.info(f"mat{hex(leakAddr)} = {mat}")
             # log.info(f"secretMat = {secretMat}")
-            # log.debug(f"MI score for {hex(leakAddr)}: {mival:.2f}")
+            # log.info(f"MI score for {hex(leakAddr)}: {mival:.2f}")
             if mival < 0.1:
                 continue
             self.results[hex(leakAddr)] = mival
