@@ -24,7 +24,7 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results: List[int] = []
-        self.ITER_COUNT = 40
+        self.ITER_COUNT = 10
 
     def run(self):
         import time

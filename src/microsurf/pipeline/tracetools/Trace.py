@@ -29,14 +29,18 @@ class MemTraceCollection:
         for t in self.traces:
             for k1, v1 in t.trace.items():
                 common = 1
+                occurs = 1
                 for t2 in self.traces:
                     if t.secret == t2.secret:
                         continue
                     if k1 in t2.trace and t2.trace[k1] == v1:
                         common += 1
+                    if k1 not in t2.trace:
+                        occurs += 1
                 if common == len(self.traces):
                     commonItems.add(k1)
-                    common = 0
+                
+        log.info(f"pruned {len(commonItems)} entries")
         for t in self.traces:
             if len(commonItems) > 0:
                 t.remove(commonItems)

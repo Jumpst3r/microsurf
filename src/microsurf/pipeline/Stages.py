@@ -51,7 +51,7 @@ class BinaryLoader(Stage):
         try:
             self.rootfs = kwargs["jail"]
         except KeyError:
-            self.rootfs = "/"
+            self.rootfs = None
         self.QLEngine: Qiling = None
         try:
             self.deterministic = kwargs["deterministic"]
@@ -103,7 +103,7 @@ class BinaryLoader(Stage):
             log.info(f"rootfs = {self.rootfs}")
         else:
             self.dynamic = False
-            self.rootfs = PurePath(tempfile.mkdtemp())
+            if not self.rootfs: self.rootfs = PurePath(tempfile.mkdtemp())
             log.info(f"detected static binary, jailing to {self.rootfs}")
         try:
             # initialize args;
@@ -276,6 +276,7 @@ class DistributionAnalyzer(Stage):
             addrSetFixed = []
             addrSetRnd = []
             # Convert traces to trace per IP/PC
+            libname = self.loader.getlibname(leakAddr)
             for t in self.fixedTraceCollection.traces:
                 vset = t.trace[leakAddr]
                 for v in vset:
@@ -292,10 +293,23 @@ class DistributionAnalyzer(Stage):
             # Skip obviously non secret dependent case:
             if set(addrSetFixed) == set(addrSetRnd):
                 continue
+            # sometimes set(addrSetRnd) will be larger than set(addrSetFixed)
+            # due to non. determ. - if addrSetRnd contains all elements of
+            # addrSetFixed, then we can also skip this, it is not a leak
+            if len(set(addrSetFixed)) == len(set(addrSetRnd).intersection(addrSetFixed)):
+                log.debug(f"skipped a sneaky FP {libname}")
+                continue
             # Skip obviously secret dependent, zero variance case:
             if len(set(addrSetFixed)) == 1:
                 results.append(leakAddr)
+                log.debug(f"Zero var on {hex(leakAddr)} (len rnd = {len(addrSetRnd)}), adding to leaks")
                 continue
+            if len(addrSetFixed) < 25 or len(addrSetRnd) < 25:
+                log.debug(f"skipping MWU with {len(addrSetFixed)} fixed and {len(addrSetRnd)} random traces for IP={hex(leakAddr)}")
+                continue
+            else:
+                log.debug(f"executing MWU with {len(addrSetFixed)} fixed and {len(addrSetRnd)} random traces for IP={hex(leakAddr)}")
+
             _, p_value = stats.mannwhitneyu(addrSetFixed, addrSetRnd)
 
             if LOGGING_LEVEL == logging.DEBUG:
@@ -328,9 +342,9 @@ class DistributionAnalyzer(Stage):
             # not gather enough traces for MWU to be stat. sig.
             if p_value < 0.01:
                 results.append(leakAddr)
+                log.info(f"Added {libname} with p_value {p_value}")
             else:
                 log.debug(f"{leakAddr} skipped (p={p_value})")
-        log.info(f"skipped {skipped} entries")
         log.info(
             f"filtered {len(self.rndTraceCollection.possibleLeaks) - len(results)} false positives"
         )
@@ -400,8 +414,6 @@ class LeakageClassification(Stage):
             # log.info(f"mat{hex(leakAddr)} = {mat}")
             # log.info(f"secretMat = {secretMat}")
             # log.info(f"MI score for {hex(leakAddr)}: {mival:.2f}")
-            if mival < 0.1:
-                continue
             self.results[hex(leakAddr)] = mival
 
     def exec(self, *args, **kwargs):

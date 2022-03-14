@@ -10,7 +10,7 @@ openssl camellia-128-ecb -e -in input.bin -out output.bin -nosalt -K hexdata
 import os
 import sys
 from microsurf.microsurf import SCDetector
-from microsurf.pipeline.LeakageModels import hamming
+from microsurf.pipeline.LeakageModels import hamming, identity
 
 
 
@@ -29,6 +29,8 @@ if __name__ == "__main__":
         jailroot = "/home/nicolas/Documents/msc-thesis-work/doc/examples/rootfs/jail-openssl-arm64/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'x8632':
         jailroot = "/home/nicolas/Documents/msc-thesis-work/doc/examples/rootfs/jail-openssl-x8632/"
+    elif len(sys.argv) > 1 and sys.argv[1] == 'x8664':
+        jailroot = "/home/nicolas/Documents/msc-thesis-work/doc/examples/rootfs/jail-openssl-x8664/"
     else:
         print("usage: openssl-camillia-128.py [arm64, x8632]")
         exit(0)
@@ -55,6 +57,6 @@ if __name__ == "__main__":
         deterministic=False,
         asFile=False,
         jail=jailroot,
-        leakageModel=hamming,
+        leakageModel=identity,
     )
     scd.exec(report=True)
