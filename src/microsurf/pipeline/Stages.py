@@ -4,7 +4,7 @@ import random
 import tempfile
 from collections import OrderedDict
 from pathlib import Path, PurePath
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import magic
 import matplotlib.pyplot as plt
@@ -77,6 +77,7 @@ class BinaryLoader(Stage):
         if not os.path.exists(self.binPath):
             log.error(f"target path {str(self.binPath)} not found")
         fileinfo = magic.from_file(path)
+        self.filemagic = fileinfo
         if "80386" in fileinfo:
             self.md = Cs(CS_ARCH_X86, CS_MODE_32)
         elif "x86" in fileinfo:
@@ -167,11 +168,7 @@ class BinaryLoader(Stage):
 
     def getlibname(self, addr):
         return next(
-            (
-                label
-                for s, e, _, label, _ in self.mappings
-                if s < addr < e
-            ),
+            (label for s, e, _, label, _ in self.mappings if s < addr < e),
             -1,
         )
 

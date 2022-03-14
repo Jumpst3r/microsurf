@@ -1,8 +1,11 @@
+import glob
 import multiprocessing
 from typing import List
 
 from microsurf.pipeline.tracetools.Trace import MemTraceCollection
 from tqdm import tqdm
+
+from microsurf.utils.report import ReportGenerator
 
 from ..pipeline.Stages import (
     BinaryLoader,
@@ -94,10 +97,9 @@ class PipeLineExecutor:
         log.info(f"Indentified {len(res)} leak with good MI score:")
         self.results = [int(k, 16) for k in res.keys()]
         endtime = time.time()
-        console.rule(
-            f"results (took {time.strftime('%H:%M:%S', time.gmtime(endtime-starttime))})"
-        )
-
+        self.runtime = time.strftime("%H:%M:%S", time.gmtime(endtime - starttime))
+        console.rule(f"results (took {self.runtime})")
+        self.MDresults = []
         # Pinpoint where the leak occured - for dyn. bins report only the offset:
         for (
             lbound,
@@ -108,17 +110,47 @@ class PipeLineExecutor:
         ) in self.loader.mappings:
             for k in self.results:
                 if lbound < k < ubound:
+                    path = (
+                            container
+                            if container
+                            else glob.glob(
+                                f'{self.loader.rootfs}/**/*{label.split(" ")[-1]}'
+                            )[0]
+                        )
                     if self.loader.dynamic:
                         offset = k - self.loader.getlibbase(label)
-                        symbname = getfnname(container, offset)
+                        symbname = getfnname(path, offset)
                         console.print(
-                            f'{offset:08x} - [MI = {self.mivals[hex(k)]:.2f}] \t at {symbname if symbname else "??":<30} {label}'
+                            f'{offset:#08x} - [MI = {self.mivals[hex(k)]:.2f}] \t at {symbname if symbname else "??":<30} {label}'
+                        )
+                        self.MDresults.append(
+                            {
+                                "offset": f"{offset:#08x}",
+                                "MI score": f"{self.mivals[hex(k)]:.2f}",
+                                "Function": f'{symbname if symbname else "??":}',
+                                "Object": f'{path.split("/")[-1]}',
+                            }
                         )
                     else:
-                        symbname = getfnname(container, k)
+                        symbname = getfnname(path, k)
                         console.print(
-                            f'{k:08x} [MI={self.mivals[hex(k)]:.2f}] \t at {symbname if symbname else "??":<30} {label}'
+                            f'{k:#08x} [MI={self.mivals[hex(k)]:.2f}] \t at {symbname if symbname else "??":<30} {label}'
                         )
+                        self.MDresults.append(
+                            {
+                                "offset": f"{k:#08x}",
+                                "MI score": f"{self.mivals[hex(k)]:.2f}",
+                                "Function": f'{symbname if symbname else "??":}',
+                                "Object": f'{path.split("/")[-1]}',
+                            }
+                        )
+
+    def generateReport(self):
+        assert self.MDresults
+        rg = ReportGenerator(
+            results=self.MDresults, time=self.runtime, loader=self.loader
+        )
+        rg.saveMD()
 
     def finalize(self):
         return self.results

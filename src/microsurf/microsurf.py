@@ -129,7 +129,13 @@ class SCDetector:
             leakageModel=self.leakageModel,
         )
 
-    def exec(self):
-        """Runs the side channel detection analysis"""
+    def exec(self, report=False):
+        """Run the side channel analysis
+
+        Args:
+            report: Generate a markdown report. Defaults to False.
+        """
         pipeline = PipeLineExecutor(loader=self.bl)
         pipeline.run()
+        if report:
+            pipeline.generateReport()

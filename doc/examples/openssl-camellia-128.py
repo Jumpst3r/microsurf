@@ -57,4 +57,4 @@ if __name__ == "__main__":
         jail=jailroot,
         leakageModel=hamming,
     )
-    scd.exec()
+    scd.exec(report=True)
