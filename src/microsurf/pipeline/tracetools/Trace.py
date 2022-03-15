@@ -39,7 +39,7 @@ class MemTraceCollection:
                         occurs += 1
                 if common == len(self.traces):
                     commonItems.add(k1)
-                
+
         log.info(f"pruned {len(commonItems)} entries")
         for t in self.traces:
             if len(commonItems) > 0:

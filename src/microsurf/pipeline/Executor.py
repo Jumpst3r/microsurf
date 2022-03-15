@@ -24,7 +24,7 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results: List[int] = []
-        self.ITER_COUNT = 10
+        self.ITER_COUNT = 30
 
     def run(self):
         import time
@@ -97,8 +97,10 @@ class PipeLineExecutor:
         log.info(f"Indentified {len(res)} leak with good MI score:")
         self.results = [int(k, 16) for k in res.keys()]
         endtime = time.time()
-        self.runtime = time.strftime("%H:%M:%S", time.gmtime(endtime - starttime))
-        console.rule(f"results (took {self.runtime})")
+        self.loader.runtime = time.strftime(
+            "%H:%M:%S", time.gmtime(endtime - starttime)
+        )
+        console.rule(f"results (took {self.loader.runtime})")
         self.MDresults = []
         # Pinpoint where the leak occured - for dyn. bins report only the offset:
         for (
@@ -111,12 +113,12 @@ class PipeLineExecutor:
             for k in self.results:
                 if lbound < k < ubound:
                     path = (
-                            container
-                            if container
-                            else glob.glob(
-                                f'{self.loader.rootfs}/**/*{label.split(" ")[-1]}'
-                            )[0]
-                        )
+                        container
+                        if container
+                        else glob.glob(
+                            f'{self.loader.rootfs}/**/*{label.split(" ")[-1]}'
+                        )[0]
+                    )
                     if self.loader.dynamic:
                         offset = k - self.loader.getlibbase(label)
                         symbname = getfnname(path, offset)
@@ -126,7 +128,7 @@ class PipeLineExecutor:
                         self.MDresults.append(
                             {
                                 "offset": f"{offset:#08x}",
-                                "MI score": f"{self.mivals[hex(k)]:.2f}",
+                                "MI score": self.mivals[hex(k)],
                                 "Function": f'{symbname if symbname else "??":}',
                                 "Object": f'{path.split("/")[-1]}',
                             }
@@ -144,12 +146,13 @@ class PipeLineExecutor:
                                 "Object": f'{path.split("/")[-1]}',
                             }
                         )
+        import pandas as pd
+
+        self.resultsDF = pd.DataFrame.from_dict(self.MDresults)
 
     def generateReport(self):
         assert self.MDresults
-        rg = ReportGenerator(
-            results=self.MDresults, time=self.runtime, loader=self.loader
-        )
+        rg = ReportGenerator(results=self.resultsDF, loader=self.loader)
         rg.saveMD()
 
     def finalize(self):

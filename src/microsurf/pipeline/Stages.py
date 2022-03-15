@@ -4,12 +4,14 @@ import random
 import tempfile
 from collections import OrderedDict
 from pathlib import Path, PurePath
+import time
 from typing import Dict, List, Tuple
-
+from datetime import datetime
 import magic
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 import seaborn as sns
+from microsurf.utils.elf import getfnname
 from capstone import CS_ARCH_ARM, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_MODE_ARM, Cs
 
 from qiling import Qiling
@@ -48,6 +50,8 @@ class BinaryLoader(Stage):
         self.mappings = None
         self.OLDVAL = None
         self.OLDPATH = None
+        self.emulationruntime = None
+        self.runtime = None
         try:
             self.rootfs = kwargs["jail"]
         except KeyError:
@@ -103,7 +107,8 @@ class BinaryLoader(Stage):
             log.info(f"rootfs = {self.rootfs}")
         else:
             self.dynamic = False
-            if not self.rootfs: self.rootfs = PurePath(tempfile.mkdtemp())
+            if not self.rootfs:
+                self.rootfs = PurePath(tempfile.mkdtemp())
             log.info(f"detected static binary, jailing to {self.rootfs}")
         try:
             # initialize args;
@@ -124,8 +129,13 @@ class BinaryLoader(Stage):
                 log.error(f"Lib {str(e.filename)} not found in jail")
                 exit(1)
         try:
+            starttime = datetime.now()
             self.exec()
-            console.rule("Looks like binary is supported")
+            endtime = datetime.now()
+            self.emulationruntime = str((endtime - starttime))
+            console.rule(
+                f"Looks like binary is supported (emulated in {self.emulationruntime})"
+            )
         except Exception as e:
             log.error(f"Emulation dry run failed: {str(e)}")
             exit(1)
@@ -273,6 +283,7 @@ class DistributionAnalyzer(Stage):
         results = []
         skipped = 0
         for leakAddr in self.rndTraceCollection.possibleLeaks:
+            log.debug(f"Current PC: {hex(leakAddr)}")
             addrSetFixed = []
             addrSetRnd = []
             # Convert traces to trace per IP/PC
@@ -292,23 +303,32 @@ class DistributionAnalyzer(Stage):
                 continue
             # Skip obviously non secret dependent case:
             if set(addrSetFixed) == set(addrSetRnd):
+                log.debug(f"skipped obv non secret dep PC {hex(leakAddr)}")
                 continue
             # sometimes set(addrSetRnd) will be larger than set(addrSetFixed)
             # due to non. determ. - if addrSetRnd contains all elements of
             # addrSetFixed, then we can also skip this, it is not a leak
-            if len(set(addrSetFixed)) == len(set(addrSetRnd).intersection(addrSetFixed)):
-                log.debug(f"skipped a sneaky FP {libname}")
+            if len(set(addrSetFixed)) == len(
+                set(addrSetRnd).intersection(addrSetFixed)
+            ):
+                log.debug(f"skipped a sneaky PC {hex(leakAddr)}")
                 continue
             # Skip obviously secret dependent, zero variance case:
             if len(set(addrSetFixed)) == 1:
                 results.append(leakAddr)
-                log.debug(f"Zero var on {hex(leakAddr)} (len rnd = {len(addrSetRnd)}), adding to leaks")
+                log.debug(
+                    f"Zero var on {hex(leakAddr)} (len rnd = {len(addrSetRnd)}), adding to leaks"
+                )
                 continue
             if len(addrSetFixed) < 25 or len(addrSetRnd) < 25:
-                log.debug(f"skipping MWU with {len(addrSetFixed)} fixed and {len(addrSetRnd)} random traces for IP={hex(leakAddr)}")
+                log.debug(
+                    f"skipping MWU with {len(addrSetFixed)} fixed and {len(addrSetRnd)} random traces for IP={hex(leakAddr)}"
+                )
                 continue
             else:
-                log.debug(f"executing MWU with {len(addrSetFixed)} fixed and {len(addrSetRnd)} random traces for IP={hex(leakAddr)}")
+                log.debug(
+                    f"executing MWU with {len(addrSetFixed)} fixed and {len(addrSetRnd)} random traces for IP={hex(leakAddr)}"
+                )
 
             _, p_value = stats.mannwhitneyu(addrSetFixed, addrSetRnd)
 
@@ -342,9 +362,9 @@ class DistributionAnalyzer(Stage):
             # not gather enough traces for MWU to be stat. sig.
             if p_value < 0.01:
                 results.append(leakAddr)
-                log.info(f"Added {libname} with p_value {p_value}")
+                log.debug(f"Added {libname} with p_value {p_value}")
             else:
-                log.debug(f"{leakAddr} skipped (p={p_value})")
+                log.debug(f"{hex(leakAddr)} skipped (p={p_value})")
         log.info(
             f"filtered {len(self.rndTraceCollection.possibleLeaks) - len(results)} false positives"
         )

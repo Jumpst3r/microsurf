@@ -133,7 +133,7 @@ class SCDetector:
         """Run the side channel analysis
 
         Args:
-            report: Generate a markdown report. Defaults to False.
+            report: Generate a markdown report.
         """
         pipeline = PipeLineExecutor(loader=self.bl)
         pipeline.run()
