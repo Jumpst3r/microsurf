@@ -141,6 +141,7 @@ class SCDetector:
             report: Generate a markdown report.
         """
         pipeline = PipeLineExecutor(loader=self.bl)
+        pipeline.ITER_COUNT = 10
         pipeline.run()
         if report:
             pipeline.generateReport()

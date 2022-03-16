@@ -369,10 +369,11 @@ class DistributionAnalyzer(Stage):
                     f"{libname} len fixed / rnd = {len(addrSetFixed)}, {len(addrSetRnd)}"
                 )
                 # ask weekly meeting when this could happen.
-                # if the same PC accesses a very large number of memory locs, it causes a FP
+                # if the same PC accesses a very large number of memory locs, it can cause a FP
                 if len(addrSetFixed) > 100 or len(addrSetRnd) > 100:
                     log.debug(f"??? @ {libname}")
-                    continue
+                    # continue
+                    
                 results.append(leakAddr)
                 log.debug(f"Added {libname} with p_value {p_value}")
             else:

@@ -38,8 +38,8 @@ if __name__ == "__main__":
     binpath = jailroot + "openssl"
     # openssl args, the secret part is marked with '@'
     opensslArgs = [
-        #"camellia-128-ecb",
-        "cast5-ecb",
+        "camellia-128-ecb",
+        #"cast5-ecb",
         "-e",
         "-in",
         "input.bin",
