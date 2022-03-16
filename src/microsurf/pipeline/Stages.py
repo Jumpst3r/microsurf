@@ -4,7 +4,6 @@ import random
 import tempfile
 from collections import OrderedDict
 from pathlib import Path, PurePath
-import time
 from typing import Dict, List, Tuple
 from datetime import datetime
 import magic
@@ -52,25 +51,14 @@ class BinaryLoader(Stage):
         self.OLDPATH = None
         self.emulationruntime = None
         self.runtime = None
-        try:
-            self.rootfs = kwargs["jail"]
-        except KeyError:
-            self.rootfs = None
+        self.rootfs = kwargs.get("jail", None)
         self.QLEngine: Qiling = None
-        try:
-            self.deterministic = kwargs["deterministic"]
-        except KeyError:
-            self.deterministic = False
-        try:
-            self.leakageModel = kwargs["leakageModel"]
-        except KeyError:
-            self.leakageModel = identity
-        try:
-            self.rndGen = kwargs["rndGen"]
-            self.asFile = kwargs["asFile"]
-        except KeyError:
-            self.asFile = False
-            self.rndGen = None
+        self.deterministic = kwargs.get("deterministic", False)
+        self.leakageModel = kwargs.get("leakageModel", identity)
+        self.rndGen = kwargs.get("rndGen", None)
+        self.asFile = kwargs.get("asFile", False)
+        self.sharedObjects = kwargs.get("sharedObjects", [])
+        self.ignoredObjects = []
         try:
             self.secretArgIndex = args.index("@")
         except IndexError as e:
@@ -101,7 +89,7 @@ class BinaryLoader(Stage):
             exit(1)
         if "dynamic" in fileinfo:
             log.warn(
-                "Detected dynamically linked binary, ensure that the appropriate shared objects are available"
+                f"Detected dynamically linked binary, ensure that the appropriate shared objects are available under {self.rootfs}"
             )
             self.dynamic = True
             log.info(f"rootfs = {self.rootfs}")
@@ -110,6 +98,10 @@ class BinaryLoader(Stage):
             if not self.rootfs:
                 self.rootfs = PurePath(tempfile.mkdtemp())
             log.info(f"detected static binary, jailing to {self.rootfs}")
+            if self.sharedObjects:
+                log.warn(
+                    "You provided a list of shared objects - but the target binary is static. Ignoring objects."
+                )
         try:
             # initialize args;
             val, path = self.rndArg()
@@ -126,7 +118,10 @@ class BinaryLoader(Stage):
             self.fixRandomness(self.deterministic)
         except FileNotFoundError as e:
             if ".so" in str(e):
-                log.error(f"Lib {str(e.filename)} not found in jail")
+                log.error(
+                    f"Shared object {str(e.filename)} not found in emulation root {self.rootfs}"
+                )
+                log.debug(e)
                 exit(1)
         try:
             starttime = datetime.now()
@@ -176,6 +171,31 @@ class BinaryLoader(Stage):
     def fixedArg(self):
         return self._fixed()
 
+    def validateObjects(self):
+        for obname in self.sharedObjects:
+            base = self.getlibbase(obname)
+            if base != -1:
+                log.info(f"Located shared object {obname} (base {hex(base)})")
+            else:
+                log.error(
+                    "you provided a shared object name which was not found in memory."
+                )
+                exit(-1)
+        for _, _, _, label, c in self.mappings:
+            labelIgnored = True
+            for obname in self.sharedObjects:
+                if obname in label or self.binPath.name in label:
+                    labelIgnored = False
+            if labelIgnored and ((" " in label) or c):
+                if c and self.binPath.name not in c.split("/")[-1]:
+                    self.ignoredObjects.append(label)
+                elif not c:
+                    self.ignoredObjects.append(label)
+
+        self.ignoredObjects = list(set(self.ignoredObjects))
+
+        log.info(f"The following objects are not traced {self.ignoredObjects}")
+
     def getlibname(self, addr):
         return next(
             (label for s, e, _, label, _ in self.mappings if s < addr < e),
@@ -186,8 +206,18 @@ class BinaryLoader(Stage):
     # FIXME there has to be a cleaner way
     def getlibbase(self, name):
         return next(
-            (s for s, _, _, label, _ in self.mappings if label == name),
+            (s for s, _, _, label, _ in self.mappings if str(name) in label),
             -1,
+        )
+
+    def issharedObject(self, addr):
+        return next(
+            (
+                not bool(container)
+                for s, e, _, _, container in self.mappings
+                if s < addr < e
+            ),
+            False,
         )
 
     def exec(self):
@@ -195,6 +225,7 @@ class BinaryLoader(Stage):
         console.rule(f"Emulating {self.QLEngine._argv} (dry run)")
         self.QLEngine.run()
         self.mappings = self.QLEngine.mem.get_mapinfo()
+        self.validateObjects()
         self.QLEngine.stop()
         self.refreshQLEngine()
         if self.dryRunOnly:
@@ -253,6 +284,8 @@ class MemWatcher(Stage):
         self.md = self.bl.md
 
     def _trace_mem_read(self, ql: Qiling, access, addr, size, value):
+        if self.bl.getlibname(ql.arch.regs.arch_pc) in self.bl.ignoredObjects:
+            return
         self.currenttrace.add(ql.arch.regs.arch_pc, addr)
 
     def exec(self, generator, pindex, mt_res):
@@ -283,11 +316,16 @@ class DistributionAnalyzer(Stage):
         results = []
         skipped = 0
         for leakAddr in self.rndTraceCollection.possibleLeaks:
-            log.debug(f"Current PC: {hex(leakAddr)}")
             addrSetFixed = []
             addrSetRnd = []
             # Convert traces to trace per IP/PC
             libname = self.loader.getlibname(leakAddr)
+
+            offset = (
+                leakAddr - self.loader.getlibbase(libname)
+                if ".so" in libname
+                else leakAddr
+            )
             for t in self.fixedTraceCollection.traces:
                 vset = t.trace[leakAddr]
                 for v in vset:
@@ -296,46 +334,13 @@ class DistributionAnalyzer(Stage):
                 vset = t.trace[leakAddr]
                 for v in vset:
                     addrSetRnd.append(v)
-            # Due to non determinism, it is possible that addresses are not present in both sets
-            if len(addrSetFixed) == 0 or len(addrSetRnd) == 0:
-                log.debug(f"Skipping {hex(leakAddr)}, not present in both sets")
-                skipped += 1
-                continue
-            # Skip obviously non secret dependent case:
-            if set(addrSetFixed) == set(addrSetRnd):
-                log.debug(f"skipped obv non secret dep PC {hex(leakAddr)}")
-                continue
-            # sometimes set(addrSetRnd) will be larger than set(addrSetFixed)
-            # due to non. determ. - if addrSetRnd contains all elements of
-            # addrSetFixed, then we can also skip this, it is not a leak
-            if len(set(addrSetFixed)) == len(
-                set(addrSetRnd).intersection(addrSetFixed)
-            ):
-                log.debug(f"skipped a sneaky PC {hex(leakAddr)}")
-                continue
-            # Skip obviously secret dependent, zero variance case:
-            if len(set(addrSetFixed)) == 1:
-                results.append(leakAddr)
-                log.debug(
-                    f"Zero var on {hex(leakAddr)} (len rnd = {len(addrSetRnd)}), adding to leaks"
-                )
-                continue
-            if len(addrSetFixed) < 25 or len(addrSetRnd) < 25:
-                log.debug(
-                    f"skipping MWU with {len(addrSetFixed)} fixed and {len(addrSetRnd)} random traces for IP={hex(leakAddr)}"
-                )
-                continue
-            else:
-                log.debug(
-                    f"executing MWU with {len(addrSetFixed)} fixed and {len(addrSetRnd)} random traces for IP={hex(leakAddr)}"
-                )
+            # _, p_value = stats.mannwhitneyu(addrSetFixed, addrSetRnd)
+            _, p_value = stats.ks_2samp(addrSetFixed, addrSetRnd)
 
-            _, p_value = stats.mannwhitneyu(addrSetFixed, addrSetRnd)
-
-            if LOGGING_LEVEL == logging.DEBUG:
+            if False and LOGGING_LEVEL == logging.DEBUG:
                 fig, ax = plt.subplots(1, 1)
                 fig.suptitle(
-                    f"IP={hex(leakAddr)} in {self.loader.getlibname(leakAddr)} MWU p={p_value:e}"
+                    f"IP={hex(leakAddr)} offset={hex(offset)} in {libname} Added :{p_value < 0.01}, {p_value:e}"
                 )
                 sns.distplot(
                     addrSetFixed,
@@ -358,16 +363,25 @@ class DistributionAnalyzer(Stage):
                     label="Random secret input",
                 )
                 plt.savefig(f"debug/{hex(leakAddr)}.png")
-            # TODO for highly non. det pathing it is possible that we do
-            # not gather enough traces for MWU to be stat. sig.
+
             if p_value < 0.01:
+                log.debug(
+                    f"{libname} len fixed / rnd = {len(addrSetFixed)}, {len(addrSetRnd)}"
+                )
+                # ask weekly meeting when this could happen.
+                # if the same PC accesses a very large number of memory locs, it causes a FP
+                if len(addrSetFixed) > 100 or len(addrSetRnd) > 100:
+                    log.debug(f"??? @ {libname}")
+                    continue
                 results.append(leakAddr)
                 log.debug(f"Added {libname} with p_value {p_value}")
             else:
-                log.debug(f"{hex(leakAddr)} skipped (p={p_value})")
+                skipped += 1
+                log.debug(f"{libname} skipped (p={p_value})")
         log.info(
-            f"filtered {len(self.rndTraceCollection.possibleLeaks) - len(results)} false positives"
+            f"filtered {len(self.rndTraceCollection.possibleLeaks) - len(results)} false positives, {skipped} through KS analysis"
         )
+        log.info(f"total leaks: {len(results)}")
         self.results = results
 
     def exec(self, *args, **kwargs):

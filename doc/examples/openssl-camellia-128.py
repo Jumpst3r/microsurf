@@ -38,7 +38,8 @@ if __name__ == "__main__":
     binpath = jailroot + "openssl"
     # openssl args, the secret part is marked with '@'
     opensslArgs = [
-        "camellia-128-ecb",
+        #"camellia-128-ecb",
+        "cast5-ecb",
         "-e",
         "-in",
         "input.bin",
@@ -47,9 +48,10 @@ if __name__ == "__main__":
         "-nosalt",
         "-K",
         "@",
-        # "-iv", no IV for camellia
+        # "-iv", # no IV for camellia
         # "0",
     ]
+    sharedObjects = ['libssl', 'libcrypto']
     scd = SCDetector(
         binPath=binpath,
         args=opensslArgs,
@@ -58,5 +60,6 @@ if __name__ == "__main__":
         asFile=False,
         jail=jailroot,
         leakageModel=identity,
+        sharedObjects=sharedObjects
     )
     scd.exec(report=True)

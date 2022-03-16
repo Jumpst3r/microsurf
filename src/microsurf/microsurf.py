@@ -65,7 +65,7 @@ if __name__ == "__main__":
 
 
 class SCDetector:
-    """The SCDetector class can be used to detect side channels in generic applications
+    """The SCDetector class can be used to detect secret dependent memory accesses in generic applications
 
     Args:
         binPath: Path to the target binary
@@ -82,6 +82,8 @@ class SCDetector:
             For dynamic binaries, the user must ensure that the appropriate shared objects are present.
         leakageModel: (Callable[[str], Any]): Function which applies a leakage model to the secret.
             Example under microsurf.pipeline.LeakageModels
+        sharedObjects: List of shared libraries to trace. For example ['libssl.so.1.1', 'libcrypto.so.1.1'].
+            Defaults to None, tracing only the target binary. Only applicable to dynamic binaries.
     """
 
     def __init__(
@@ -93,6 +95,7 @@ class SCDetector:
         asFile: bool,
         jail: str,
         leakageModel: Callable[[str], Any],
+        sharedObjects: list[str] = [],
     ) -> None:
         self.binPath = binPath
         self.args = args
@@ -101,6 +104,7 @@ class SCDetector:
         self.asFile = asFile
         self.rootfs = jail
         self.leakageModel = leakageModel
+        self.sharedObjects = sharedObjects
         self._validate()
 
     def _validate(self):
@@ -127,6 +131,7 @@ class SCDetector:
             asFile=self.asFile,
             jail=self.rootfs,
             leakageModel=self.leakageModel,
+            sharedObjects=self.sharedObjects,
         )
 
     def exec(self, report=False):

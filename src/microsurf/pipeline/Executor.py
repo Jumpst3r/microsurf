@@ -24,7 +24,7 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results: List[int] = []
-        self.ITER_COUNT = 30
+        self.ITER_COUNT = 20
 
     def run(self):
         import time
@@ -86,15 +86,13 @@ class PipeLineExecutor:
         for idx, t in enumerate(rndTraceCollection.traces):
             for leak in possibleLeaks:
                 assert len(t.trace[leak]) > 0
-        log.info("Classifying leaks")
+        log.info("Rating leaks")
         lc = LeakageClassification(
             rndTraceCollection, self.loader, possibleLeaks, self.loader.leakageModel
         )
         lc.exec()
         res = lc.finalize()
         self.mivals = res
-        log.info(f"Ignoring {len(possibleLeaks) - len(res)} leaks with low score")
-        log.info(f"Indentified {len(res)} leak with good MI score:")
         self.results = [int(k, 16) for k in res.keys()]
         endtime = time.time()
         self.loader.runtime = time.strftime(
@@ -121,7 +119,11 @@ class PipeLineExecutor:
                     )
                     if self.loader.dynamic:
                         offset = k - self.loader.getlibbase(label)
-                        symbname = getfnname(path, offset)
+                        symbname = (
+                            getfnname(path, offset)
+                            if ".so" in label
+                            else getfnname(path, k)
+                        )
                         console.print(
                             f'{offset:#08x} - [MI = {self.mivals[hex(k)]:.2f}] \t at {symbname if symbname else "??":<30} {label}'
                         )
@@ -151,7 +153,9 @@ class PipeLineExecutor:
         self.resultsDF = pd.DataFrame.from_dict(self.MDresults)
 
     def generateReport(self):
-        assert self.MDresults
+        if not self.MDresults:
+            log.info("no results - no file.")
+            return
         rg = ReportGenerator(results=self.resultsDF, loader=self.loader)
         rg.saveMD()
 
