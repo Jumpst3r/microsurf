@@ -117,9 +117,19 @@ A leakage model is a transformation which is applied to the secret. An example m
 
 Custom leakage models can be passed to the `SCDetector` object.
 
+### Selective tracing (`sharedObjects` argument)
+
+To selectively trace shared objects, a list of names can be passed to the `sharedObjects` argument. Note that this only works for dynamic libraries. For example:
+
+```python
+sharedObjects = ['libssl', 'libcrypto']
+```
+
+will ignore every other shared library (`libc` etc).
+
 ## Execution and results
 
-Once an `SCDetector` object has been initialized with all the arguments needed, analysis can be started by calling the `.exec()` function.
+Once an `SCDetector` object has been initialized with all the arguments needed, analysis can be started by calling the `.exec()` function:
 
 The results will look be split in several columns:
 
@@ -132,3 +142,58 @@ The results will look be split in several columns:
 ```
 
 The first column is the relative offset within the shared object at which the leak was identified. The second column gives the estimated [mutual information](https://en.wikipedia.org/wiki/Mutual_information) score optained by applying the specified leakage model. The next column provides the function name (if the symbols are available). The last column gives the name of the (shared) object.
+
+The `exec` function takes an optional argument `report`. If set to `True`, the results will be saved in markdown table format, as exemplified by the next section.
+
+## Sample results 
+
+__Run at__: 03/15/2022, 11:19:26 
+
+__Elapsed time (analysis)__: 00:01:31 
+
+__Elapsed time (single run emulation)__: 0:00:00.427573 
+
+__Binary__
+
+`/home/nicolas/Documents/msc-thesis-work/doc/examples/rootfs/jail-openssl-arm64/openssl`
+
+ >ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux-aarch64.so.1, for GNU/Linux 3.7.0, with debug_info, not stripped 
+
+__Args__
+
+`['camellia-128-ecb', '-e', '-in', 'input.bin', '-out', 'output.bin', '-nosalt', '-K', '47356fc8ca111593e80e47e4667fb4c3']` 
+
+__Deterministic__
+
+`False` 
+
+__Emulation root__
+
+`/home/nicolas/Documents/msc-thesis-work/doc/examples/rootfs/jail-openssl-arm64/` 
+
+__Sample secret__
+
+`e02216de8a7fc5c0f31aa99d84eacf76` 
+
+__Leakage model__
+
+`identity` 
+
+__Results__
+
+__Top 5, sorted by MI__
+
+| offset   |   MI score | Function                     | Object           |
+|:---------|-----------:|:-----------------------------|:-----------------|
+| 0x0df0ec |   1.07667  | Camellia_Ekeygen             | libcrypto.so.1.1 |
+| 0x0e05e8 |   0.279915 | Camellia_EncryptBlock_Rounds | libcrypto.so.1.1 |
+| 0x0e07f8 |   0.27345  | Camellia_EncryptBlock_Rounds | libcrypto.so.1.1 |
+| 0x0df44c |   0.239999 | Camellia_Ekeygen             | libcrypto.so.1.1 |
+| 0x0e0778 |   0.150515 | Camellia_EncryptBlock_Rounds | libcrypto.so.1.1 |
+ 
+ __Grouped by function name__
+ 
+| Function                     |   Leak Count |
+|:-----------------------------|-------------:|
+| Camellia_Ekeygen             |           30 |
+| Camellia_EncryptBlock_Rounds |           14 |
