@@ -2,19 +2,23 @@ import logging
 import os
 import random
 import tempfile
+import traceback
 from collections import OrderedDict
+from datetime import datetime
+from functools import lru_cache
 from pathlib import Path, PurePath
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import magic
 import matplotlib.pyplot as plt
+import ray
 import scipy.stats as stats
 import seaborn as sns
 from capstone import CS_ARCH_ARM, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_MODE_ARM, Cs
-
-from qiling import Qiling
-
 from microsurf.pipeline.LeakageModels import identity
+from microsurf.utils.elf import getfnname
+from qiling import Qiling
+from sortedcontainers import SortedDict
 
 from ..utils.hijack import (
     const_clock_gettime,
@@ -48,25 +52,17 @@ class BinaryLoader(Stage):
         self.mappings = None
         self.OLDVAL = None
         self.OLDPATH = None
-        try:
-            self.rootfs = kwargs["jail"]
-        except KeyError:
-            self.rootfs = "/"
+        self.emulationruntime = None
+        self.runtime = None
+        self.rootfs = kwargs.get("jail", None)
         self.QLEngine: Qiling = None
-        try:
-            self.deterministic = kwargs["deterministic"]
-        except KeyError:
-            self.deterministic = False
-        try:
-            self.leakageModel = kwargs["leakageModel"]
-        except KeyError:
-            self.leakageModel = identity
-        try:
-            self.rndGen = kwargs["rndGen"]
-            self.asFile = kwargs["asFile"]
-        except KeyError:
-            self.asFile = False
-            self.rndGen = None
+        self.deterministic = kwargs.get("deterministic", False)
+        self.leakageModel = kwargs.get("leakageModel", identity)
+        self.rndGen = kwargs.get("rndGen", None)
+        self.asFile = kwargs.get("asFile", False)
+        self.sharedObjects = kwargs.get("sharedObjects", [])
+        self.ignoredObjects = []
+        self.newArgs = self.args.copy()
         try:
             self.secretArgIndex = args.index("@")
         except IndexError as e:
@@ -77,6 +73,7 @@ class BinaryLoader(Stage):
         if not os.path.exists(self.binPath):
             log.error(f"target path {str(self.binPath)} not found")
         fileinfo = magic.from_file(path)
+        self.filemagic = fileinfo
         if "80386" in fileinfo:
             self.md = Cs(CS_ARCH_X86, CS_MODE_32)
         elif "x86" in fileinfo:
@@ -96,19 +93,24 @@ class BinaryLoader(Stage):
             exit(1)
         if "dynamic" in fileinfo:
             log.warn(
-                "Detected dynamically linked binary, ensure that the appropriate shared objects are available"
+                f"Detected dynamically linked binary, ensure that the appropriate shared objects are available under {self.rootfs}"
             )
             self.dynamic = True
             log.info(f"rootfs = {self.rootfs}")
         else:
             self.dynamic = False
-            self.rootfs = PurePath(tempfile.mkdtemp())
+            if not self.rootfs:
+                self.rootfs = PurePath(tempfile.mkdtemp())
             log.info(f"detected static binary, jailing to {self.rootfs}")
+            if self.sharedObjects:
+                log.warn(
+                    "You provided a list of shared objects - but the target binary is static. Ignoring objects."
+                )
         try:
             # initialize args;
             val, path = self.rndArg()
             self.QLEngine = Qiling(
-                [str(self.binPath), *args],
+                [str(self.binPath), *self.newArgs],
                 str(self.rootfs),
                 log_override=getQilingLogger(),
                 verbose=1,
@@ -120,13 +122,22 @@ class BinaryLoader(Stage):
             self.fixRandomness(self.deterministic)
         except FileNotFoundError as e:
             if ".so" in str(e):
-                log.error(f"Lib {str(e.filename)} not found in jail")
+                log.error(
+                    f"Shared object {str(e.filename)} not found in emulation root {self.rootfs}"
+                )
+                log.debug(e)
                 exit(1)
         try:
+            starttime = datetime.now()
             self.exec()
-            console.rule("Looks like binary is supported")
+            endtime = datetime.now()
+            self.emulationruntime = str((endtime - starttime))
+            console.rule(
+                f"Looks like binary is supported (emulated in {self.emulationruntime})"
+            )
         except Exception as e:
             log.error(f"Emulation dry run failed: {str(e)}")
+            log.error(traceback.format_exc())
             exit(1)
         self.md.detail = True
 
@@ -139,19 +150,19 @@ class BinaryLoader(Stage):
                 log.info(f"generated keyfile:{path}")
                 os.write(tmpfile, val.encode())
                 os.close(tmpfile)
-                self.args[self.secretArgIndex] = path.split("/")[-1]
+                self.newArgs[self.secretArgIndex] = path.split("/")[-1]
             else:
-                self.args[self.secretArgIndex] = val
+                self.newArgs[self.secretArgIndex] = val
         else:
             if self.asFile:
                 val = random.randint(0x00, 0xFF)
                 tmpfile, path = tempfile.mkstemp()
                 os.write(tmpfile, val)
                 os.close(tmpfile)
-                self.args[self.secretArgIndex] = path
+                self.newArgs[self.secretArgIndex] = path
             else:
                 val = random.randint(0x00, 0xFF)
-                self.args[self.secretArgIndex] = str(val)
+                self.newArgs[self.secretArgIndex] = str(val)
         return val, path
 
     def _fixed(self):
@@ -165,22 +176,55 @@ class BinaryLoader(Stage):
     def fixedArg(self):
         return self._fixed()
 
+    def validateObjects(self):
+        for obname in self.sharedObjects:
+            base = self.getlibbase(obname)
+            if base != -1:
+                log.info(f"Located shared object {obname} (base {hex(base)})")
+            else:
+                log.error(
+                    "you provided a shared object name which was not found in memory."
+                )
+                exit(-1)
+        for _, _, _, label, c in self.mappings:
+            labelIgnored = True
+            for obname in self.sharedObjects:
+                if obname in label or self.binPath.name in label:
+                    labelIgnored = False
+            if labelIgnored and ((" " in label) or c):
+                if c and self.binPath.name not in c.split("/")[-1]:
+                    self.ignoredObjects.append(label)
+                elif not c:
+                    self.ignoredObjects.append(label)
+
+        self.ignoredObjects = list(set(self.ignoredObjects))
+
+        log.info(f"The following objects are not traced {self.ignoredObjects}")
+
     def getlibname(self, addr):
         return next(
-            (
-                label
-                for s, e, _, label, _ in self.mappings
-                if s < addr < e
-            ),
+            (label for s, e, _, label, _ in self.mappings if s < addr < e),
             -1,
         )
 
     # we can't call qiling's function (undef mappings), so replicate it here
     # FIXME there has to be a cleaner way
+    @lru_cache(maxsize=None)
     def getlibbase(self, name):
         return next(
-            (s for s, _, _, label, _ in self.mappings if label == name),
+            (s for s, _, _, label, _ in self.mappings if str(name) in label),
             -1,
+        )
+
+    @lru_cache(maxsize=None)
+    def issharedObject(self, addr):
+        return next(
+            (
+                not bool(container)
+                for s, e, _, _, container in self.mappings
+                if s < addr < e
+            ),
+            False,
         )
 
     def exec(self):
@@ -188,6 +232,7 @@ class BinaryLoader(Stage):
         console.rule(f"Emulating {self.QLEngine._argv} (dry run)")
         self.QLEngine.run()
         self.mappings = self.QLEngine.mem.get_mapinfo()
+        self.validateObjects()
         self.QLEngine.stop()
         self.refreshQLEngine()
         if self.dryRunOnly:
@@ -201,6 +246,7 @@ class BinaryLoader(Stage):
             log_override=getQilingLogger(),
             verbose=-1,
             multithread=True,
+            libcache=True,
         )
         self.fixRandomness(self.deterministic)
 
@@ -235,27 +281,89 @@ class BinaryLoader(Stage):
         self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
 
 
+@ray.remote(num_cpus=1)
 class MemWatcher(Stage):
     """
     Hooks memory reads
     """
 
-    def __init__(self, binaryLoader: BinaryLoader) -> None:
+    def __init__(
+        self,
+        binpath,
+        args,
+        rootfs,
+        ignoredObjects,
+        mappings,
+        locations=None,
+        deterministic=False,
+    ) -> None:
         self.traces: List[MemTrace] = []
-        self.bl = binaryLoader
-        self.md = self.bl.md
+        self.binPath = binpath
+        self.args = args
+        self.rootfs = rootfs
+        self.locations = locations
+        self.ignoredObjects = ignoredObjects
+        self.mappings = mappings
+        self.deterministic = deterministic
 
     def _trace_mem_read(self, ql: Qiling, access, addr, size, value):
-        self.currenttrace.add(ql.arch.regs.arch_pc, addr)
+        if self.locations is None:
+            if self.getlibname(ql.arch.regs.arch_pc) not in self.ignoredObjects:
+                self.currenttrace.add(ql.arch.regs.arch_pc, addr)
+        elif ql.arch.regs.arch_pc in self.locations:
+            self.currenttrace.add(ql.arch.regs.arch_pc, addr)
 
-    def exec(self, generator, pindex, mt_res):
-        secret, path = generator()  # updates the secret
+    def getlibname(self, addr):
+        return next(
+            (label for s, e, _, label, _ in self.mappings if s < addr < e),
+            -1,
+        )
+
+    def exec(self, secret):
+        self.args[self.args.index("@")] = secret
+        self.QLEngine = Qiling(
+            [str(self.binPath), *[str(a) for a in self.args]],
+            str(self.rootfs),
+            console=True,
+            log_override=getQilingLogger(),
+            verbose=-1,
+            multithread=True,
+        )
         self.currenttrace = MemTrace(secret)
-        self.bl.refreshQLEngine()
-        self.bl.QLEngine.hook_mem_read(self._trace_mem_read)
-        self.bl.QLEngine.run()
-        mt_res[pindex] = self.currenttrace
-        self.bl.QLEngine.stop()
+        self.QLEngine.hook_mem_read(self._trace_mem_read)
+        # duplicate code. Ugly - fixme.
+        if self.deterministic:
+            self.QLEngine.add_fs_mapper("/dev/urandom", device_random)
+            self.QLEngine.add_fs_mapper("/dev/random", device_random)
+            self.QLEngine.add_fs_mapper("/dev/arandom", device_random)
+            # ref https://marcin.juszkiewicz.com.pl/download/tables/syscalls.html
+            if self.md.arch == CS_ARCH_ARM:
+                self.QLEngine.os.set_syscall(403, const_time)
+                self.QLEngine.os.set_syscall(384, const_getrandom)
+                self.QLEngine.os.set_syscall(78, const_clock_gettimeofday)
+                self.QLEngine.os.set_syscall(263, const_clock_gettime)
+            if self.md.arch == CS_ARCH_X86 and self.md.mode == CS_MODE_64:
+                self.QLEngine.os.set_syscall(318, const_getrandom)
+                self.QLEngine.os.set_syscall(96, const_clock_gettimeofday)
+                self.QLEngine.os.set_syscall(228, const_clock_gettime)
+            if self.md.arch == CS_ARCH_X86 and self.md.mode == CS_MODE_32:
+                self.QLEngine.os.set_syscall(403, const_time)
+                self.QLEngine.os.set_syscall(13, const_time)
+                self.QLEngine.os.set_syscall(355, const_getrandom)
+                self.QLEngine.os.set_syscall(78, const_clock_gettimeofday)
+                self.QLEngine.os.set_syscall(265, const_clock_gettime)
+        else:
+            self.QLEngine.add_fs_mapper("/dev/urandom", "/dev/urandom")
+            self.QLEngine.add_fs_mapper("/dev/random", "/dev/random")
+            self.QLEngine.add_fs_mapper("/dev/arandom", "/dev/arandom")
+
+        # replace broken qiling hooks with working ones:
+        self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
+        self.QLEngine.run()
+        self.QLEngine.stop()
+
+    def getResults(self):
+        return self.currenttrace
 
 
 class DistributionAnalyzer(Stage):
@@ -279,6 +387,13 @@ class DistributionAnalyzer(Stage):
             addrSetFixed = []
             addrSetRnd = []
             # Convert traces to trace per IP/PC
+            libname = self.loader.getlibname(leakAddr)
+
+            offset = (
+                leakAddr - self.loader.getlibbase(libname)
+                if ".so" in libname
+                else leakAddr
+            )
             for t in self.fixedTraceCollection.traces:
                 vset = t.trace[leakAddr]
                 for v in vset:
@@ -287,24 +402,13 @@ class DistributionAnalyzer(Stage):
                 vset = t.trace[leakAddr]
                 for v in vset:
                     addrSetRnd.append(v)
-            # Due to non determinism, it is possible that addresses are not present in both sets
-            if len(addrSetFixed) == 0 or len(addrSetRnd) == 0:
-                log.debug(f"Skipping {hex(leakAddr)}, not present in both sets")
-                skipped += 1
-                continue
-            # Skip obviously non secret dependent case:
-            if set(addrSetFixed) == set(addrSetRnd):
-                continue
-            # Skip obviously secret dependent, zero variance case:
-            if len(set(addrSetFixed)) == 1:
-                results.append(leakAddr)
-                continue
-            _, p_value = stats.mannwhitneyu(addrSetFixed, addrSetRnd)
+            # _, p_value = stats.mannwhitneyu(addrSetFixed, addrSetRnd)
+            _, p_value = stats.ks_2samp(addrSetFixed, addrSetRnd)
 
-            if LOGGING_LEVEL == logging.DEBUG:
+            if False and LOGGING_LEVEL == logging.DEBUG:
                 fig, ax = plt.subplots(1, 1)
                 fig.suptitle(
-                    f"IP={hex(leakAddr)} in {self.loader.getlibname(leakAddr)} MWU p={p_value:e}"
+                    f"IP={hex(leakAddr)} offset={hex(offset)} in {libname} Added :{p_value < 0.01}, {p_value:e}"
                 )
                 sns.distplot(
                     addrSetFixed,
@@ -327,16 +431,21 @@ class DistributionAnalyzer(Stage):
                     label="Random secret input",
                 )
                 plt.savefig(f"debug/{hex(leakAddr)}.png")
-            # TODO for highly non. det pathing it is possible that we do
-            # not gather enough traces for MWU to be stat. sig.
+
             if p_value < 0.01:
+                log.debug(
+                    f"{libname} len fixed / rnd = {len(addrSetFixed)}, {len(addrSetRnd)}"
+                )
+
                 results.append(leakAddr)
+                log.debug(f"Added {libname} with p_value {p_value}")
             else:
-                log.debug(f"{leakAddr} skipped (p={p_value})")
-        log.info(f"skipped {skipped} entries")
+                skipped += 1
+                log.debug(f"{libname} skipped (p={p_value})")
         log.info(
-            f"filtered {len(self.rndTraceCollection.possibleLeaks) - len(results)} false positives"
+            f"filtered {len(self.rndTraceCollection.possibleLeaks) - len(results)} false positives, {skipped} through KS analysis"
         )
+        log.info(f"total leaks: {len(results)}")
         self.results = results
 
     def exec(self, *args, **kwargs):
@@ -403,8 +512,6 @@ class LeakageClassification(Stage):
             # log.info(f"mat{hex(leakAddr)} = {mat}")
             # log.info(f"secretMat = {secretMat}")
             # log.info(f"MI score for {hex(leakAddr)}: {mival:.2f}")
-            if mival < 0.1:
-                continue
             self.results[hex(leakAddr)] = mival
 
     def exec(self, *args, **kwargs):

@@ -1,8 +1,11 @@
+import glob
 import multiprocessing
 from typing import List
-
-from microsurf.pipeline.tracetools.Trace import MemTraceCollection
+import ray
+from microsurf.pipeline.tracetools.Trace import MemTrace, MemTraceCollection
 from tqdm import tqdm
+
+from microsurf.utils.report import ReportGenerator
 
 from ..pipeline.Stages import (
     BinaryLoader,
@@ -21,50 +24,82 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results: List[int] = []
-        self.ITER_COUNT = 40
+        self.ITER_COUNT = 5
 
     def run(self):
+        ray.init()
         import time
 
         starttime = time.time()
 
-        memWatcherFixed = MemWatcher(binaryLoader=self.loader)
-        memWatcherRnd = MemWatcher(binaryLoader=self.loader)
+        log.info("Identifying possible leak locations")
+
+        memWatchers = [
+            MemWatcher.remote(
+                self.loader.binPath,
+                self.loader.args,
+                self.loader.rootfs,
+                self.loader.ignoredObjects,
+                self.loader.mappings,
+            )
+            for _ in range(2)
+        ]
+        [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchers]
+        futures = [m.getResults.remote() for m in memWatchers]
+        mt = MemTraceCollection(ray.get(futures))
+        [ray.kill(m) for m in memWatchers]
+        mt.prune()
+
+        log.info(f"Identified {len(mt.possibleLeaks)} candidates")
+        if len(mt.possibleLeaks) > 1000:
+            log.warn("!! this is a rare bug that I cannot track down !!")
+
         log.info("Running stage Leak Confirm")
 
-        jobs = []
-        manager = multiprocessing.Manager()
-        tracesFixed = manager.dict()
-        tracesRandom = manager.dict()
-        # TODO let the user define how many cores.
-        nbCores = (
-            1 if multiprocessing.cpu_count() == 1 else multiprocessing.cpu_count() - 1
+        NB_CORES = (
+            multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 1 else 1
         )
-        for i in range(self.ITER_COUNT):
-            pfixed = multiprocessing.Process(
-                target=memWatcherFixed.exec, args=(self.loader.fixedArg, i, tracesFixed)
-            )
-            jobs.append(pfixed)
-            prand = multiprocessing.Process(
-                target=memWatcherRnd.exec, args=(self.loader.rndArg, i, tracesRandom)
-            )
-            jobs.append(prand)
 
-        log.info(f"Batching {len(jobs)} jobs across {nbCores} cores")
-        for i in tqdm(range(0, len(jobs), nbCores)):
-            batch = []
-            for j in jobs[i : i + nbCores]:
-                batch.append(j)
-                j.start()
-            for j in batch:
-                j.join()
+        resultsRnd = []
+        resultsfixed = []
+        log.info(f"batching {2*self.ITER_COUNT} jobs across {NB_CORES} cores")
+        for _ in tqdm(range(0, self.ITER_COUNT, NB_CORES)):
+            memWatchersFixed = [
+                MemWatcher.remote(
+                    self.loader.binPath,
+                    self.loader.args,
+                    self.loader.rootfs,
+                    self.loader.ignoredObjects,
+                    self.loader.mappings,
+                    deterministic=self.loader.deterministic,
+                    locations=mt.possibleLeaks,
+                )
+                for _ in range(NB_CORES)
+            ]
+            [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in memWatchersFixed]
+            futuresfixed = [m.getResults.remote() for m in memWatchersFixed]
+            resultsfixed += ray.get(futuresfixed)
+            [ray.kill(m) for m in memWatchersFixed]
+            memWatchersRand = [
+                MemWatcher.remote(
+                    self.loader.binPath,
+                    self.loader.args,
+                    self.loader.rootfs,
+                    self.loader.ignoredObjects,
+                    self.loader.mappings,
+                    deterministic=self.loader.deterministic,
+                    locations=mt.possibleLeaks,
+                )
+                for _ in range(NB_CORES)
+            ]
+            [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchersRand]
+            futuresRnd = [m.getResults.remote() for m in memWatchersRand]
+            resultsRnd += ray.get(futuresRnd)
+            [ray.kill(m) for m in memWatchersRand]
 
-        fixedTraceCollection = MemTraceCollection(tracesFixed.values())
-        assert len(fixedTraceCollection.possibleLeaks) == 0
-        del tracesFixed
-        rndTraceCollection = MemTraceCollection(tracesRandom.values())
-        del tracesRandom
-
+        ray.shutdown()
+        rndTraceCollection = MemTraceCollection(resultsRnd)
+        fixedTraceCollection = MemTraceCollection(resultsfixed)
         rndTraceCollection.prune()  # populates .possibleLeaks
 
         log.info("Filtering stochastic events")
@@ -83,21 +118,20 @@ class PipeLineExecutor:
         for idx, t in enumerate(rndTraceCollection.traces):
             for leak in possibleLeaks:
                 assert len(t.trace[leak]) > 0
-        log.info("Classifying leaks")
+        log.info("Rating leaks")
         lc = LeakageClassification(
             rndTraceCollection, self.loader, possibleLeaks, self.loader.leakageModel
         )
         lc.exec()
         res = lc.finalize()
         self.mivals = res
-        log.info(f"Ignoring {len(possibleLeaks) - len(res)} leaks with low score")
-        log.info(f"Indentified {len(res)} leak with good MI score:")
         self.results = [int(k, 16) for k in res.keys()]
         endtime = time.time()
-        console.rule(
-            f"results (took {time.strftime('%H:%M:%S', time.gmtime(endtime-starttime))})"
+        self.loader.runtime = time.strftime(
+            "%H:%M:%S", time.gmtime(endtime - starttime)
         )
-
+        console.rule(f"results (took {self.loader.runtime})")
+        self.MDresults = []
         # Pinpoint where the leak occured - for dyn. bins report only the offset:
         for (
             lbound,
@@ -108,17 +142,54 @@ class PipeLineExecutor:
         ) in self.loader.mappings:
             for k in self.results:
                 if lbound < k < ubound:
+                    path = (
+                        container
+                        if container
+                        else glob.glob(
+                            f'{self.loader.rootfs}/**/*{label.split(" ")[-1]}'
+                        )[0]
+                    )
                     if self.loader.dynamic:
                         offset = k - self.loader.getlibbase(label)
-                        symbname = getfnname(container, offset)
+                        symbname = (
+                            getfnname(path, offset)
+                            if ".so" in label
+                            else getfnname(path, k)
+                        )
                         console.print(
-                            f'{offset:08x} - [MI = {self.mivals[hex(k)]:.2f}] \t at {symbname if symbname else "??":<30} {label}'
+                            f'{offset:#08x} - [MI = {self.mivals[hex(k)]:.2f}] \t at {symbname if symbname else "??":<30} {label}'
+                        )
+                        self.MDresults.append(
+                            {
+                                "offset": f"{offset:#08x}",
+                                "MI score": self.mivals[hex(k)],
+                                "Function": f'{symbname if symbname else "??":}',
+                                "Object": f'{path.split("/")[-1]}',
+                            }
                         )
                     else:
-                        symbname = getfnname(container, k)
+                        symbname = getfnname(path, k)
                         console.print(
-                            f'{k:08x} [MI={self.mivals[hex(k)]:.2f}] \t at {symbname if symbname else "??":<30} {label}'
+                            f'{k:#08x} [MI={self.mivals[hex(k)]:.2f}] \t at {symbname if symbname else "??":<30} {label}'
                         )
+                        self.MDresults.append(
+                            {
+                                "offset": f"{k:#08x}",
+                                "MI score": f"{self.mivals[hex(k)]:.2f}",
+                                "Function": f'{symbname if symbname else "??":}',
+                                "Object": f'{path.split("/")[-1]}',
+                            }
+                        )
+        import pandas as pd
+
+        self.resultsDF = pd.DataFrame.from_dict(self.MDresults)
+
+    def generateReport(self):
+        if not self.MDresults:
+            log.info("no results - no file.")
+            return
+        rg = ReportGenerator(results=self.resultsDF, loader=self.loader)
+        rg.saveMD()
 
     def finalize(self):
         return self.results

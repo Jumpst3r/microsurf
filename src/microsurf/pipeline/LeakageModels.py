@@ -2,7 +2,12 @@ from typing import Any
 import numpy as np
 
 
-def identity(secret) -> Any:
+def identity(secret) -> np.ndarray:
+    if isinstance(secret, str):
+        try:
+            secret = int(secret)
+        except ValueError:
+            secret = int(secret, 16)
     return np.array(secret)
 
 

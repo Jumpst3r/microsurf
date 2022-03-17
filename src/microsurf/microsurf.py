@@ -7,65 +7,13 @@ from typing import Any, Callable
 from .pipeline.Executor import PipeLineExecutor
 from .pipeline.Stages import BinaryLoader
 from .utils.logger import getConsole, getLogger
-import argparse
-from pyfiglet import figlet_format
 
 console = getConsole()
 log = getLogger()
 
-"""
-Mostly used for test suite binaries (./bin <secret> )
-"""
-
-
-def main():
-
-    parser = argparse.ArgumentParser(
-        description="Microsurf: An architecture independent dynamic side channel analysis framework"
-    )
-    parser.add_argument(
-        "--binary",
-        metavar="PATH",
-        type=str,
-        required=True,
-        help="path to the target binary",
-    )
-    parser.add_argument(
-        "--sc",
-        type=str,
-        choices=["data", "cf"],
-        required=True,
-        help="analyze for data or control flow SCs",
-    )
-    parser.add_argument(
-        "--norandom",
-        action="store_true",
-        required=False,
-        help="Force deterministic execution by controlling possible sources of randomness",
-    )
-    args = parser.parse_args()
-
-    console.print(figlet_format("microSurf", font="slant") + "v0.0.0.0")
-    console.rule(f"[b]binary target:[/b] {args.binary}")
-    log.info(f"Anaylzing: {args.sc} side channels")
-
-    binLoader = BinaryLoader(
-        path=args.binary,
-        args=["@"],
-        dryRunOnly=False,
-        deterministic=args.norandom,
-    )
-
-    pipeline = PipeLineExecutor(loader=binLoader)
-    pipeline.run()
-
-
-if __name__ == "__main__":
-    main()
-
 
 class SCDetector:
-    """The SCDetector class can be used to detect side channels in generic applications
+    """The SCDetector class can be used to detect secret dependent memory accesses in generic applications
 
     Args:
         binPath: Path to the target binary
@@ -82,6 +30,8 @@ class SCDetector:
             For dynamic binaries, the user must ensure that the appropriate shared objects are present.
         leakageModel: (Callable[[str], Any]): Function which applies a leakage model to the secret.
             Example under microsurf.pipeline.LeakageModels
+        sharedObjects: List of shared libraries to trace. For example ['libssl.so.1.1', 'libcrypto.so.1.1'].
+            Defaults to None, tracing only the target binary. Only applicable to dynamic binaries.
     """
 
     def __init__(
@@ -93,6 +43,7 @@ class SCDetector:
         asFile: bool,
         jail: str,
         leakageModel: Callable[[str], Any],
+        sharedObjects: list[str] = [],
     ) -> None:
         self.binPath = binPath
         self.args = args
@@ -101,6 +52,7 @@ class SCDetector:
         self.asFile = asFile
         self.rootfs = jail
         self.leakageModel = leakageModel
+        self.sharedObjects = sharedObjects
         self._validate()
 
     def _validate(self):
@@ -127,9 +79,17 @@ class SCDetector:
             asFile=self.asFile,
             jail=self.rootfs,
             leakageModel=self.leakageModel,
+            sharedObjects=self.sharedObjects,
         )
 
-    def exec(self):
-        """Runs the side channel detection analysis"""
+    def exec(self, report=False):
+        """Run the side channel analysis
+
+        Args:
+            report: Generate a markdown report.
+        """
         pipeline = PipeLineExecutor(loader=self.bl)
+        pipeline.ITER_COUNT = 10
         pipeline.run()
+        if report:
+            pipeline.generateReport()

@@ -37,4 +37,3 @@ pip install -e .
 - Unit / Integration tests: `pytest`
 - Type checking: `mypy src`
 - Linting: `flake8 src`
-
