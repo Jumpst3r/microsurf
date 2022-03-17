@@ -1,8 +1,8 @@
 import glob
 import multiprocessing
 from typing import List
-
-from microsurf.pipeline.tracetools.Trace import MemTraceCollection
+import ray
+from microsurf.pipeline.tracetools.Trace import MemTrace, MemTraceCollection
 from tqdm import tqdm
 
 from microsurf.utils.report import ReportGenerator
@@ -24,50 +24,80 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results: List[int] = []
-        self.ITER_COUNT = 20
+        self.ITER_COUNT = 5
 
     def run(self):
+        ray.init()
         import time
 
         starttime = time.time()
 
-        memWatcherFixed = MemWatcher(binaryLoader=self.loader)
-        memWatcherRnd = MemWatcher(binaryLoader=self.loader)
+        log.info("Identifying possible leak locations")
+
+        memWatchers = [
+            MemWatcher.remote(
+                self.loader.binPath,
+                self.loader.args,
+                self.loader.rootfs,
+                self.loader.ignoredObjects,
+                self.loader.mappings,
+            )
+            for _ in range(2)
+        ]
+        [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchers]
+        futures = [m.getResults.remote() for m in memWatchers]
+        mt = MemTraceCollection(ray.get(futures))
+        [ray.kill(m) for m in memWatchers]
+        mt.prune()
+
+        log.info(f"Identified {len(mt.possibleLeaks)} candidates")
+        if len(mt.possibleLeaks) > 1000:
+            print("INDSnd")
+
         log.info("Running stage Leak Confirm")
 
-        jobs = []
-        manager = multiprocessing.Manager()
-        tracesFixed = manager.dict()
-        tracesRandom = manager.dict()
-        # TODO let the user define how many cores.
-        nbCores = (
-            1 if multiprocessing.cpu_count() == 1 else multiprocessing.cpu_count() - 1
+        NB_CORES = (
+            multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 1 else 1
         )
-        for i in range(self.ITER_COUNT):
-            pfixed = multiprocessing.Process(
-                target=memWatcherFixed.exec, args=(self.loader.fixedArg, i, tracesFixed)
-            )
-            jobs.append(pfixed)
-            prand = multiprocessing.Process(
-                target=memWatcherRnd.exec, args=(self.loader.rndArg, i, tracesRandom)
-            )
-            jobs.append(prand)
 
-        log.info(f"Batching {len(jobs)} jobs across {nbCores} cores")
-        for i in tqdm(range(0, len(jobs), nbCores)):
-            batch = []
-            for j in jobs[i : i + nbCores]:
-                batch.append(j)
-                j.start()
-            for j in batch:
-                j.join()
+        resultsRnd = []
+        resultsfixed = []
+        log.info(f"batching {2*self.ITER_COUNT} jobs across {NB_CORES} cores")
+        for _ in tqdm(range(0, self.ITER_COUNT, NB_CORES)):
+            memWatchersFixed = [
+                MemWatcher.remote(
+                    self.loader.binPath,
+                    self.loader.args,
+                    self.loader.rootfs,
+                    self.loader.ignoredObjects,
+                    self.loader.mappings,
+                    locations=mt.possibleLeaks,
+                )
+                for _ in range(NB_CORES)
+            ]
+            [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in memWatchersFixed]
+            futuresfixed = [m.getResults.remote() for m in memWatchersFixed]
+            resultsfixed += ray.get(futuresfixed)
+            [ray.kill(m) for m in memWatchersFixed]
+            memWatchersRand = [
+                MemWatcher.remote(
+                    self.loader.binPath,
+                    self.loader.args,
+                    self.loader.rootfs,
+                    self.loader.ignoredObjects,
+                    self.loader.mappings,
+                    locations=mt.possibleLeaks,
+                )
+                for _ in range(NB_CORES)
+            ]
+            [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchersRand]
+            futuresRnd = [m.getResults.remote() for m in memWatchersRand]
+            resultsRnd += ray.get(futuresRnd)
+            [ray.kill(m) for m in memWatchersRand]
 
-        fixedTraceCollection = MemTraceCollection(tracesFixed.values())
-        assert len(fixedTraceCollection.possibleLeaks) == 0
-        del tracesFixed
-        rndTraceCollection = MemTraceCollection(tracesRandom.values())
-        del tracesRandom
-
+        ray.shutdown()
+        rndTraceCollection = MemTraceCollection(resultsRnd)
+        fixedTraceCollection = MemTraceCollection(resultsfixed)
         rndTraceCollection.prune()  # populates .possibleLeaks
 
         log.info("Filtering stochastic events")

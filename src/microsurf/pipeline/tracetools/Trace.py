@@ -44,8 +44,8 @@ class MemTraceCollection:
         for t in self.traces:
             if len(commonItems) > 0:
                 t.remove(commonItems)
-                for k in t.trace.keys():
-                    self.possibleLeaks.add(k)
+            for k in t.trace.keys():
+                self.possibleLeaks.add(k)
 
     def remove(self, indices):
         for index in sorted(indices, reverse=True):

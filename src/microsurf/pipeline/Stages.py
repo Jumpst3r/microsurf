@@ -2,20 +2,23 @@ import logging
 import os
 import random
 import tempfile
+import traceback
 from collections import OrderedDict
+from datetime import datetime
+from functools import lru_cache
 from pathlib import Path, PurePath
 from typing import Dict, List, Tuple
-from datetime import datetime
+
 import magic
 import matplotlib.pyplot as plt
+import ray
 import scipy.stats as stats
 import seaborn as sns
-from microsurf.utils.elf import getfnname
 from capstone import CS_ARCH_ARM, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_MODE_ARM, Cs
-
-from qiling import Qiling
-
 from microsurf.pipeline.LeakageModels import identity
+from microsurf.utils.elf import getfnname
+from qiling import Qiling
+from sortedcontainers import SortedDict
 
 from ..utils.hijack import (
     const_clock_gettime,
@@ -59,6 +62,7 @@ class BinaryLoader(Stage):
         self.asFile = kwargs.get("asFile", False)
         self.sharedObjects = kwargs.get("sharedObjects", [])
         self.ignoredObjects = []
+        self.newArgs = self.args.copy()
         try:
             self.secretArgIndex = args.index("@")
         except IndexError as e:
@@ -106,7 +110,7 @@ class BinaryLoader(Stage):
             # initialize args;
             val, path = self.rndArg()
             self.QLEngine = Qiling(
-                [str(self.binPath), *args],
+                [str(self.binPath), *self.newArgs],
                 str(self.rootfs),
                 log_override=getQilingLogger(),
                 verbose=1,
@@ -133,6 +137,7 @@ class BinaryLoader(Stage):
             )
         except Exception as e:
             log.error(f"Emulation dry run failed: {str(e)}")
+            log.error(traceback.format_exc())
             exit(1)
         self.md.detail = True
 
@@ -145,19 +150,19 @@ class BinaryLoader(Stage):
                 log.info(f"generated keyfile:{path}")
                 os.write(tmpfile, val.encode())
                 os.close(tmpfile)
-                self.args[self.secretArgIndex] = path.split("/")[-1]
+                self.newArgs[self.secretArgIndex] = path.split("/")[-1]
             else:
-                self.args[self.secretArgIndex] = val
+                self.newArgs[self.secretArgIndex] = val
         else:
             if self.asFile:
                 val = random.randint(0x00, 0xFF)
                 tmpfile, path = tempfile.mkstemp()
                 os.write(tmpfile, val)
                 os.close(tmpfile)
-                self.args[self.secretArgIndex] = path
+                self.newArgs[self.secretArgIndex] = path
             else:
                 val = random.randint(0x00, 0xFF)
-                self.args[self.secretArgIndex] = str(val)
+                self.newArgs[self.secretArgIndex] = str(val)
         return val, path
 
     def _fixed(self):
@@ -204,12 +209,14 @@ class BinaryLoader(Stage):
 
     # we can't call qiling's function (undef mappings), so replicate it here
     # FIXME there has to be a cleaner way
+    @lru_cache(maxsize=None)
     def getlibbase(self, name):
         return next(
             (s for s, _, _, label, _ in self.mappings if str(name) in label),
             -1,
         )
 
+    @lru_cache(maxsize=None)
     def issharedObject(self, addr):
         return next(
             (
@@ -239,6 +246,7 @@ class BinaryLoader(Stage):
             log_override=getQilingLogger(),
             verbose=-1,
             multithread=True,
+            libcache=True,
         )
         self.fixRandomness(self.deterministic)
 
@@ -273,29 +281,53 @@ class BinaryLoader(Stage):
         self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
 
 
+@ray.remote(num_cpus=1)
 class MemWatcher(Stage):
     """
     Hooks memory reads
     """
 
-    def __init__(self, binaryLoader: BinaryLoader) -> None:
+    def __init__(
+        self, binpath, args, rootfs, ignoredObjects, mappings, locations=None
+    ) -> None:
         self.traces: List[MemTrace] = []
-        self.bl = binaryLoader
-        self.md = self.bl.md
+        self.binPath = binpath
+        self.args = args
+        self.rootfs = rootfs
+        self.locations = locations
+        self.ignoredObjects = ignoredObjects
+        self.mappings = mappings
 
     def _trace_mem_read(self, ql: Qiling, access, addr, size, value):
-        if self.bl.getlibname(ql.arch.regs.arch_pc) in self.bl.ignoredObjects:
-            return
-        self.currenttrace.add(ql.arch.regs.arch_pc, addr)
+        if self.locations is None:
+            if self.getlibname(ql.arch.regs.arch_pc) not in self.ignoredObjects:
+                self.currenttrace.add(ql.arch.regs.arch_pc, addr)
+        elif ql.arch.regs.arch_pc in self.locations:
+            self.currenttrace.add(ql.arch.regs.arch_pc, addr)
 
-    def exec(self, generator, pindex, mt_res):
-        secret, path = generator()  # updates the secret
+    def getlibname(self, addr):
+        return next(
+            (label for s, e, _, label, _ in self.mappings if s < addr < e),
+            -1,
+        )
+
+    def exec(self, secret):
+        self.args[self.args.index("@")] = secret
+        self.QLEngine = Qiling(
+            [str(self.binPath), *[str(a) for a in self.args]],
+            str(self.rootfs),
+            console=True,
+            log_override=getQilingLogger(),
+            verbose=-1,
+            multithread=True,
+        )
         self.currenttrace = MemTrace(secret)
-        self.bl.refreshQLEngine()
-        self.bl.QLEngine.hook_mem_read(self._trace_mem_read)
-        self.bl.QLEngine.run()
-        mt_res[pindex] = self.currenttrace
-        self.bl.QLEngine.stop()
+        self.QLEngine.hook_mem_read(self._trace_mem_read)
+        self.QLEngine.run()
+        self.QLEngine.stop()
+
+    def getResults(self):
+        return self.currenttrace
 
 
 class DistributionAnalyzer(Stage):
@@ -364,16 +396,11 @@ class DistributionAnalyzer(Stage):
                 )
                 plt.savefig(f"debug/{hex(leakAddr)}.png")
 
-            if p_value < 0.01:
+            if p_value < 0.001:
                 log.debug(
                     f"{libname} len fixed / rnd = {len(addrSetFixed)}, {len(addrSetRnd)}"
                 )
-                # ask weekly meeting when this could happen.
-                # if the same PC accesses a very large number of memory locs, it can cause a FP
-                if len(addrSetFixed) > 100 or len(addrSetRnd) > 100:
-                    log.debug(f"??? @ {libname}")
-                    # continue
-                    
+
                 results.append(leakAddr)
                 log.debug(f"Added {libname} with p_value {p_value}")
             else:
