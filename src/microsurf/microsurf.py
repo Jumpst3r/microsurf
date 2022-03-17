@@ -7,61 +7,9 @@ from typing import Any, Callable
 from .pipeline.Executor import PipeLineExecutor
 from .pipeline.Stages import BinaryLoader
 from .utils.logger import getConsole, getLogger
-import argparse
-from pyfiglet import figlet_format
 
 console = getConsole()
 log = getLogger()
-
-"""
-Mostly used for test suite binaries (./bin <secret> )
-"""
-
-
-def main():
-
-    parser = argparse.ArgumentParser(
-        description="Microsurf: An architecture independent dynamic side channel analysis framework"
-    )
-    parser.add_argument(
-        "--binary",
-        metavar="PATH",
-        type=str,
-        required=True,
-        help="path to the target binary",
-    )
-    parser.add_argument(
-        "--sc",
-        type=str,
-        choices=["data", "cf"],
-        required=True,
-        help="analyze for data or control flow SCs",
-    )
-    parser.add_argument(
-        "--norandom",
-        action="store_true",
-        required=False,
-        help="Force deterministic execution by controlling possible sources of randomness",
-    )
-    args = parser.parse_args()
-
-    console.print(figlet_format("microSurf", font="slant") + "v0.0.0.0")
-    console.rule(f"[b]binary target:[/b] {args.binary}")
-    log.info(f"Anaylzing: {args.sc} side channels")
-
-    binLoader = BinaryLoader(
-        path=args.binary,
-        args=["@"],
-        dryRunOnly=False,
-        deterministic=args.norandom,
-    )
-
-    pipeline = PipeLineExecutor(loader=binLoader)
-    pipeline.run()
-
-
-if __name__ == "__main__":
-    main()
 
 
 class SCDetector:

@@ -52,7 +52,7 @@ class PipeLineExecutor:
 
         log.info(f"Identified {len(mt.possibleLeaks)} candidates")
         if len(mt.possibleLeaks) > 1000:
-            print("INDSnd")
+            log.warn("!! this is a rare bug that I cannot track down !!")
 
         log.info("Running stage Leak Confirm")
 
@@ -71,6 +71,7 @@ class PipeLineExecutor:
                     self.loader.rootfs,
                     self.loader.ignoredObjects,
                     self.loader.mappings,
+                    deterministic=self.loader.deterministic,
                     locations=mt.possibleLeaks,
                 )
                 for _ in range(NB_CORES)
@@ -86,6 +87,7 @@ class PipeLineExecutor:
                     self.loader.rootfs,
                     self.loader.ignoredObjects,
                     self.loader.mappings,
+                    deterministic=self.loader.deterministic,
                     locations=mt.possibleLeaks,
                 )
                 for _ in range(NB_CORES)

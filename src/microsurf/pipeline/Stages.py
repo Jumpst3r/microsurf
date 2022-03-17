@@ -288,7 +288,14 @@ class MemWatcher(Stage):
     """
 
     def __init__(
-        self, binpath, args, rootfs, ignoredObjects, mappings, locations=None
+        self,
+        binpath,
+        args,
+        rootfs,
+        ignoredObjects,
+        mappings,
+        locations=None,
+        deterministic=False,
     ) -> None:
         self.traces: List[MemTrace] = []
         self.binPath = binpath
@@ -297,6 +304,7 @@ class MemWatcher(Stage):
         self.locations = locations
         self.ignoredObjects = ignoredObjects
         self.mappings = mappings
+        self.deterministic = deterministic
 
     def _trace_mem_read(self, ql: Qiling, access, addr, size, value):
         if self.locations is None:
@@ -323,6 +331,34 @@ class MemWatcher(Stage):
         )
         self.currenttrace = MemTrace(secret)
         self.QLEngine.hook_mem_read(self._trace_mem_read)
+        # duplicate code. Ugly - fixme.
+        if self.deterministic:
+            self.QLEngine.add_fs_mapper("/dev/urandom", device_random)
+            self.QLEngine.add_fs_mapper("/dev/random", device_random)
+            self.QLEngine.add_fs_mapper("/dev/arandom", device_random)
+            # ref https://marcin.juszkiewicz.com.pl/download/tables/syscalls.html
+            if self.md.arch == CS_ARCH_ARM:
+                self.QLEngine.os.set_syscall(403, const_time)
+                self.QLEngine.os.set_syscall(384, const_getrandom)
+                self.QLEngine.os.set_syscall(78, const_clock_gettimeofday)
+                self.QLEngine.os.set_syscall(263, const_clock_gettime)
+            if self.md.arch == CS_ARCH_X86 and self.md.mode == CS_MODE_64:
+                self.QLEngine.os.set_syscall(318, const_getrandom)
+                self.QLEngine.os.set_syscall(96, const_clock_gettimeofday)
+                self.QLEngine.os.set_syscall(228, const_clock_gettime)
+            if self.md.arch == CS_ARCH_X86 and self.md.mode == CS_MODE_32:
+                self.QLEngine.os.set_syscall(403, const_time)
+                self.QLEngine.os.set_syscall(13, const_time)
+                self.QLEngine.os.set_syscall(355, const_getrandom)
+                self.QLEngine.os.set_syscall(78, const_clock_gettimeofday)
+                self.QLEngine.os.set_syscall(265, const_clock_gettime)
+        else:
+            self.QLEngine.add_fs_mapper("/dev/urandom", "/dev/urandom")
+            self.QLEngine.add_fs_mapper("/dev/random", "/dev/random")
+            self.QLEngine.add_fs_mapper("/dev/arandom", "/dev/arandom")
+
+        # replace broken qiling hooks with working ones:
+        self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
         self.QLEngine.run()
         self.QLEngine.stop()
 
@@ -396,7 +432,7 @@ class DistributionAnalyzer(Stage):
                 )
                 plt.savefig(f"debug/{hex(leakAddr)}.png")
 
-            if p_value < 0.001:
+            if p_value < 0.01:
                 log.debug(
                     f"{libname} len fixed / rnd = {len(addrSetFixed)}, {len(addrSetRnd)}"
                 )
