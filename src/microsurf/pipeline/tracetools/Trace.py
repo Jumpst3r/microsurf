@@ -51,5 +51,12 @@ class MemTraceCollection:
         for index in sorted(indices, reverse=True):
             del self.traces[index]
 
+    def get(self, indices):
+        res = []
+        for index in indices:
+            if index in self.traces:
+                res.append(self.traces[index])
+        return res
+
     def __len__(self):
         return len(self.traces)

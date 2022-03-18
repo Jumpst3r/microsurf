@@ -28,6 +28,7 @@ class SCDetector:
             If false, the secret will be passed directly as an argument
         jail: Specifies the a directory to which the binary will be jailed during emulation.
             For dynamic binaries, the user must ensure that the appropriate shared objects are present.
+            Optional for static binaries, defaults to a tmp directory.
         leakageModel: (Callable[[str], Any]): Function which applies a leakage model to the secret.
             Example under microsurf.pipeline.LeakageModels
         sharedObjects: List of shared libraries to trace. For example ['libssl.so.1.1', 'libcrypto.so.1.1'].
@@ -41,9 +42,9 @@ class SCDetector:
         randGen: Callable[[], str],
         deterministic: bool,
         asFile: bool,
-        jail: str,
         leakageModel: Callable[[str], Any],
         sharedObjects: list[str] = [],
+        jail: str = None,
     ) -> None:
         self.binPath = binPath
         self.args = args
@@ -59,8 +60,11 @@ class SCDetector:
         resrnd = set()
         for _ in range(10):
             resrnd.add(self.randGen())
-        if len(resrnd) != 10:
-            raise ValueError("Provided random function does not produce random output.")
+        if len(resrnd) < 5:
+            log.error(
+                f"Provided random function not random enough (got {len(resrnd)} repeated values in 10 invocation."
+            )
+            exit(1)
         count = 0
         # Check that we only have a single secret marker
         for arg in self.args:
@@ -89,7 +93,6 @@ class SCDetector:
             report: Generate a markdown report.
         """
         pipeline = PipeLineExecutor(loader=self.bl)
-        pipeline.ITER_COUNT = 10
         pipeline.run()
         if report:
             pipeline.generateReport()

@@ -10,9 +10,11 @@ class ReportGenerator:
     def __init__(
         self,
         results: pandas.DataFrame,
+        resultsReg: pandas.DataFrame,
         loader: BinaryLoader,
     ) -> None:
         self.results = results
+        self.resultsReg = resultsReg
         self.mdString = ""
         self.loader = loader
         self.datetime = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
@@ -29,7 +31,6 @@ class ReportGenerator:
         self.mdString += f"__Args__\n`{self.loader.args}` \n"
         self.mdString += f"__Deterministic__\n`{self.loader.deterministic}` \n"
         self.mdString += f"__Emulation root__\n`{ self.loader.rootfs}` \n"
-        self.mdString += f"__Sample secret__\n`{ self.loader.rndArg()[0]}` \n"
         self.mdString += (
             f"__Leakage model__\n`{ str(self.loader.leakageModel).split(' ')[1]}` \n"
         )
@@ -48,6 +49,14 @@ class ReportGenerator:
             .sort_values(by=["Leak Count"], ascending=False)
             .to_markdown(index=False)
         )
+
+        self.mdString += "\n ### Regression results for leaks with MI > 0.4\n"
+        self.mdString += "The [linear regression score](https://en.wikipedia.org/wiki/Coefficient_of_determination) is always in a [0,1] interval, with 1 indicating a perfect linear dependency between the memory read locations and L(secret) with L being the chosen leakage model.\n"
+        self.mdString += self.resultsReg.sort_values(
+            by=["Linear regression score"], ascending=False
+        ).to_markdown(index=False)
+        self.mdString += "\n"
+
         self.mdString += "\n ### All Leaks, sorted by MI\n"
         self.mdString += self.results.sort_values(
             by=["MI score"], ascending=False

@@ -13,17 +13,11 @@ import sys
 from microsurf.microsurf import SCDetector
 from microsurf.pipeline.LeakageModels import hamming, identity
 
-
-
-
 def genRandom() -> str:
     KEYLEN = 128
     kbytes = KEYLEN // 8
     rbytes = os.urandom(kbytes)
     return f"{int.from_bytes(rbytes, byteorder='big'):x}"
-
-def genRand():
-    return str(random.randint(0,300))
 
 if __name__ == "__main__":
     # define lib / bin paths
@@ -41,10 +35,11 @@ if __name__ == "__main__":
     binpath = jailroot + "openssl"
     # openssl args, the secret part is marked with '@'
     opensslArgs = [
-        #"camellia-128-ecb",
-        "cast5-ecb",
+        "camellia-128-ecb",
+        #"cast5-ecb",
         #"bf-ecb",
         #"des3",
+        #"des-ecb",
         "-e",
         "-in",
         "input.bin",
@@ -67,13 +62,5 @@ if __name__ == "__main__":
         leakageModel=identity,
         sharedObjects=sharedObjects
     )
-    """scd = SCDetector(
-        binPath='/home/nicolas/Documents/msc-thesis-work/tests/binaries/secret0/secret-x86-32.bin',
-        args=['@'],
-        randGen=genRand,
-        deterministic=False,
-        asFile=False,
-        jail=jailroot,
-        leakageModel=identity,
-    )"""
+   
     scd.exec(report=True)

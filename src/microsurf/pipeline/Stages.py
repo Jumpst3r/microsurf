@@ -8,13 +8,16 @@ from datetime import datetime
 from functools import lru_cache
 from pathlib import Path, PurePath
 from typing import Dict, List, Tuple
+import matplotlib.ticker as ticker
 
 import magic
 import matplotlib.pyplot as plt
+import numpy as np
 import ray
 import scipy.stats as stats
 import seaborn as sns
 from capstone import CS_ARCH_ARM, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_MODE_ARM, Cs
+from sklearn import decomposition
 from microsurf.pipeline.LeakageModels import identity
 from microsurf.utils.elf import getfnname
 from qiling import Qiling
@@ -230,6 +233,7 @@ class BinaryLoader(Stage):
     def exec(self):
         self.fixedArg()
         console.rule(f"Emulating {self.QLEngine._argv} (dry run)")
+        log.info(f"args={self.QLEngine._argv}")
         self.QLEngine.run()
         self.mappings = self.QLEngine.mem.get_mapinfo()
         self.validateObjects()
@@ -402,6 +406,8 @@ class DistributionAnalyzer(Stage):
                 vset = t.trace[leakAddr]
                 for v in vset:
                     addrSetRnd.append(v)
+            if len(addrSetFixed) == 0 or len(addrSetRnd) == 0:
+                continue
             # _, p_value = stats.mannwhitneyu(addrSetFixed, addrSetRnd)
             _, p_value = stats.ks_2samp(addrSetFixed, addrSetRnd)
 
@@ -432,7 +438,7 @@ class DistributionAnalyzer(Stage):
                 )
                 plt.savefig(f"debug/{hex(leakAddr)}.png")
 
-            if p_value < 0.01:
+            if p_value < 0.02:
                 log.debug(
                     f"{libname} len fixed / rnd = {len(addrSetFixed)}, {len(addrSetRnd)}"
                 )
@@ -442,6 +448,12 @@ class DistributionAnalyzer(Stage):
             else:
                 skipped += 1
                 log.debug(f"{libname} skipped (p={p_value})")
+                log.debug(
+                    f"{libname} len fixed / rnd = {len(addrSetFixed)}, {len(addrSetRnd)}"
+                )
+                log.debug(
+                    f"var fixed / var rnd = {np.std(addrSetFixed)}, {np.std(addrSetRnd)}"
+                )
         log.info(
             f"filtered {len(self.rndTraceCollection.possibleLeaks) - len(results)} false positives, {skipped} through KS analysis"
         )
@@ -483,12 +495,20 @@ class LeakageClassification(Stage):
             addList = {}
             # Store the secret according to the given leakage model
             for t in self.rndTraceCollection.traces:
-                secrets.add(t.secret)
-                try:
-                    addList[int(t.secret)] = t.trace[leakAddr]
-                except ValueError:
-                    addList[t.secret] = t.trace[leakAddr]
-            mat = np.zeros((len(addList), 1), dtype=np.uint64)
+                secrets.add(t.secret)  # uselesess ?
+                if t.trace[leakAddr]:
+                    try:
+                        addList[int(t.secret)] = t.trace[leakAddr]
+                    except ValueError:
+                        addList[t.secret] = t.trace[leakAddr]
+            # check that we have the same number of targets
+            tlen = min([len(l) for l in list(addList.values())])
+            for k, v in addList.items():
+                if len(v) != tlen:
+                    addList[k] = v[:tlen]
+            mat = np.zeros(
+                (len(addList), len(list(addList.values())[0])), dtype=np.uint64
+            )
             if not self.leakageModelFunction(
                 self.rndTraceCollection.traces[0].secret
             ).shape:
@@ -500,8 +520,10 @@ class LeakageClassification(Stage):
             secretMat = np.zeros((len(addList.keys()), secretFeatureShape))
             addList = OrderedDict(sorted(addList.items(), key=self._key))
             for idx, k in enumerate(addList):
-                addr = np.mean(addList[k])
-                mat[idx] = addr - self.loader.getlibbase(self.loader.getlibname(addr))
+                addr = addList[k]
+                mat[idx] = [
+                    a - self.loader.getlibbase(self.loader.getlibname(a)) for a in addr
+                ]
                 secretMat[idx] = self.leakageModelFunction(k)
 
             # Build a matrix containing the masked secret (according to the given leakage model)
@@ -516,6 +538,93 @@ class LeakageClassification(Stage):
 
     def exec(self, *args, **kwargs):
         self.analyze()
+
+    def finalize(self, *args, **kwargs):
+        return self.results
+
+
+class LeakageRegression(Stage):
+    def __init__(
+        self,
+        rndTraceCollection: MemTraceCollection,
+        binaryLoader: BinaryLoader,
+        possibleLeaks,
+        leakageModelFunction,
+    ):
+        self.rndTraceCollection = rndTraceCollection
+        self.possibleLeaks = possibleLeaks
+        self.leakageModelFunction = leakageModelFunction
+        self.loader = binaryLoader
+        self.results: Dict[int, float] = {}
+
+    def _key(self, t):
+        return self.leakageModelFunction(t[0])
+
+    def regress(self):
+        import numpy as np
+        from sklearn.linear_model import LinearRegression
+
+        secrets = set()
+        # Convert traces to trace per IP/PC
+        log.debug(f"leak locations in LeakRegression: {self.possibleLeaks}")
+        for leakAddr in self.possibleLeaks:
+            addList = {}
+            # Store the secret according to the given leakage model
+            for t in self.rndTraceCollection.traces:
+                secrets.add(t.secret)  # uselesess ?
+                if t.trace[leakAddr]:
+                    try:
+                        addList[int(t.secret)] = t.trace[leakAddr]
+                    except ValueError:
+                        addList[t.secret] = t.trace[leakAddr]
+            # check that we have the same number of targets
+            tlen = min([len(l) for l in list(addList.values())])
+            for k, v in addList.items():
+                if len(v) != tlen:
+                    addList[k] = v[:tlen]
+            mat = np.zeros(
+                (len(addList), len(list(addList.values())[0])), dtype=np.uint64
+            )
+            if not self.leakageModelFunction(
+                self.rndTraceCollection.traces[0].secret
+            ).shape:
+                secretFeatureShape = 1
+            else:
+                secretFeatureShape = self.leakageModelFunction(
+                    self.rndTraceCollection.traces[0].secret
+                ).shape
+            secretMat = np.zeros((len(addList.keys()), secretFeatureShape))
+            addList = OrderedDict(sorted(addList.items(), key=self._key))
+            for idx, k in enumerate(addList):
+                addr = addList[k]
+                mat[idx] = [
+                    a - self.loader.getlibbase(self.loader.getlibname(a)) for a in addr
+                ]
+                secretMat[idx] = self.leakageModelFunction(k)
+
+            regressor = LinearRegression().fit(mat, secretMat)
+            regscore = regressor.score(mat, secretMat)
+            log.info(
+                f"Linear regression score for {hex(leakAddr - self.loader.getlibbase(self.loader.getlibname(leakAddr)))}: {regscore:.2f}"
+            )
+            if LOGGING_LEVEL == logging.DEBUG:
+                if mat.shape[1] == 1:
+                    plt.style.use("seaborn")
+                    fig, ax = plt.subplots(1, 1)
+                    fig.suptitle(
+                        f"Trace regression for PC={hex(leakAddr)} (lib = {self.loader.getlibname(leakAddr)})\n score={regscore:.2f}"
+                    )
+                    ax.scatter(secretMat, mat)
+                    ax.plot(regressor.predict(mat), mat)
+                    ax.set_xlabel(
+                        f"{str(self.leakageModelFunction).split(' ')[1]}(secret)"
+                    )
+                    ax.set_ylabel("offset")
+                    plt.savefig(f"debug/reg-{hex(leakAddr)}.png")
+            self.results[leakAddr] = regscore
+
+    def exec(self, *args, **kwargs):
+        self.regress()
 
     def finalize(self, *args, **kwargs):
         return self.results

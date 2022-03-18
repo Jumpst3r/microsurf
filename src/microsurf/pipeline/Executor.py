@@ -12,6 +12,7 @@ from ..pipeline.Stages import (
     DistributionAnalyzer,
     LeakageClassification,
     MemWatcher,
+    LeakageRegression,
 )
 from ..utils.elf import getfnname
 from ..utils.logger import getConsole, getLogger
@@ -24,10 +25,10 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results: List[int] = []
-        self.ITER_COUNT = 5
+        self.ITER_COUNT = 40
 
     def run(self):
-        ray.init()
+        if not ray.is_initialized(): ray.init()
         import time
 
         starttime = time.time()
@@ -57,7 +58,7 @@ class PipeLineExecutor:
         log.info("Running stage Leak Confirm")
 
         NB_CORES = (
-            multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 1 else 1
+            multiprocessing.cpu_count() // 2 if multiprocessing.cpu_count() > 1 else 1
         )
 
         resultsRnd = []
@@ -97,11 +98,10 @@ class PipeLineExecutor:
             resultsRnd += ray.get(futuresRnd)
             [ray.kill(m) for m in memWatchersRand]
 
-        ray.shutdown()
         rndTraceCollection = MemTraceCollection(resultsRnd)
         fixedTraceCollection = MemTraceCollection(resultsfixed)
         rndTraceCollection.prune()  # populates .possibleLeaks
-
+        ray.stop()
         log.info("Filtering stochastic events")
         distAnalyzer = DistributionAnalyzer(
             fixedTraceCollection, rndTraceCollection, self.loader
@@ -161,10 +161,10 @@ class PipeLineExecutor:
                         )
                         self.MDresults.append(
                             {
+                                "runtime Addr": k,
                                 "offset": f"{offset:#08x}",
                                 "MI score": self.mivals[hex(k)],
                                 "Function": f'{symbname if symbname else "??":}',
-                                "Object": f'{path.split("/")[-1]}',
                             }
                         )
                     else:
@@ -174,8 +174,9 @@ class PipeLineExecutor:
                         )
                         self.MDresults.append(
                             {
+                                "runtime Addr": k,
                                 "offset": f"{k:#08x}",
-                                "MI score": f"{self.mivals[hex(k)]:.2f}",
+                                "MI score": self.mivals[hex(k)],
                                 "Function": f'{symbname if symbname else "??":}',
                                 "Object": f'{path.split("/")[-1]}',
                             }
@@ -183,12 +184,61 @@ class PipeLineExecutor:
         import pandas as pd
 
         self.resultsDF = pd.DataFrame.from_dict(self.MDresults)
+        if len(self.resultsDF) == 0:
+            log.info("No leaks found, exiting")
+            exit(0)
+        console.rule("Regression on high MI leaks")
+        log.info("Trying to learn secret-trace mappings for high (>=0.4) MI leaks")
+        dropped = []
+        for idx, x in self.resultsDF.sort_values(
+            by=["MI score"], ascending=False
+        ).iterrows():
+            if x[["MI score"]].values[0] < 0.4:
+                dropped.append(idx)
+        self.resultsDF.drop(dropped, inplace=True)
+        log.info(f"gathering extra traces at {len(self.resultsDF)} locations")
+        regressionTargets = self.resultsDF[["runtime Addr"]].values.tolist()
+        regressionTargets = [i for sl in regressionTargets for i in sl]
+        resultsRnd = []
+        for _ in tqdm(range(0, 10, NB_CORES)):
+            memWatchersRand = [
+                MemWatcher.remote(
+                    self.loader.binPath,
+                    self.loader.args,
+                    self.loader.rootfs,
+                    self.loader.ignoredObjects,
+                    self.loader.mappings,
+                    deterministic=self.loader.deterministic,
+                    locations=regressionTargets,
+                )
+                for _ in range(NB_CORES)
+            ]
+            [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchersRand]
+            futuresRnd = [m.getResults.remote() for m in memWatchersRand]
+            resultsRnd += ray.get(futuresRnd)
+            [ray.kill(m) for m in memWatchersRand]
+        ray.shutdown()
+        regressionTraces = MemTraceCollection(
+            resultsRnd + rndTraceCollection.get(regressionTargets)
+        )  # increase sample size by reusing previously collected traces
+        regressionTraces.prune()
+        regressor = LeakageRegression(
+            regressionTraces, self.loader, regressionTargets, self.loader.leakageModel
+        )
+        regressor.exec()
+        res = regressor.finalize()
+        self.resultsDF["Linear regression score"] = res.values()
+        self.resultsDFTotal = pd.DataFrame.from_dict(self.MDresults)
+        self.resultsDFTotal.drop(columns=["runtime Addr"], inplace=True)
+        self.resultsDF.drop(columns=["runtime Addr"], inplace=True)
 
     def generateReport(self):
         if not self.MDresults:
             log.info("no results - no file.")
             return
-        rg = ReportGenerator(results=self.resultsDF, loader=self.loader)
+        rg = ReportGenerator(
+            results=self.resultsDFTotal, resultsReg=self.resultsDF, loader=self.loader
+        )
         rg.saveMD()
 
     def finalize(self):
