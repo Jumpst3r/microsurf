@@ -87,12 +87,17 @@ class SCDetector:
         )
 
     def exec(self, report=False):
-        """Run the side channel analysis
+        """Executes the side channel analysis (secret dependent memory accesses).
 
         Args:
-            report: Generate a markdown report.
+            report: Generates a markdown report. Defaults to False.
+
+        Returns:
+            A list of leak locations, as integers (IP values).
+            For dynamic objects, the offsets are reported.
         """
         pipeline = PipeLineExecutor(loader=self.bl)
         pipeline.run()
         if report:
             pipeline.generateReport()
+        return pipeline.finalize()

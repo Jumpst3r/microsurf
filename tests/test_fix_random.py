@@ -13,7 +13,7 @@ import json, sys, tempfile
 
 def test_norandom_arm(capfd, monkeypatch):
     fp = tempfile.TemporaryFile()
-    monkeypatch.setattr('sys.stdin', fp)
+    monkeypatch.setattr("sys.stdin", fp)
 
     binPath = PurePath(
         Path(__file__).parent, Path("binaries/random/checkrandom-arm.bin")
@@ -25,7 +25,7 @@ def test_norandom_arm(capfd, monkeypatch):
 
 def test_norandom_ia32(capfd, monkeypatch):
     fp = tempfile.TemporaryFile()
-    monkeypatch.setattr('sys.stdin', fp)
+    monkeypatch.setattr("sys.stdin", fp)
     binPath = PurePath(
         Path(__file__).parent,
         Path("binaries/random/checkrandom-x86-32.bin"),
@@ -37,7 +37,7 @@ def test_norandom_ia32(capfd, monkeypatch):
 
 def test_norandom_x86_64(capfd, monkeypatch):
     fp = tempfile.TemporaryFile()
-    monkeypatch.setattr('sys.stdin', fp)
+    monkeypatch.setattr("sys.stdin", fp)
     binPath = PurePath(
         Path(__file__).parent,
         Path("binaries/random/checkrandom-x86-64.bin"),

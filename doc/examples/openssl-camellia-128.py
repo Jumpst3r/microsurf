@@ -12,12 +12,7 @@ import random
 import sys
 from microsurf.microsurf import SCDetector
 from microsurf.pipeline.LeakageModels import hamming, identity
-
-def genRandom() -> str:
-    KEYLEN = 128
-    kbytes = KEYLEN // 8
-    rbytes = os.urandom(kbytes)
-    return f"{int.from_bytes(rbytes, byteorder='big'):x}"
+from microsurf.utils.generators import getRandomHexKeyFunction
 
 if __name__ == "__main__":
     # define lib / bin paths
@@ -55,7 +50,7 @@ if __name__ == "__main__":
     scd = SCDetector(
         binPath=binpath,
         args=opensslArgs,
-        randGen=genRandom,
+        randGen=getRandomHexKeyFunction(128),
         deterministic=False,
         asFile=False,
         jail=jailroot,

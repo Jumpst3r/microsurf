@@ -13,7 +13,7 @@ from microsurf.pipeline.Stages import BinaryLoader
 
 
 def test_load_arm(monkeypatch):
-    monkeypatch.setattr('sys.stdin', sys.stdout)
+    monkeypatch.setattr("sys.stdin", sys.stdout)
     bins = Path(__file__).parent.glob("binaries/secret1/*-arm.bin")
     fcnt = 0
     for b in bins:
@@ -23,7 +23,7 @@ def test_load_arm(monkeypatch):
 
 
 def test_load_ia32(monkeypatch):
-    monkeypatch.setattr('sys.stdin', sys.stdout)
+    monkeypatch.setattr("sys.stdin", sys.stdout)
     bins = Path(__file__).parent.glob("binaries/secret1/*-x86-32.bin")
     fcnt = 0
     for b in bins:
@@ -33,7 +33,7 @@ def test_load_ia32(monkeypatch):
 
 
 def test_load_x86_64(monkeypatch):
-    monkeypatch.setattr('sys.stdin', sys.stdout)
+    monkeypatch.setattr("sys.stdin", sys.stdout)
     bins = Path(__file__).parent.glob("binaries/secret1/*-x86-64.bin")
     fcnt = 0
     for b in bins:
@@ -48,7 +48,7 @@ def test_load_non_existing(monkeypatch):
 
 
 def test_no_secret_marker(monkeypatch):
-    monkeypatch.setattr('sys.stdin', sys.stdout)
+    monkeypatch.setattr("sys.stdin", sys.stdout)
     with pytest.raises(ValueError) as e:
         BinaryLoader(
             "The answer to life and everything.bin", ["--arg", "1"], dryRunOnly=True

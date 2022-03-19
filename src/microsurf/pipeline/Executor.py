@@ -1,7 +1,11 @@
 import glob
+import logging
 import multiprocessing
+import sys
 from typing import List
+import numpy as np
 import ray
+from sklearn.ensemble import RandomTreesEmbedding
 from microsurf.pipeline.tracetools.Trace import MemTrace, MemTraceCollection
 from tqdm import tqdm
 
@@ -15,7 +19,7 @@ from ..pipeline.Stages import (
     LeakageRegression,
 )
 from ..utils.elf import getfnname
-from ..utils.logger import getConsole, getLogger
+from ..utils.logger import getConsole, getLogger, RayFilter
 
 log = getLogger()
 console = getConsole()
@@ -26,6 +30,7 @@ class PipeLineExecutor:
         self.loader = loader
         self.results: List[int] = []
         self.ITER_COUNT = 40
+        self.multiprocessing = True
 
     def run(self):
         if not ray.is_initialized(): ray.init()
@@ -35,6 +40,10 @@ class PipeLineExecutor:
 
         log.info("Identifying possible leak locations")
 
+        log.info("Estimating whether multiprocessing is worth it")
+
+        start_time = time.time()
+        INI_CNT = 10
         memWatchers = [
             MemWatcher.remote(
                 self.loader.binPath,
@@ -43,27 +52,41 @@ class PipeLineExecutor:
                 self.loader.ignoredObjects,
                 self.loader.mappings,
             )
-            for _ in range(2)
+            for _ in range(INI_CNT)
         ]
         [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchers]
         futures = [m.getResults.remote() for m in memWatchers]
-        mt = MemTraceCollection(ray.get(futures))
+        res = ray.get(futures)
+        mt = MemTraceCollection([r[0] for r in res])
+        emutime = np.mean([r[1] for r in res])
+        end_time = time.time()
         [ray.kill(m) for m in memWatchers]
         mt.prune()
-
-        log.info(f"Identified {len(mt.possibleLeaks)} candidates")
-        if len(mt.possibleLeaks) > 1000:
-            log.warn("!! this is a rare bug that I cannot track down !!")
-
-        log.info("Running stage Leak Confirm")
-
         NB_CORES = (
             multiprocessing.cpu_count() // 2 if multiprocessing.cpu_count() > 1 else 1
         )
+        if (emutime * INI_CNT) < (end_time - start_time):
+            log.warning("multiprocessing overhead too large, switching to sequencial.")
+            ray.shutdown()
+            ray.init(local_mode=True, logging_level=logging.CRITICAL)
+            sys.stdout = RayFilter(sys.stdout)
+            sys.stderr = RayFilter(sys.stderr)
+            self.multiprocessing = False
+            NB_CORES = 1
+        else:
+            log.info(f"Enabled multiprocessing using {NB_CORES} (v)cores.")
+        log.info(f"Identified {len(mt.possibleLeaks)} candidates")
 
-        resultsRnd = []
-        resultsfixed = []
-        log.info(f"batching {2*self.ITER_COUNT} jobs across {NB_CORES} cores")
+        if len(mt.possibleLeaks) > 1000:
+            log.warning("!! this is a rare bug that I cannot track down !!")
+
+        log.info("Running stage Leak Confirm")
+
+        if self. multiprocessing:
+            log.info(f"batching {2*self.ITER_COUNT} jobs across {NB_CORES} cores")
+
+        resFixed = []
+        resRnd = []
         for _ in tqdm(range(0, self.ITER_COUNT, NB_CORES)):
             memWatchersFixed = [
                 MemWatcher.remote(
@@ -78,8 +101,9 @@ class PipeLineExecutor:
                 for _ in range(NB_CORES)
             ]
             [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in memWatchersFixed]
-            futuresfixed = [m.getResults.remote() for m in memWatchersFixed]
-            resultsfixed += ray.get(futuresfixed)
+            futuresFixed = [m.getResults.remote() for m in memWatchersFixed]
+            res = ray.get(futuresFixed)
+            resFixed += [r[0] for r in res]
             [ray.kill(m) for m in memWatchersFixed]
             memWatchersRand = [
                 MemWatcher.remote(
@@ -95,13 +119,14 @@ class PipeLineExecutor:
             ]
             [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchersRand]
             futuresRnd = [m.getResults.remote() for m in memWatchersRand]
-            resultsRnd += ray.get(futuresRnd)
+            res = ray.get(futuresRnd)
+            resRnd += [r[0] for r in res]
             [ray.kill(m) for m in memWatchersRand]
 
-        rndTraceCollection = MemTraceCollection(resultsRnd)
-        fixedTraceCollection = MemTraceCollection(resultsfixed)
+        rndTraceCollection = MemTraceCollection(resRnd)
+        fixedTraceCollection = MemTraceCollection(resFixed)
+
         rndTraceCollection.prune()  # populates .possibleLeaks
-        ray.stop()
         log.info("Filtering stochastic events")
         distAnalyzer = DistributionAnalyzer(
             fixedTraceCollection, rndTraceCollection, self.loader
@@ -185,8 +210,8 @@ class PipeLineExecutor:
 
         self.resultsDF = pd.DataFrame.from_dict(self.MDresults)
         if len(self.resultsDF) == 0:
-            log.info("No leaks found, exiting")
-            exit(0)
+            log.info("No leaks found")
+            return
         console.rule("Regression on high MI leaks")
         log.info("Trying to learn secret-trace mappings for high (>=0.4) MI leaks")
         dropped = []
@@ -196,6 +221,13 @@ class PipeLineExecutor:
             if x[["MI score"]].values[0] < 0.4:
                 dropped.append(idx)
         self.resultsDF.drop(dropped, inplace=True)
+        if len(self.resultsDF) == 0:
+            log.info("no leaks with sufficient MI to attempt regression.")
+            self.resultsDFTotal = pd.DataFrame.from_dict(self.MDresults)
+            self.resultsDFTotal.drop(columns=["runtime Addr"], inplace=True)
+            self.resultsDF = None
+            self.generateReport()
+            exit(0)
         log.info(f"gathering extra traces at {len(self.resultsDF)} locations")
         regressionTargets = self.resultsDF[["runtime Addr"]].values.tolist()
         regressionTargets = [i for sl in regressionTargets for i in sl]
@@ -215,11 +247,12 @@ class PipeLineExecutor:
             ]
             [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchersRand]
             futuresRnd = [m.getResults.remote() for m in memWatchersRand]
-            resultsRnd += ray.get(futuresRnd)
+            res = ray.get(futuresRnd)
+            resultsRnd += [r[0] for r in res]
             [ray.kill(m) for m in memWatchersRand]
         ray.shutdown()
         regressionTraces = MemTraceCollection(
-            resultsRnd + rndTraceCollection.get(regressionTargets)
+            resRnd + rndTraceCollection.get(regressionTargets)
         )  # increase sample size by reusing previously collected traces
         regressionTraces.prune()
         regressor = LeakageRegression(

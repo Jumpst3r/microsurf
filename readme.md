@@ -1,4 +1,4 @@
-<img align="left" width="60" height="60" src="doc/logo.png" alt="Resume application project app icon">
+<img align="left" width="60" height="60" src="doc/figures/logo.png" alt="Resume application project app icon">
 
 
 # MicroSurf: An architecture independent side channel detection framework

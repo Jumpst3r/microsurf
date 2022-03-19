@@ -34,3 +34,23 @@ def getQilingLogger():
 
 def getConsole():
     return Console()
+
+'''
+In serial mode ray will output actor names, polluting the output.
+This filters out any ray messages.
+'''
+class RayFilter(object):
+    def __init__(self, stream):
+        self.stream = stream
+
+    def __getattr__(self, attr_name):
+        return getattr(self.stream, attr_name)
+
+    def write(self, data):
+        if ":actor_name:" in data:
+            return
+        self.stream.write(data)
+        self.stream.flush()
+
+    def flush(self):
+        self.stream.flush()

@@ -2,6 +2,7 @@ import logging
 import os
 import random
 import tempfile
+import time
 import traceback
 from collections import OrderedDict
 from datetime import datetime
@@ -250,7 +251,6 @@ class BinaryLoader(Stage):
             log_override=getQilingLogger(),
             verbose=-1,
             multithread=True,
-            libcache=True,
         )
         self.fixRandomness(self.deterministic)
 
@@ -310,6 +310,7 @@ class MemWatcher(Stage):
         self.mappings = mappings
         self.deterministic = deterministic
 
+
     def _trace_mem_read(self, ql: Qiling, access, addr, size, value):
         if self.locations is None:
             if self.getlibname(ql.arch.regs.arch_pc) not in self.ignoredObjects:
@@ -324,6 +325,7 @@ class MemWatcher(Stage):
         )
 
     def exec(self, secret):
+        start_time = time.time()
         self.args[self.args.index("@")] = secret
         self.QLEngine = Qiling(
             [str(self.binPath), *[str(a) for a in self.args]],
@@ -365,9 +367,11 @@ class MemWatcher(Stage):
         self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
         self.QLEngine.run()
         self.QLEngine.stop()
+        endtime = time.time()
+        self.tracetime = endtime-start_time
 
     def getResults(self):
-        return self.currenttrace
+        return self.currenttrace, self.tracetime
 
 
 class DistributionAnalyzer(Stage):
@@ -379,10 +383,9 @@ class DistributionAnalyzer(Stage):
     ):
         self.fixedTraceCollection = fixedTraceCollection
         self.rndTraceCollection = rndTraceCollection
+        log.debug(f"len rndTraces: {len(self.rndTraceCollection)}")
+        log.debug(f"len fixedTraces: {len(self.fixedTraceCollection)}")
         self.loader = binaryLoader
-        log.info(
-            f"possible leaks in rndTraceCollection: {len(self.rndTraceCollection.possibleLeaks)}"
-        )
 
     def analyze(self):
         results = []
@@ -398,20 +401,27 @@ class DistributionAnalyzer(Stage):
                 if ".so" in libname
                 else leakAddr
             )
+            secret = None
             for t in self.fixedTraceCollection.traces:
+                if secret == None:
+                    secret = t.secret
+                else:
+                    assert secret == t.secret
                 vset = t.trace[leakAddr]
                 for v in vset:
+                    assert v > 0
                     addrSetFixed.append(v)
             for t in self.rndTraceCollection.traces:
                 vset = t.trace[leakAddr]
                 for v in vset:
+                    assert v > 0
                     addrSetRnd.append(v)
             if len(addrSetFixed) == 0 or len(addrSetRnd) == 0:
                 continue
-            # _, p_value = stats.mannwhitneyu(addrSetFixed, addrSetRnd)
-            _, p_value = stats.ks_2samp(addrSetFixed, addrSetRnd)
+            _, p_value = stats.mannwhitneyu(addrSetFixed, addrSetRnd)
+            # _, p_value = stats.ks_2samp(addrSetFixed, addrSetRnd)
 
-            if False and LOGGING_LEVEL == logging.DEBUG:
+            if LOGGING_LEVEL == logging.DEBUG:
                 fig, ax = plt.subplots(1, 1)
                 fig.suptitle(
                     f"IP={hex(leakAddr)} offset={hex(offset)} in {libname} Added :{p_value < 0.01}, {p_value:e}"
@@ -437,22 +447,25 @@ class DistributionAnalyzer(Stage):
                     label="Random secret input",
                 )
                 plt.savefig(f"debug/{hex(leakAddr)}.png")
-
-            if p_value < 0.02:
+            target_p_val = 0.01
+            # zero var fixed and pos. var. rand should be detected.
+            if np.var(addrSetFixed) == 0 and  np.var(addrSetRnd) > 0:
+                target_p_val = 0.5
+            if p_value < target_p_val:
                 log.debug(
-                    f"{libname} len fixed / rnd = {len(addrSetFixed)}, {len(addrSetRnd)}"
+                    f"{libname}-{hex(offset)} len fixed / rnd = {len(addrSetFixed)}, {len(addrSetRnd)}"
                 )
 
                 results.append(leakAddr)
-                log.debug(f"Added {libname} with p_value {p_value}")
+                log.debug(f"Added {libname}-{hex(offset)} with p_value {p_value}")
             else:
                 skipped += 1
-                log.debug(f"{libname} skipped (p={p_value})")
+                log.debug(f"{libname}-{hex(offset)} skipped (p={p_value})")
                 log.debug(
-                    f"{libname} len fixed / rnd = {len(addrSetFixed)}, {len(addrSetRnd)}"
+                    f"{libname}-{hex(offset)} len fixed / rnd = {len(addrSetFixed)}, {len(addrSetRnd)}"
                 )
                 log.debug(
-                    f"var fixed / var rnd = {np.std(addrSetFixed)}, {np.std(addrSetRnd)}"
+                    f"{libname}-{hex(offset)} var fixed / var rnd = {np.std(addrSetFixed)}, {np.std(addrSetRnd)}"
                 )
         log.info(
             f"filtered {len(self.rndTraceCollection.possibleLeaks) - len(results)} false positives, {skipped} through KS analysis"
