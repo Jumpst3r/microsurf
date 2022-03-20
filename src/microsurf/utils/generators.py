@@ -12,7 +12,7 @@ def getRandomHexKeyFunction(keylen: int):
 def _genRandomHexKey(keylen: int) -> str:
     kbytes = keylen // 8
     rbytes = os.urandom(kbytes)
-    return f"{int.from_bytes(rbytes, byteorder='big'):x}"
+    return f"{int.from_bytes(rbytes, byteorder='big'):0{kbytes * 2}x}"
 
 def genRandInt() -> str:
     """Generates a random integer in [0,300). Useful for testing.

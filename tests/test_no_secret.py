@@ -43,7 +43,6 @@ def test_analyze_no_secret(monkeypatch, binPath):
         randGen=genRandInt,
         deterministic=False,
         asFile=False,
-        leakageModel=identity,
     )
     res = scd.exec()
     armTargetAddr = [int(a, 16) for a in armTargetAddr]

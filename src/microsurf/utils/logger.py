@@ -6,7 +6,7 @@ from rich.logging import RichHandler
 
 warnings.filterwarnings("ignore")
 
-LOGGING_LEVEL = logging.DEBUG
+LOGGING_LEVEL = logging.INFO
 
 logging.basicConfig(
     level="INFO",

@@ -18,11 +18,9 @@ import ray
 import scipy.stats as stats
 import seaborn as sns
 from capstone import CS_ARCH_ARM, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_MODE_ARM, Cs
-from sklearn import decomposition
-from microsurf.pipeline.LeakageModels import CRYPTO_MODELS, hamming, identity
-from microsurf.utils.elf import getfnname
+from microsurf.pipeline.LeakageModels import getCryptoModels
 from qiling import Qiling
-from sortedcontainers import SortedDict
+import microsurf
 
 from ..utils.hijack import (
     const_clock_gettime,
@@ -61,7 +59,6 @@ class BinaryLoader(Stage):
         self.rootfs = kwargs.get("jail", None)
         self.QLEngine: Qiling = None
         self.deterministic = kwargs.get("deterministic", False)
-        self.leakageModel = kwargs.get("leakageModel", identity)
         self.rndGen = kwargs.get("rndGen", None)
         self.asFile = kwargs.get("asFile", False)
         self.sharedObjects = kwargs.get("sharedObjects", [])
@@ -88,13 +85,6 @@ class BinaryLoader(Stage):
             log.info(fileinfo)
             log.error("Target architecture not implemented")
             exit(-1)
-        try:
-            val, _ = self._rand()
-            encoded = self.leakageModel(val)
-            log.info(f"L({val}) = {encoded}, leakage model compatible.")
-        except ValueError:
-            log.error(f"leakage model does not suppport input {val}")
-            exit(1)
         if "dynamic" in fileinfo:
             log.warn(
                 f"Detected dynamically linked binary, ensure that the appropriate shared objects are available under {self.rootfs}"
@@ -486,29 +476,46 @@ class LeakageClassification(Stage):
         rndTraceCollection: MemTraceCollection,
         binaryLoader: BinaryLoader,
         possibleLeaks,
-        leakageModelFunction,
     ):
         self.rndTraceCollection = rndTraceCollection
         self.possibleLeaks = possibleLeaks
         # The leakage function can return one dimensional data (ex. hamm. dist.) or multidimensional data (bit/byte slices)
-        self.leakageModelFunction = leakageModelFunction
         self.loader = binaryLoader
         self.results: Dict[str, float] = {}
 
     def _key(self, t):
-        return self.leakageModelFunction(t[0])
+        return t[0]
 
     def analyze(self):
         import numpy as np
         from sklearn.feature_selection import mutual_info_regression
-
-        secrets = set()
+        secrets = [t.secret for t in self.rndTraceCollection.traces]
+        slen = -1
+        fixedLenSecrets = True
+        for s in secrets:
+            try:
+                secret = int(s)
+                fixedLenSecrets = False
+            # secret hexadecimal
+            except ValueError:
+                secret = int(s, 16)
+                if slen == -1:
+                    slen = len(s) * 4
+                elif slen != len(s) * 4:
+                    log.error(slen)
+                    log.error(s)
+                    fixedLenSecrets = False
+        if fixedLenSecrets:
+            CRYPTO_MODELS = getCryptoModels(slen)
+            log.info(f"using fixed key leakage models(KEYLEN: {slen})")
+        else:
+            log.info("using variable key leakage models.")
+            CRYPTO_MODELS = getCryptoModels(0)
         # Convert traces to trace per IP/PC
         for leakAddr in self.possibleLeaks:
             addList = {}
             # Store the secret according to the given leakage model
             for t in self.rndTraceCollection.traces:
-                secrets.add(t.secret)  # uselesess ?
                 if t.trace[leakAddr]:
                     try:
                         addList[int(t.secret)] = t.trace[leakAddr]
@@ -522,15 +529,7 @@ class LeakageClassification(Stage):
             mat = np.zeros(
                 (len(addList), len(list(addList.values())[0])), dtype=np.uint64
             )
-            if not self.leakageModelFunction(
-                self.rndTraceCollection.traces[0].secret
-            ).shape:
-                secretFeatureShape = 1
-            else:
-                secretFeatureShape = self.leakageModelFunction(
-                    self.rndTraceCollection.traces[0].secret
-                ).shape
-            secretMat = np.zeros((len(addList.keys()), 2))
+            secretMat = np.zeros((len(addList.keys()), len(CRYPTO_MODELS)))
             addList = OrderedDict(sorted(addList.items(), key=self._key))
             for idx, k in enumerate(addList):
                 addr = addList[k]
@@ -541,14 +540,14 @@ class LeakageClassification(Stage):
 
             # For now, let's work with the mutual information instead of the more complex RDC
             # We'll switch to the RDC stat. when we understand the nitty gritty math behind it.
-            mivals = []
+            mivals = {}
             for col,lmodel in zip(secretMat.T, CRYPTO_MODELS):
-                mivals.append(np.sum(mutual_info_regression(mat, col, random_state=42)))
-                log.debug(f"for PC {leakAddr}, leakage model <{str(lmodel)}> gave a MI of {mivals[-1]}")
+                mivals[lmodel] = np.sum(mutual_info_regression(mat, col, random_state=42))
             # log.info(f"mat{hex(leakAddr)} = {mat}")
             # log.info(f"secretMat = {secretMat}")
             # log.info(f"MI score for {hex(leakAddr)}: {mival:.2f}")
-            self.results[hex(leakAddr)] = mivals[0]
+            mivals = {k: v for k, v in sorted(mivals.items(), key=lambda item: item[1], reverse=True)}
+            self.results[hex(leakAddr)] = mivals
 
     def exec(self, *args, **kwargs):
         self.analyze()
@@ -563,16 +562,16 @@ class LeakageRegression(Stage):
         rndTraceCollection: MemTraceCollection,
         binaryLoader: BinaryLoader,
         possibleLeaks,
-        leakageModelFunction,
+        mivals,
     ):
         self.rndTraceCollection = rndTraceCollection
         self.possibleLeaks = possibleLeaks
-        self.leakageModelFunction = leakageModelFunction
         self.loader = binaryLoader
         self.results: Dict[int, float] = {}
+        self.mivals = mivals
 
     def _key(self, t):
-        return self.leakageModelFunction(t[0])
+        return t[0]
 
     def regress(self):
         import numpy as np
@@ -582,6 +581,8 @@ class LeakageRegression(Stage):
         # Convert traces to trace per IP/PC
         log.debug(f"leak locations in LeakRegression: {self.possibleLeaks}")
         for leakAddr in self.possibleLeaks:
+            leakageModelFunction = list(self.mivals[hex(leakAddr)].keys())[0]
+
             addList = {}
             # Store the secret according to the given leakage model
             for t in self.rndTraceCollection.traces:
@@ -599,22 +600,14 @@ class LeakageRegression(Stage):
             mat = np.zeros(
                 (len(addList), len(list(addList.values())[0])), dtype=np.uint64
             )
-            if not self.leakageModelFunction(
-                self.rndTraceCollection.traces[0].secret
-            ).shape:
-                secretFeatureShape = 1
-            else:
-                secretFeatureShape = self.leakageModelFunction(
-                    self.rndTraceCollection.traces[0].secret
-                ).shape
-            secretMat = np.zeros((len(addList.keys()), secretFeatureShape))
+            secretMat = np.zeros((len(addList.keys()), 1))
             addList = OrderedDict(sorted(addList.items(), key=self._key))
             for idx, k in enumerate(addList):
                 addr = addList[k]
                 mat[idx] = [
                     a - self.loader.getlibbase(self.loader.getlibname(a)) for a in addr
                 ]
-                secretMat[idx] = self.leakageModelFunction(k)
+                secretMat[idx] = leakageModelFunction(k)
 
             regressor = LinearRegression().fit(mat, secretMat)
             regscore = regressor.score(mat, secretMat)
@@ -631,7 +624,7 @@ class LeakageRegression(Stage):
                     ax.scatter(secretMat, mat)
                     ax.plot(regressor.predict(mat), mat)
                     ax.set_xlabel(
-                        f"{str(self.leakageModelFunction)}(secret)"
+                        f"{str(leakageModelFunction)}(secret)"
                     )
                     ax.set_ylabel("offset")
                     plt.savefig(f"debug/reg-{hex(leakAddr)}.png")

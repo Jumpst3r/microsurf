@@ -29,8 +29,6 @@ class SCDetector:
         jail: Specifies the a directory to which the binary will be jailed during emulation.
             For dynamic binaries, the user must ensure that the appropriate shared objects are present.
             Optional for static binaries, defaults to a tmp directory.
-        leakageModel: (Callable[[str], Any]): Function which applies a leakage model to the secret.
-            Example under microsurf.pipeline.LeakageModels
         sharedObjects: List of shared libraries to trace. For example ['libssl.so.1.1', 'libcrypto.so.1.1'].
             Defaults to None, tracing only the target binary. Only applicable to dynamic binaries.
     """
@@ -42,7 +40,6 @@ class SCDetector:
         randGen: Callable[[], str],
         deterministic: bool,
         asFile: bool,
-        leakageModel: Callable[[str], Any],
         sharedObjects: list[str] = [],
         jail: str = None,
     ) -> None:
@@ -52,7 +49,6 @@ class SCDetector:
         self.deterministic = deterministic
         self.asFile = asFile
         self.rootfs = jail
-        self.leakageModel = leakageModel
         self.sharedObjects = sharedObjects
         self._validate()
 
@@ -82,7 +78,6 @@ class SCDetector:
             rndGen=self.randGen,
             asFile=self.asFile,
             jail=self.rootfs,
-            leakageModel=self.leakageModel,
             sharedObjects=self.sharedObjects,
         )
 

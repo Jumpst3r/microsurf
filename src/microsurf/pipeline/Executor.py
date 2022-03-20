@@ -145,7 +145,7 @@ class PipeLineExecutor:
                 assert len(t.trace[leak]) > 0
         log.info("Rating leaks")
         lc = LeakageClassification(
-            rndTraceCollection, self.loader, possibleLeaks, self.loader.leakageModel
+            rndTraceCollection, self.loader, possibleLeaks
         )
         lc.exec()
         res = lc.finalize()
@@ -181,27 +181,31 @@ class PipeLineExecutor:
                             if ".so" in label
                             else getfnname(path, k)
                         )
+                        mivals = list(self.mivals[hex(k)].items())
                         console.print(
-                            f'{offset:#08x} - [MI = {self.mivals[hex(k)]:.2f}] \t at {symbname if symbname else "??":<30} {label}'
+                            f'{offset:#08x} - [MI ({mivals[0][0]}) = {mivals[0][1]:.2f}] \t at {symbname if symbname else "??":<30} {label}'
                         )
                         self.MDresults.append(
                             {
                                 "runtime Addr": k,
                                 "offset": f"{offset:#08x}",
-                                "MI score": self.mivals[hex(k)],
+                                "MI score": mivals[0][1],
+                                "Leakage model": mivals[0][0],
                                 "Function": f'{symbname if symbname else "??":}',
                             }
                         )
                     else:
                         symbname = getfnname(path, k)
+                        mivals = list(self.mivals[hex(k)].items())
                         console.print(
-                            f'{k:#08x} [MI={self.mivals[hex(k)]:.2f}] \t at {symbname if symbname else "??":<30} {label}'
+                            f'{k:#08x} -[MI ({mivals[0][0]}) = {mivals[0][1]:.2f}]  \t at {symbname if symbname else "??":<30} {label}'
                         )
                         self.MDresults.append(
                             {
                                 "runtime Addr": k,
                                 "offset": f"{k:#08x}",
-                                "MI score": self.mivals[hex(k)],
+                                "MI score": mivals[0][1],
+                                "Leakage model": mivals[0][0],
                                 "Function": f'{symbname if symbname else "??":}',
                                 "Object": f'{path.split("/")[-1]}',
                             }
@@ -256,7 +260,7 @@ class PipeLineExecutor:
         )  # increase sample size by reusing previously collected traces
         regressionTraces.prune()
         regressor = LeakageRegression(
-            regressionTraces, self.loader, regressionTargets, self.loader.leakageModel
+            regressionTraces, self.loader, regressionTargets, self.mivals
         )
         regressor.exec()
         res = regressor.finalize()

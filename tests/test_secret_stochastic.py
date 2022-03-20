@@ -38,11 +38,14 @@ def test_analyze_stochastic(monkeypatch, binPath):
     with open(resFile) as f:
         data = json.load(f)
         armTargetAddr = data[binPath.name]
-    bl = BinaryLoader(binPath, ["@"], dryRunOnly=False)
-    pipeline = PipeLineExecutor(loader=bl)
-    pipeline.ITER_COUNT = 50
-    pipeline.run()
-    res = pipeline.finalize()
+    scd = SCDetector(
+        binPath=binPath,
+        args=["@"],
+        randGen=genRandInt,
+        deterministic=False,
+        asFile=False,
+    )
+    res = scd.exec()
     armTargetAddr = [int(a, 16) for a in armTargetAddr]
     fp.close()
     for a in armTargetAddr:
