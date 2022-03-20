@@ -32,7 +32,7 @@ class ReportGenerator:
         self.mdString += f"__Deterministic__\n`{self.loader.deterministic}` \n"
         self.mdString += f"__Emulation root__\n`{ self.loader.rootfs}` \n"
         self.mdString += (
-            f"__Leakage model__\n`{ str(self.loader.leakageModel).split(' ')[1]}` \n"
+            f"__Leakage model__\n`{ str(self.loader.leakageModel)}` \n"
         )
 
     def generateResults(self):

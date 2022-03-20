@@ -54,7 +54,7 @@ if __name__ == "__main__":
         deterministic=False,
         asFile=False,
         jail=jailroot,
-        leakageModel=identity,
+        leakageModel=identity(),
         sharedObjects=sharedObjects
     )
    

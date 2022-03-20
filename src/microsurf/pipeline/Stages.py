@@ -19,7 +19,7 @@ import scipy.stats as stats
 import seaborn as sns
 from capstone import CS_ARCH_ARM, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_MODE_ARM, Cs
 from sklearn import decomposition
-from microsurf.pipeline.LeakageModels import identity
+from microsurf.pipeline.LeakageModels import CRYPTO_MODELS, hamming, identity
 from microsurf.utils.elf import getfnname
 from qiling import Qiling
 from sortedcontainers import SortedDict
@@ -285,7 +285,7 @@ class BinaryLoader(Stage):
         self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
 
 
-@ray.remote(num_cpus=1)
+@ray.remote
 class MemWatcher(Stage):
     """
     Hooks memory reads
@@ -530,24 +530,25 @@ class LeakageClassification(Stage):
                 secretFeatureShape = self.leakageModelFunction(
                     self.rndTraceCollection.traces[0].secret
                 ).shape
-            secretMat = np.zeros((len(addList.keys()), secretFeatureShape))
+            secretMat = np.zeros((len(addList.keys()), 2))
             addList = OrderedDict(sorted(addList.items(), key=self._key))
             for idx, k in enumerate(addList):
                 addr = addList[k]
                 mat[idx] = [
                     a - self.loader.getlibbase(self.loader.getlibname(a)) for a in addr
                 ]
-                secretMat[idx] = self.leakageModelFunction(k)
-
-            # Build a matrix containing the masked secret (according to the given leakage model)
+                secretMat[idx] = [f(k) for f in CRYPTO_MODELS]
 
             # For now, let's work with the mutual information instead of the more complex RDC
             # We'll switch to the RDC stat. when we understand the nitty gritty math behind it.
-            mival = np.sum(mutual_info_regression(mat, secretMat, random_state=42))
+            mivals = []
+            for col,lmodel in zip(secretMat.T, CRYPTO_MODELS):
+                mivals.append(np.sum(mutual_info_regression(mat, col, random_state=42)))
+                log.debug(f"for PC {leakAddr}, leakage model <{str(lmodel)}> gave a MI of {mivals[-1]}")
             # log.info(f"mat{hex(leakAddr)} = {mat}")
             # log.info(f"secretMat = {secretMat}")
             # log.info(f"MI score for {hex(leakAddr)}: {mival:.2f}")
-            self.results[hex(leakAddr)] = mival
+            self.results[hex(leakAddr)] = mivals[0]
 
     def exec(self, *args, **kwargs):
         self.analyze()
@@ -630,7 +631,7 @@ class LeakageRegression(Stage):
                     ax.scatter(secretMat, mat)
                     ax.plot(regressor.predict(mat), mat)
                     ax.set_xlabel(
-                        f"{str(self.leakageModelFunction).split(' ')[1]}(secret)"
+                        f"{str(self.leakageModelFunction)}(secret)"
                     )
                     ax.set_ylabel("offset")
                     plt.savefig(f"debug/reg-{hex(leakAddr)}.png")

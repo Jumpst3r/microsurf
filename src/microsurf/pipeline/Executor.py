@@ -43,7 +43,7 @@ class PipeLineExecutor:
         log.info("Estimating whether multiprocessing is worth it")
 
         start_time = time.time()
-        INI_CNT = 10
+        INI_CNT = 3
         memWatchers = [
             MemWatcher.remote(
                 self.loader.binPath,
@@ -63,7 +63,7 @@ class PipeLineExecutor:
         [ray.kill(m) for m in memWatchers]
         mt.prune()
         NB_CORES = (
-            multiprocessing.cpu_count() // 2 if multiprocessing.cpu_count() > 1 else 1
+            multiprocessing.cpu_count() - 1  if multiprocessing.cpu_count() > 2 else 1
         )
         if (emutime * INI_CNT) < (end_time - start_time):
             log.warning("multiprocessing overhead too large, switching to sequencial.")
