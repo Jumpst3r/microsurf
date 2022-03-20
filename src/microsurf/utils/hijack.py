@@ -161,3 +161,30 @@ def ql_fixed_syscall_faccessat(ql, dfd: int, filename: int, mode: int):
         ql.log.debug(f"File found: {access_path}")
 
     return regreturn
+
+'''
+adapted from qiling's os/unistd.py
+to return the application exit code.
+'''
+def syscall_exit_group(ql, code: int):
+    success = (code == 0)
+    if ql.os.child_processes == True:
+        os._exit(0)
+
+    if ql.multithread:
+        def _sched_cb_exit(cur_thread):
+            ql.log.debug(f"[Thread {cur_thread.get_id()}] Terminated")
+            cur_thread.stop()
+            cur_thread.exit_code = code
+
+        td = ql.os.thread_management.cur_thread
+        ql.emu_stop()
+        td.sched_cb = _sched_cb_exit
+    else:
+        ql.os.exit_code = code
+        ql.os.stop()
+    if not success:
+        log.error("Application returned a non zero exit code. Bad args ?")
+        exit(0)
+    else:
+        return 0

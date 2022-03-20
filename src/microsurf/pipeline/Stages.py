@@ -29,6 +29,7 @@ from ..utils.hijack import (
     const_time,
     device_random,
     ql_fixed_syscall_faccessat,
+    syscall_exit_group
 )
 from ..utils.logger import LOGGING_LEVEL, getConsole, getLogger, getQilingLogger
 from .tracetools.Trace import MemTrace, MemTraceCollection
@@ -273,6 +274,7 @@ class BinaryLoader(Stage):
 
         # replace broken qiling hooks with working ones:
         self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
+        self.QLEngine.os.set_syscall("exit_group", syscall_exit_group)
 
 
 @ray.remote
@@ -614,7 +616,7 @@ class LeakageRegression(Stage):
             log.info(
                 f"Linear regression score for {hex(leakAddr - self.loader.getlibbase(self.loader.getlibname(leakAddr)))}: {regscore:.2f}"
             )
-            if LOGGING_LEVEL == logging.DEBUG:
+            if LOGGING_LEVEL == logging.INFO:
                 if mat.shape[1] == 1:
                     plt.style.use("seaborn")
                     fig, ax = plt.subplots(1, 1)

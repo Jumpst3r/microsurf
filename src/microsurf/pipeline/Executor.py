@@ -236,7 +236,7 @@ class PipeLineExecutor:
         regressionTargets = self.resultsDF[["runtime Addr"]].values.tolist()
         regressionTargets = [i for sl in regressionTargets for i in sl]
         resultsRnd = []
-        for _ in tqdm(range(0, 10, NB_CORES)):
+        for _ in tqdm(range(0, self.ITER_COUNT, NB_CORES)):
             memWatchersRand = [
                 MemWatcher.remote(
                     self.loader.binPath,
