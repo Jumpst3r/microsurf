@@ -29,7 +29,7 @@ from ..utils.hijack import (
     const_time,
     device_random,
     ql_fixed_syscall_faccessat,
-    syscall_exit_group
+    syscall_exit_group,
 )
 from ..utils.logger import LOGGING_LEVEL, getConsole, getLogger, getQilingLogger
 from .tracetools.Trace import MemTrace, MemTraceCollection
@@ -302,7 +302,6 @@ class MemWatcher(Stage):
         self.mappings = mappings
         self.deterministic = deterministic
 
-
     def _trace_mem_read(self, ql: Qiling, access, addr, size, value):
         if self.locations is None:
             if self.getlibname(ql.arch.regs.arch_pc) not in self.ignoredObjects:
@@ -318,9 +317,10 @@ class MemWatcher(Stage):
 
     def exec(self, secret):
         start_time = time.time()
-        self.args[self.args.index("@")] = secret
+        args = self.args.copy()
+        args[args.index("@")] = secret
         self.QLEngine = Qiling(
-            [str(self.binPath), *[str(a) for a in self.args]],
+            [str(self.binPath), *[str(a) for a in args]],
             str(self.rootfs),
             console=True,
             log_override=getQilingLogger(),
@@ -360,7 +360,7 @@ class MemWatcher(Stage):
         self.QLEngine.run()
         self.QLEngine.stop()
         endtime = time.time()
-        self.tracetime = endtime-start_time
+        self.tracetime = endtime - start_time
 
     def getResults(self):
         return self.currenttrace, self.tracetime
@@ -441,7 +441,7 @@ class DistributionAnalyzer(Stage):
                 plt.savefig(f"debug/{hex(leakAddr)}.png")
             target_p_val = 0.01
             # zero var fixed and pos. var. rand should be detected.
-            if np.var(addrSetFixed) == 0 and  np.var(addrSetRnd) > 0:
+            if np.var(addrSetFixed) == 0 and np.var(addrSetRnd) > 0:
                 target_p_val = 0.5
             if p_value < target_p_val:
                 log.debug(
@@ -491,6 +491,7 @@ class LeakageClassification(Stage):
     def analyze(self):
         import numpy as np
         from sklearn.feature_selection import mutual_info_regression
+
         secrets = [t.secret for t in self.rndTraceCollection.traces]
         slen = -1
         fixedLenSecrets = True
@@ -543,12 +544,19 @@ class LeakageClassification(Stage):
             # For now, let's work with the mutual information instead of the more complex RDC
             # We'll switch to the RDC stat. when we understand the nitty gritty math behind it.
             mivals = {}
-            for col,lmodel in zip(secretMat.T, CRYPTO_MODELS):
-                mivals[lmodel] = np.sum(mutual_info_regression(mat, col, random_state=42))
+            for col, lmodel in zip(secretMat.T, CRYPTO_MODELS):
+                mivals[lmodel] = np.mean(
+                    mutual_info_regression(mat, col, random_state=42)
+                )
             # log.info(f"mat{hex(leakAddr)} = {mat}")
             # log.info(f"secretMat = {secretMat}")
             # log.info(f"MI score for {hex(leakAddr)}: {mival:.2f}")
-            mivals = {k: v for k, v in sorted(mivals.items(), key=lambda item: item[1], reverse=True)}
+            mivals = {
+                k: v
+                for k, v in sorted(
+                    mivals.items(), key=lambda item: item[1], reverse=True
+                )
+            }
             self.results[hex(leakAddr)] = mivals
 
     def exec(self, *args, **kwargs):
@@ -561,12 +569,14 @@ class LeakageClassification(Stage):
 class LeakageRegression(Stage):
     def __init__(
         self,
-        rndTraceCollection: MemTraceCollection,
+        rndTraceCollectionTrain: MemTraceCollection,
+        rndTraceCollectionTest: MemTraceCollection,
         binaryLoader: BinaryLoader,
         possibleLeaks,
         mivals,
     ):
-        self.rndTraceCollection = rndTraceCollection
+        self.rndTraceCollectionTrain = rndTraceCollectionTrain
+        self.rndTraceCollectionTest = rndTraceCollectionTest
         self.possibleLeaks = possibleLeaks
         self.loader = binaryLoader
         self.results: Dict[int, float] = {}
@@ -575,61 +585,113 @@ class LeakageRegression(Stage):
     def _key(self, t):
         return t[0]
 
+    def convertTraces(self, rndTraceCollection, leakAddr):
+        addList = {}
+        # Store the secret according to the given leakage model
+        for t in rndTraceCollection.traces:
+            if t.trace[leakAddr]:
+                try:
+                    addList[int(t.secret)] = t.trace[leakAddr]
+                except ValueError:
+                    addList[t.secret] = t.trace[leakAddr]
+        # check that we have the same number of targets
+        tlen = min([len(l) for l in list(addList.values())])
+        for k, v in addList.items():
+            if len(v) != tlen:
+                log.info(f"tlen: {tlen}, len(v):{len(v)}")
+                addList[k] = v[:tlen]
+        mat = np.zeros((len(addList), len(list(addList.values())[0])), dtype=np.uint64)
+        secretMat = np.zeros((len(addList.keys()), 1))
+        addList = OrderedDict(sorted(addList.items(), key=self._key))
+        for idx, k in enumerate(addList):
+            addr = addList[k]
+            mat[idx] = [
+                a - self.loader.getlibbase(self.loader.getlibname(a)) for a in addr
+            ]
+            secretMat[idx] = self.leakageModelFunction(k)
+        return mat, secretMat, tlen
+
     def regress(self):
         import numpy as np
         from sklearn.linear_model import LinearRegression
+        from sklearn import tree
+        import seaborn as sns
 
-        secrets = set()
         # Convert traces to trace per IP/PC
         log.debug(f"leak locations in LeakRegression: {self.possibleLeaks}")
         for leakAddr in self.possibleLeaks:
-            leakageModelFunction = list(self.mivals[hex(leakAddr)].keys())[0]
+            self.leakageModelFunction = list(self.mivals[hex(leakAddr)].keys())[0]
 
-            addList = {}
-            # Store the secret according to the given leakage model
-            for t in self.rndTraceCollection.traces:
-                secrets.add(t.secret)  # uselesess ?
-                if t.trace[leakAddr]:
-                    try:
-                        addList[int(t.secret)] = t.trace[leakAddr]
-                    except ValueError:
-                        addList[t.secret] = t.trace[leakAddr]
-            # check that we have the same number of targets
-            tlen = min([len(l) for l in list(addList.values())])
-            for k, v in addList.items():
-                if len(v) != tlen:
-                    addList[k] = v[:tlen]
-            mat = np.zeros(
-                (len(addList), len(list(addList.values())[0])), dtype=np.uint64
+            X_train, Y_train, tlen = self.convertTraces(
+                self.rndTraceCollectionTrain, leakAddr
             )
-            secretMat = np.zeros((len(addList.keys()), 1))
-            addList = OrderedDict(sorted(addList.items(), key=self._key))
-            for idx, k in enumerate(addList):
-                addr = addList[k]
-                mat[idx] = [
-                    a - self.loader.getlibbase(self.loader.getlibname(a)) for a in addr
-                ]
-                secretMat[idx] = leakageModelFunction(k)
+            X_test, Y_test, tlen = self.convertTraces(
+                self.rndTraceCollectionTest, leakAddr
+            )
 
-            regressor = LinearRegression().fit(mat, secretMat)
-            regscore = regressor.score(mat, secretMat)
+            if "bit" in str(self.leakageModelFunction):  # two class classification
+                # should be named classifier but this makes the code shorter
+                regressor = tree.DecisionTreeClassifier(max_depth=2).fit(
+                    X_train, Y_train.ravel()
+                )
+            else:
+                regressor = LinearRegression().fit(X_train, Y_train.ravel())
+            regscore = regressor.score(X_test, Y_test.ravel())
+
             log.info(
                 f"Linear regression score for {hex(leakAddr - self.loader.getlibbase(self.loader.getlibname(leakAddr)))}: {regscore:.2f}"
             )
-            if LOGGING_LEVEL == logging.INFO:
-                if mat.shape[1] == 1:
+            if LOGGING_LEVEL == logging.DEBUG:
+                if tlen >= 2:
+                    PLOTSECRETS = 5 if Y_test.shape[0] >= 5 else Y_test.shape[0]
+                    heatmat = np.zeros(
+                        (
+                            PLOTSECRETS,
+                            int(X_test[:PLOTSECRETS].max())
+                            - int(X_test[:PLOTSECRETS].min())
+                            + 1,
+                        )
+                    )
+                    absvals = X_test - X_test[:PLOTSECRETS].min()
+                    for rowid, _ in enumerate(X_test[:PLOTSECRETS]):
+                        for colid, _ in enumerate(X_test.T):
+                            heatmat[rowid][absvals[rowid, colid]] = rowid + 1
+                    sns.set(font_scale=0.4)
+                    plt.figure(figsize=(7, 2.5))
+                    hfig = sns.heatmap(
+                        heatmat,
+                        cbar=False,
+                        xticklabels=[
+                            hex(int(s)) if int(s) % 128 == 0 else ""
+                            for s in range(
+                                X_test[:PLOTSECRETS].min(), X_test[:PLOTSECRETS].max()
+                            )
+                        ],
+                        cmap="cubehelix_r",
+                        yticklabels=[hex(int(s[0])) for s in Y_test[:PLOTSECRETS]],
+                    )
+                    hfig.set(
+                        xlabel="Memory offset",
+                        ylabel=f"{str(self.leakageModelFunction)}(secret)",
+                    )
+
+                    fig = hfig.get_figure()
+                    fig.savefig(f"debug/heatmap-{leakAddr}.png", dpi=300)
+                if tlen == 1:
                     plt.style.use("seaborn")
                     fig, ax = plt.subplots(1, 1)
-                    fig.suptitle(
-                        f"Trace regression for PC={hex(leakAddr)} (lib = {self.loader.getlibname(leakAddr)})\n score={regscore:.2f}"
-                    )
-                    ax.scatter(secretMat, mat)
-                    ax.plot(regressor.predict(mat), mat)
-                    ax.set_xlabel(
-                        f"{str(leakageModelFunction)}(secret)"
-                    )
+                    figtitle = f"Trace regression for PC={hex(leakAddr)} (lib = {self.loader.getlibname(leakAddr)})\n score={regscore:.2f}"
+                    fig.suptitle(figtitle)
+                    if "bit" in str(self.leakageModelFunction):
+                        ax.scatter(X_test, Y_test)
+                        # ax.scatter(X_test, regressor.predict(X_test), c='g')
+                    else:
+                        ax.scatter(X_test, Y_test)
+                        # ax.plot(X_test, regressor.predict(X_test))
+                    ax.set_xlabel(f"{str(self.leakageModelFunction)}(secret)")
                     ax.set_ylabel("offset")
                     plt.savefig(f"debug/reg-{hex(leakAddr)}.png")
+                    plt.close()
             self.results[leakAddr] = regscore
 
     def exec(self, *args, **kwargs):

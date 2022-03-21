@@ -29,11 +29,12 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results: List[int] = []
-        self.ITER_COUNT = 40
+        self.ITER_COUNT = 200
         self.multiprocessing = True
 
     def run(self):
-        if not ray.is_initialized(): ray.init()
+        if not ray.is_initialized():
+            ray.init()
         import time
 
         starttime = time.time()
@@ -63,7 +64,7 @@ class PipeLineExecutor:
         [ray.kill(m) for m in memWatchers]
         mt.prune()
         NB_CORES = (
-            multiprocessing.cpu_count() - 1  if multiprocessing.cpu_count() > 2 else 1
+            multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 2 else 1
         )
         if (emutime * INI_CNT) < (end_time - start_time):
             log.warning("multiprocessing overhead too large, switching to sequencial.")
@@ -82,46 +83,40 @@ class PipeLineExecutor:
 
         log.info("Running stage Leak Confirm")
 
-        if self. multiprocessing:
+        if self.multiprocessing:
             log.info(f"batching {2*self.ITER_COUNT} jobs across {NB_CORES} cores")
 
         resFixed = []
         resRnd = []
+        binPath_id = ray.put(self.loader.binPath)
+        args_id = ray.put(self.loader.args)
+        rootfs_id = ray.put(self.loader.rootfs)
+        ignoredObjects_id = ray.put(self.loader.ignoredObjects)
+        mappings_id = ray.put(self.loader.mappings)
+        deterministic_id = ray.put(self.loader.deterministic)
+        possibleLeaks_id = ray.put(mt.possibleLeaks)
+        memWatchers = [
+            MemWatcher.remote(
+                binPath_id,
+                args_id,
+                rootfs_id,
+                ignoredObjects_id,
+                mappings_id,
+                deterministic=deterministic_id,
+                locations=possibleLeaks_id,
+            )
+            for _ in range(NB_CORES)
+        ]
         for _ in tqdm(range(0, self.ITER_COUNT, NB_CORES)):
-            memWatchersFixed = [
-                MemWatcher.remote(
-                    self.loader.binPath,
-                    self.loader.args,
-                    self.loader.rootfs,
-                    self.loader.ignoredObjects,
-                    self.loader.mappings,
-                    deterministic=self.loader.deterministic,
-                    locations=mt.possibleLeaks,
-                )
-                for _ in range(NB_CORES)
-            ]
-            [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in memWatchersFixed]
-            futuresFixed = [m.getResults.remote() for m in memWatchersFixed]
+
+            [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in memWatchers]
+            futuresFixed = [m.getResults.remote() for m in memWatchers]
             res = ray.get(futuresFixed)
             resFixed += [r[0] for r in res]
-            [ray.kill(m) for m in memWatchersFixed]
-            memWatchersRand = [
-                MemWatcher.remote(
-                    self.loader.binPath,
-                    self.loader.args,
-                    self.loader.rootfs,
-                    self.loader.ignoredObjects,
-                    self.loader.mappings,
-                    deterministic=self.loader.deterministic,
-                    locations=mt.possibleLeaks,
-                )
-                for _ in range(NB_CORES)
-            ]
-            [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchersRand]
-            futuresRnd = [m.getResults.remote() for m in memWatchersRand]
+            [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchers]
+            futuresRnd = [m.getResults.remote() for m in memWatchers]
             res = ray.get(futuresRnd)
             resRnd += [r[0] for r in res]
-            [ray.kill(m) for m in memWatchersRand]
 
         rndTraceCollection = MemTraceCollection(resRnd)
         fixedTraceCollection = MemTraceCollection(resFixed)
@@ -144,9 +139,7 @@ class PipeLineExecutor:
             for leak in possibleLeaks:
                 assert len(t.trace[leak]) > 0
         log.info("Rating leaks")
-        lc = LeakageClassification(
-            rndTraceCollection, self.loader, possibleLeaks
-        )
+        lc = LeakageClassification(rndTraceCollection, self.loader, possibleLeaks)
         lc.exec()
         res = lc.finalize()
         self.mivals = res
@@ -217,12 +210,12 @@ class PipeLineExecutor:
             log.info("No leaks found")
             return
         console.rule("Regression on high MI leaks")
-        log.info("Trying to learn secret-trace mappings for high (>=0.4) MI leaks")
+        log.info("Trying to learn secret-trace mappings for high (>=0.1) MI leaks")
         dropped = []
         for idx, x in self.resultsDF.sort_values(
             by=["MI score"], ascending=False
         ).iterrows():
-            if x[["MI score"]].values[0] < 0.4:
+            if x[["MI score"]].values[0] < 0.1:
                 dropped.append(idx)
         self.resultsDF.drop(dropped, inplace=True)
         if len(self.resultsDF) == 0:
@@ -236,31 +229,39 @@ class PipeLineExecutor:
         regressionTargets = self.resultsDF[["runtime Addr"]].values.tolist()
         regressionTargets = [i for sl in regressionTargets for i in sl]
         resultsRnd = []
-        for _ in tqdm(range(0, self.ITER_COUNT, NB_CORES)):
-            memWatchersRand = [
-                MemWatcher.remote(
-                    self.loader.binPath,
-                    self.loader.args,
-                    self.loader.rootfs,
-                    self.loader.ignoredObjects,
-                    self.loader.mappings,
-                    deterministic=self.loader.deterministic,
-                    locations=regressionTargets,
-                )
-                for _ in range(NB_CORES)
-            ]
+        memWatchersRand = [
+            MemWatcher.remote(
+                binPath_id,
+                args_id,
+                rootfs_id,
+                ignoredObjects_id,
+                mappings_id,
+                deterministic=deterministic_id,
+                locations=regressionTargets,
+            )
+            for _ in range(NB_CORES)
+        ]
+        for _ in tqdm(range(0, 2 * self.ITER_COUNT, NB_CORES)):
             [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchersRand]
             futuresRnd = [m.getResults.remote() for m in memWatchersRand]
             res = ray.get(futuresRnd)
             resultsRnd += [r[0] for r in res]
-            [ray.kill(m) for m in memWatchersRand]
         ray.shutdown()
-        regressionTraces = MemTraceCollection(
-            resRnd + rndTraceCollection.get(regressionTargets)
+        regressionTracesTrain = MemTraceCollection(
+            resRnd
         )  # increase sample size by reusing previously collected traces
-        regressionTraces.prune()
+        regressionTracesTest = MemTraceCollection(
+            rndTraceCollection.get(regressionTargets)
+        )
+
+        regressionTracesTest.prune()
+        regressionTracesTrain.prune()
         regressor = LeakageRegression(
-            regressionTraces, self.loader, regressionTargets, self.mivals
+            regressionTracesTrain,
+            regressionTracesTest,
+            self.loader,
+            regressionTargets,
+            self.mivals,
         )
         regressor.exec()
         res = regressor.finalize()

@@ -3,7 +3,7 @@ import numpy as np
 
 
 class identity:
-    def __call__ (self, secret) -> np.ndarray:
+    def __call__(self, secret) -> np.ndarray:
         if isinstance(secret, str):
             try:
                 secret = int(secret)
@@ -11,12 +11,12 @@ class identity:
                 secret = int(secret, 16)
         return np.array(secret)
 
-    def __str__ (self):
-        return 'identity'
+    def __str__(self):
+        return "identity"
 
 
 class hamming:
-    def __call__ (self, secret) -> np.ndarray:
+    def __call__(self, secret) -> np.ndarray:
         """Computes the hamming distance of the secret
 
         Args:
@@ -36,14 +36,16 @@ class hamming:
                 secret = int(secret, 16)
             return np.array(bin(secret)[2:].count("1"))
 
-    def __str__ (self):
-        return 'hamming'    
+    def __str__(self):
+        return "hamming"
+
 
 class bitval:
     def __init__(self, pos) -> None:
-        
+
         self.pos = pos
-    def __call__ (self, secret) -> np.ndarray:
+
+    def __call__(self, secret) -> np.ndarray:
         """Return the value of the nth bit
 
         Args:
@@ -66,13 +68,15 @@ class bitval:
             except IndexError:
                 return np.array(0)
 
-    def __str__ (self):
-        return f'{self.pos}-th bit value'    
+    def __str__(self):
+        return f"{self.pos}-th bit value"
+
 
 def getCryptoModels(keylen=0):
     basemodels = [identity(), hamming()]
     if keylen:
         return basemodels + [bitval(i) for i in range(keylen)]
     return basemodels
+
 
 CRYPTO_MODELS = [identity(), hamming()]

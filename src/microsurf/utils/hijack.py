@@ -162,16 +162,20 @@ def ql_fixed_syscall_faccessat(ql, dfd: int, filename: int, mode: int):
 
     return regreturn
 
-'''
+
+"""
 adapted from qiling's os/unistd.py
 to return the application exit code.
-'''
+"""
+
+
 def syscall_exit_group(ql, code: int):
-    success = (code == 0)
+    success = code == 0
     if ql.os.child_processes == True:
         os._exit(0)
 
     if ql.multithread:
+
         def _sched_cb_exit(cur_thread):
             ql.log.debug(f"[Thread {cur_thread.get_id()}] Terminated")
             cur_thread.stop()

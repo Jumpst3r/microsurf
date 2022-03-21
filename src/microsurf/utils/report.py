@@ -47,7 +47,7 @@ class ReportGenerator:
             .to_markdown(index=False)
         )
         if self.resultsReg is not None:
-            self.mdString += "\n ### Regression results for leaks with MI > 0.4\n\n"
+            self.mdString += "\n ### Regression results for leaks with MI > 0.1\n\n"
             self.mdString += "The [linear regression score](https://en.wikipedia.org/wiki/Coefficient_of_determination) is always in a [0,1] interval, with 1 indicating a perfect linear dependency between the memory read locations and L(secret) with L being the chosen leakage model.\n"
             self.mdString += self.resultsReg.sort_values(
                 by=["Linear regression score"], ascending=False
