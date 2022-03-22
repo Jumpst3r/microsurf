@@ -1,36 +1,37 @@
 """
-Tests if address based side channel detection works on the binary sample `nosecret.bin`
-For more information about the given binary, refer to binaries/nosecret/readme.md
+Tests if address based side channel detection works on the binary sample `secret0.bin`
+For more information about the given binary, refer to binaries/secret0/readme.md
 @author nicolas
 """
 
 import tempfile
 import pytest
 from microsurf.pipeline.Stages import BinaryLoader
-from microsurf import SCDetector
 from microsurf.pipeline.Executor import PipeLineExecutor
-from pathlib import Path, PurePath
-import json, sys
 from microsurf.utils.generators import genRandInt
 from microsurf.pipeline.LeakageModels import identity
+from microsurf import SCDetector
+from pathlib import Path, PurePath
+import json, sys
 
-resFile = PurePath(Path(__file__).parent, Path("binaries/nosecret/secret-dep.json"))
 
-armPath = PurePath(Path(__file__).parent, Path("binaries/nosecret/nosecret-arm.bin"))
+resFile = PurePath(Path(__file__).parent, Path("binaries/secret0/secret-dep.json"))
+
+armPath = PurePath(Path(__file__).parent, Path("binaries/secret0/secret-arm.bin"))
 
 x8632Path = PurePath(
-    Path(__file__).parent, Path("binaries/nosecret/nosecret-x86-32.bin")
+    Path(__file__).parent, Path("binaries/secret0/secret-x86-32.bin")
 )
 
 x8664Path = PurePath(
-    Path(__file__).parent, Path("binaries/nosecret/nosecret-x86-32.bin")
+    Path(__file__).parent, Path("binaries/secret0/secret-x86-32.bin")
 )
 
 targets = [armPath, x8632Path, x8664Path]
 
 
 @pytest.mark.parametrize("binPath", targets)
-def test_analyze_no_secret(monkeypatch, binPath):
+def test_analyze_secret_simple(monkeypatch, binPath):
     fp = tempfile.TemporaryFile()
     monkeypatch.setattr("sys.stdin", fp)
     armTargetAddr = []
@@ -47,4 +48,5 @@ def test_analyze_no_secret(monkeypatch, binPath):
     res = scd.exec()
     armTargetAddr = [int(a, 16) for a in armTargetAddr]
     fp.close()
-    assert res == armTargetAddr
+    for a in armTargetAddr:
+        assert a in res

@@ -1,5 +1,9 @@
 # Quickstart
 
+```{note}
+Make sure you [installed](installation.md) the framework if you wish to follow along.
+```
+
 In the general case, testing a target binary for side channels requires a number of items which are highly dependent on the binary, these include:
 
 - The arguments to be passed to the binary
@@ -28,16 +32,19 @@ For dynamic binaries you will have to provide a root directory (the `jail` argum
 
 ```
 jail-openssl-x8632/
-lib/
-  ld-linux.so.2
-  libc.so.6
-  libcrypto.so.1.1
-  libssl.so.1.1
-input.bin
-openssl
+  lib/
+    ld-linux.so.2
+    libc.so.6
+    libcrypto.so.1.1
+    libssl.so.1.1
+  input.bin
+  openssl
 ```
 
-As a user of the framework, you have to ensure that all required shared objects are present in the correct location.
+```{note}
+As a user of the framework, you have to ensure that all required shared objects are present in the correct location. Also create make sure that any input files your binary expects are present. For dynamic x86 binaries you can check which shared objects are expected to be where by running `ldd mybinary.bin`.
+```
+
 
 ```python
 jailroot = '/path/jail-openssl-x8632/'
@@ -83,24 +90,26 @@ The '@' will be replaced with the data produced by the `randGen` function. If `i
 
 ### Producing secrets (`randGen` argument)
 
-A secret often has to adhere to some specific format in order to be processed by the target binary. Since microsurf cannot guess that, it is the end user's job to specify such a function. In our example, the `-K` flag expects a 128bit key specified as a hex string:
+A secret often has to adhere to some specific format in order to be processed by the target binary. Since microsurf cannot guess that, it is the end user's job to specify such a function. In our example, the `-K` flag expects a 128bit key specified as a hex string. Since this is a fairly common requirement, it is already implemented in the `microsurf` framework. Other generators are also included :
 
-```python
-def genRandom() -> str:
-    KEYLEN = 128
-    kbytes = KEYLEN // 8
-    rbytes = os.urandom(kbytes)
-    return f"{int.from_bytes(rbytes, byteorder='big'):x}"
+```{eval-rst}
+.. automodule:: microsurf.utils.generators
+  :members:
 ```
 
 The `SCDetector` class will validate that the function generates different secrets at each call.
 
 ```python
+from microsurf.utils.generators import getRandomHexKeyFunction
 scd = SCDetector(
         ...
-        randGen=genRandom,
+        randGen=getRandomHexKeyFunction(128),
         ...
     )
+```
+
+```{note}
+The `randGen` parameter takes a __callable__ object. The framework will validate whether it produces sufficiently random output when called.
 ```
 
 ### Secret leakage model (`leakagemodel` argument)
@@ -127,6 +136,10 @@ sharedObjects = ['libssl', 'libcrypto']
 
 will ignore every other shared library (`libc` etc).
 
+```{note}
+The binary specified in `binPath` will always be traced, no need to pass it to the `sharedObjects` parameter.
+```
+
 ## Execution and results
 
 Once an `SCDetector` object has been initialized with all the arguments needed, analysis can be started by calling the `.exec()` function:
@@ -143,57 +156,6 @@ The results will look be split in several columns:
 
 The first column is the relative offset within the shared object at which the leak was identified. The second column gives the estimated [mutual information](https://en.wikipedia.org/wiki/Mutual_information) score optained by applying the specified leakage model. The next column provides the function name (if the symbols are available). The last column gives the name of the (shared) object.
 
-The `exec` function takes an optional argument `report`. If set to `True`, the results will be saved in markdown table format, as exemplified by the next section.
+The `exec` function takes an optional argument `report`. If set to `True`, the results will be saved in markdown table format:
 
-## Sample results 
-
-__Run at__: 03/15/2022, 11:19:26 
-
-__Elapsed time (analysis)__: 00:01:31 
-
-__Elapsed time (single run emulation)__: 0:00:00.427573 
-
-__Binary__
-
-`/home/nicolas/Documents/msc-thesis-work/doc/examples/rootfs/jail-openssl-arm64/openssl`
-
- >ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux-aarch64.so.1, for GNU/Linux 3.7.0, with debug_info, not stripped 
-
-__Args__
-
-`['camellia-128-ecb', '-e', '-in', 'input.bin', '-out', 'output.bin', '-nosalt', '-K', '47356fc8ca111593e80e47e4667fb4c3']` 
-
-__Deterministic__
-
-`False` 
-
-__Emulation root__
-
-`/home/nicolas/Documents/msc-thesis-work/doc/examples/rootfs/jail-openssl-arm64/` 
-
-__Sample secret__
-
-`e02216de8a7fc5c0f31aa99d84eacf76` 
-
-__Leakage model__
-
-`identity` 
-
-__Results__
-
-__Top 5, sorted by MI__
-
-| offset   |   MI score | Function                     | Object           |
-|:---------|-----------:|:-----------------------------|:-----------------|
-| 0x0df0ec |   1.07667  | Camellia_Ekeygen             | libcrypto.so.1.1 |
-| 0x0e05e8 |   0.279915 | Camellia_EncryptBlock_Rounds | libcrypto.so.1.1 |
-| 0x0e07f8 |   0.27345  | Camellia_EncryptBlock_Rounds | libcrypto.so.1.1 |
-| 0x0df44c |   0.239999 | Camellia_Ekeygen             | libcrypto.so.1.1 |
-| 0x0e0778 |   0.150515 | Camellia_EncryptBlock_Rounds | libcrypto.so.1.1 |
- 
- __Grouped by function name__
- 
-| Function                     |   Leak Count |
-|:-----------------------------|-------------:|
-| Camellia_Ekeygen             |           30 |
-| Camellia_EncryptBlock_Rounds |           14 |
+![Microsurf markdown results](figures/sampleRes.png)

@@ -28,8 +28,7 @@ class SCDetector:
             If false, the secret will be passed directly as an argument
         jail: Specifies the a directory to which the binary will be jailed during emulation.
             For dynamic binaries, the user must ensure that the appropriate shared objects are present.
-        leakageModel: (Callable[[str], Any]): Function which applies a leakage model to the secret.
-            Example under microsurf.pipeline.LeakageModels
+            Optional for static binaries, defaults to a tmp directory.
         sharedObjects: List of shared libraries to trace. For example ['libssl.so.1.1', 'libcrypto.so.1.1'].
             Defaults to None, tracing only the target binary. Only applicable to dynamic binaries.
     """
@@ -41,9 +40,8 @@ class SCDetector:
         randGen: Callable[[], str],
         deterministic: bool,
         asFile: bool,
-        jail: str,
-        leakageModel: Callable[[str], Any],
         sharedObjects: list[str] = [],
+        jail: str = None,
     ) -> None:
         self.binPath = binPath
         self.args = args
@@ -51,7 +49,6 @@ class SCDetector:
         self.deterministic = deterministic
         self.asFile = asFile
         self.rootfs = jail
-        self.leakageModel = leakageModel
         self.sharedObjects = sharedObjects
         self._validate()
 
@@ -59,8 +56,11 @@ class SCDetector:
         resrnd = set()
         for _ in range(10):
             resrnd.add(self.randGen())
-        if len(resrnd) != 10:
-            raise ValueError("Provided random function does not produce random output.")
+        if len(resrnd) < 5:
+            log.error(
+                f"Provided random function not random enough (got {len(resrnd)} repeated values in 10 invocation."
+            )
+            exit(1)
         count = 0
         # Check that we only have a single secret marker
         for arg in self.args:
@@ -78,18 +78,21 @@ class SCDetector:
             rndGen=self.randGen,
             asFile=self.asFile,
             jail=self.rootfs,
-            leakageModel=self.leakageModel,
             sharedObjects=self.sharedObjects,
         )
 
     def exec(self, report=False):
-        """Run the side channel analysis
+        """Executes the side channel analysis (secret dependent memory accesses).
 
         Args:
-            report: Generate a markdown report.
+            report: Generates a markdown report. Defaults to False.
+
+        Returns:
+            A list of leak locations, as integers (IP values).
+            For dynamic objects, the offsets are reported.
         """
         pipeline = PipeLineExecutor(loader=self.bl)
-        pipeline.ITER_COUNT = 10
         pipeline.run()
         if report:
             pipeline.generateReport()
+        return pipeline.finalize()
