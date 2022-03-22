@@ -29,7 +29,7 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results: List[int] = []
-        self.ITER_COUNT = 5
+        self.ITER_COUNT = 100
         self.multiprocessing = True
 
     def run(self):
@@ -145,11 +145,7 @@ class PipeLineExecutor:
         res = lc.finalize()
         self.mivals = res
         self.results = [int(k, 16) for k in res.keys()]
-        endtime = time.time()
-        self.loader.runtime = time.strftime(
-            "%H:%M:%S", time.gmtime(endtime - starttime)
-        )
-        console.rule(f"results (took {self.loader.runtime})")
+        console.rule(f"MI results")
         self.MDresults = []
         # Pinpoint where the leak occured - for dyn. bins report only the offset:
         for (
@@ -269,6 +265,10 @@ class PipeLineExecutor:
         self.resultsDFTotal = pd.DataFrame.from_dict(self.MDresults)
         self.resultsDFTotal.drop(columns=["runtime Addr"], inplace=True)
         self.resultsDF.drop(columns=["runtime Addr"], inplace=True)
+        endtime = time.time()
+        self.loader.runtime = time.strftime(
+            "%H:%M:%S", time.gmtime(endtime - starttime)
+        )
 
     def generateReport(self):
         if not self.MDresults:
