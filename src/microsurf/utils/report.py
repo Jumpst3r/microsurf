@@ -1,3 +1,4 @@
+from collections import defaultdict
 import pandas
 from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.utils.logger import getLogger
@@ -12,12 +13,14 @@ class ReportGenerator:
         results: pandas.DataFrame,
         resultsReg: pandas.DataFrame,
         loader: BinaryLoader,
+        keylen: int,
     ) -> None:
         self.results = results
         self.resultsReg = resultsReg
         self.mdString = ""
         self.loader = loader
         self.datetime = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+        self.keylen = keylen
 
     def generateHeaders(self):
         self.mdString += f"# Microsurf Analysis Results \n\n"
@@ -34,6 +37,25 @@ class ReportGenerator:
 
     def generateResults(self):
         self.mdString += "## Results\n\n"
+
+        if self.resultsReg is not None:
+            if len(self.resultsReg[self.resultsReg["Prediction accuracy"] > 0.5]) > 0:
+                self.mdString += "### Executive summary\n\n"
+                self.mdString += f'Identified {len(self.resultsReg[self.resultsReg["Prediction accuracy"] > 0.5])} bits with prediction score > 0.5 \n\n'
+                bitVals = (
+                    self.resultsReg[self.resultsReg["Prediction accuracy"] > 0.5]
+                    .loc[:, ["Leakage model", "Prediction accuracy"]]
+                    .to_dict("index")
+                )
+                bitRes = defaultdict(list)
+                for _, dic in bitVals.items():
+                    bitNr = str(list(dic.values())[0]).split("-")[0]
+                    predScore = list(dic.values())[1]
+                    bitRes[bitNr].append(predScore)
+                for k in bitRes:
+                    bitRes[k] = max(bitRes[k])
+                # do something cool here, expected number of traces for leakfree vs our vals.
+
         self.mdString += "### Top 5, sorted by MI\n\n"
         self.mdString += self.results.sort_values(by=["MI score"], ascending=False)[
             :5
@@ -47,12 +69,26 @@ class ReportGenerator:
             .to_markdown(index=False)
         )
         if self.resultsReg is not None:
-            self.mdString += "\n ### Regression results for leaks with MI > 0.1\n\n"
-            self.mdString += "The [linear regression score](https://en.wikipedia.org/wiki/Coefficient_of_determination) is always in a [0,1] interval, with 1 indicating a perfect linear dependency between the memory read locations and L(secret) with L being the chosen leakage model.\n"
-            self.mdString += self.resultsReg.sort_values(
-                by=["Linear regression score"], ascending=False
-            ).to_markdown(index=False)
-            self.mdString += "\n"
+            if len(self.resultsReg[self.resultsReg["Linear regression score"] > 0]) > 0:
+                self.mdString += "\n ### Regression results for leaks with MI > 0.1\n\n"
+                self.mdString += "The [regression score](https://en.wikipedia.org/wiki/Coefficient_of_determination) is always in a [0,1] interval, with 1 indicating a perfect linear dependency between the memory read locations and L(secret) with L being the chosen leakage model.\n"
+                self.mdString += (
+                    self.resultsReg[self.resultsReg["Linear regression score"] > 0]
+                    .loc[:, self.resultsReg.columns != "Prediction accuracy"]
+                    .sort_values(by=["Linear regression score"], ascending=False)
+                    .to_markdown(index=False)
+                )
+                self.mdString += "\n"
+            if len(self.resultsReg[self.resultsReg["Prediction accuracy"] > 0]) > 0:
+                self.mdString += "\n ### Bitwise prediction scores \n\n"
+                self.mdString += "The prediction score is the accuracy in predicting a given bit value.\n"
+                self.mdString += (
+                    self.resultsReg[self.resultsReg["Prediction accuracy"] > 0]
+                    .loc[:, self.resultsReg.columns != "Linear regression score"]
+                    .sort_values(by=["Prediction accuracy"], ascending=False)
+                    .to_markdown(index=False)
+                )
+                self.mdString += "\n"
 
         self.mdString += "\n ### All Leaks, sorted by MI\n\n"
         self.mdString += self.results.sort_values(

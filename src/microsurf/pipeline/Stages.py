@@ -413,7 +413,7 @@ class DistributionAnalyzer(Stage):
             _, p_value = stats.mannwhitneyu(addrSetFixed, addrSetRnd)
             # _, p_value = stats.ks_2samp(addrSetFixed, addrSetRnd)
 
-            if LOGGING_LEVEL == logging.DEBUG:
+            if False and LOGGING_LEVEL == logging.DEBUG:
                 fig, ax = plt.subplots(1, 1)
                 fig.suptitle(
                     f"IP={hex(leakAddr)} offset={hex(offset)} in {libname} Added :{p_value < 0.01}, {p_value:e}"
@@ -484,6 +484,7 @@ class LeakageClassification(Stage):
         # The leakage function can return one dimensional data (ex. hamm. dist.) or multidimensional data (bit/byte slices)
         self.loader = binaryLoader
         self.results: Dict[str, float] = {}
+        self.KEYLEN = None
 
     def _key(self, t):
         return t[0]
@@ -510,7 +511,8 @@ class LeakageClassification(Stage):
                     fixedLenSecrets = False
         if fixedLenSecrets:
             CRYPTO_MODELS = getCryptoModels(slen)
-            log.info(f"using fixed key leakage models(KEYLEN: {slen})")
+            log.info(f"using fixed key leakage models (KEYLEN: {slen})")
+            self.KEYLEN = slen
         else:
             log.info("using variable key leakage models.")
             CRYPTO_MODELS = getCryptoModels(0)
@@ -634,9 +636,12 @@ class LeakageRegression(Stage):
                 regressor = tree.DecisionTreeClassifier(max_depth=2).fit(
                     X_train, Y_train.ravel()
                 )
+                classcore = regressor.score(X_test, Y_test.ravel())
+                regscore = 0
             else:
                 regressor = LinearRegression().fit(X_train, Y_train.ravel())
-            regscore = regressor.score(X_test, Y_test.ravel())
+                regscore = regressor.score(X_test, Y_test.ravel())
+                classcore = 0
 
             log.info(
                 f"Linear regression score for {hex(leakAddr - self.loader.getlibbase(self.loader.getlibname(leakAddr)))}: {regscore:.2f}"
@@ -657,7 +662,7 @@ class LeakageRegression(Stage):
                         for colid, _ in enumerate(X_test.T):
                             heatmat[rowid][absvals[rowid, colid]] = rowid + 1
                     sns.set(font_scale=0.4)
-                    plt.figure(figsize=(7, 2.5))
+                    plt.figure(figsize=(7, 3))
                     hfig = sns.heatmap(
                         heatmat,
                         cbar=False,
@@ -687,12 +692,12 @@ class LeakageRegression(Stage):
                         # ax.scatter(X_test, regressor.predict(X_test), c='g')
                     else:
                         ax.scatter(X_test, Y_test)
-                        # ax.plot(X_test, regressor.predict(X_test))
+                        ax.plot(X_test, regressor.predict(X_test))
                     ax.set_xlabel(f"{str(self.leakageModelFunction)}(secret)")
                     ax.set_ylabel("offset")
                     plt.savefig(f"debug/reg-{hex(leakAddr)}.png")
                     plt.close()
-            self.results[leakAddr] = regscore
+            self.results[leakAddr] = (regscore, classcore)
 
     def exec(self, *args, **kwargs):
         self.regress()

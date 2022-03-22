@@ -29,7 +29,7 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results: List[int] = []
-        self.ITER_COUNT = 200
+        self.ITER_COUNT = 5
         self.multiprocessing = True
 
     def run(self):
@@ -140,6 +140,7 @@ class PipeLineExecutor:
                 assert len(t.trace[leak]) > 0
         log.info("Rating leaks")
         lc = LeakageClassification(rndTraceCollection, self.loader, possibleLeaks)
+        self.KEYLEN = lc.KEYLEN
         lc.exec()
         res = lc.finalize()
         self.mivals = res
@@ -254,8 +255,6 @@ class PipeLineExecutor:
             rndTraceCollection.get(regressionTargets)
         )
 
-        regressionTracesTest.prune()
-        regressionTracesTrain.prune()
         regressor = LeakageRegression(
             regressionTracesTrain,
             regressionTracesTest,
@@ -265,7 +264,8 @@ class PipeLineExecutor:
         )
         regressor.exec()
         res = regressor.finalize()
-        self.resultsDF["Linear regression score"] = res.values()
+        self.resultsDF["Linear regression score"] = [a[0] for a in res.values()]
+        self.resultsDF["Prediction accuracy"] = [a[1] for a in res.values()]
         self.resultsDFTotal = pd.DataFrame.from_dict(self.MDresults)
         self.resultsDFTotal.drop(columns=["runtime Addr"], inplace=True)
         self.resultsDF.drop(columns=["runtime Addr"], inplace=True)
@@ -275,7 +275,10 @@ class PipeLineExecutor:
             log.info("no results - no file.")
             return
         rg = ReportGenerator(
-            results=self.resultsDFTotal, resultsReg=self.resultsDF, loader=self.loader
+            results=self.resultsDFTotal,
+            resultsReg=self.resultsDF,
+            loader=self.loader,
+            keylen=self.KEYLEN,
         )
         rg.saveMD()
 
