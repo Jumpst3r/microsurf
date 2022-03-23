@@ -297,17 +297,19 @@ class MemWatcher(Stage):
         self.binPath = binpath
         self.args = args
         self.rootfs = rootfs
-        self.locations = locations
+        self.locations = (
+            {l: 1 for l in locations} if locations is not None else locations
+        )
         self.ignoredObjects = ignoredObjects
         self.mappings = mappings
         self.deterministic = deterministic
 
     def _trace_mem_read(self, ql: Qiling, access, addr, size, value):
+        pc = ql.arch.regs.arch_pc
         if self.locations is None:
-            if self.getlibname(ql.arch.regs.arch_pc) not in self.ignoredObjects:
-                self.currenttrace.add(ql.arch.regs.arch_pc, addr)
-        elif ql.arch.regs.arch_pc in self.locations:
-            self.currenttrace.add(ql.arch.regs.arch_pc, addr)
+            self.currenttrace.add(pc, addr)
+        elif pc in self.locations:
+            self.currenttrace.add(pc, addr)
 
     def getlibname(self, addr):
         return next(
@@ -322,10 +324,9 @@ class MemWatcher(Stage):
         self.QLEngine = Qiling(
             [str(self.binPath), *[str(a) for a in args]],
             str(self.rootfs),
-            console=True,
-            log_override=getQilingLogger(),
-            verbose=-1,
+            console=False,
             multithread=True,
+            libcache=True,
         )
         self.currenttrace = MemTrace(secret)
         self.QLEngine.hook_mem_read(self._trace_mem_read)
@@ -359,6 +360,12 @@ class MemWatcher(Stage):
         self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
         self.QLEngine.run()
         self.QLEngine.stop()
+        dropset = []
+        for t in self.currenttrace.trace:
+            if self.getlibname(t) in self.ignoredObjects:
+                dropset.append(t)
+        self.currenttrace.remove(dropset)
+        log.info(f"dropped {len(dropset)} items")
         endtime = time.time()
         self.tracetime = endtime - start_time
 
