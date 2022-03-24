@@ -43,8 +43,8 @@ if __name__ == "__main__":
         "-nosalt",
         "-K",
         "@",
-        "-iv", # no IV for camellia
-        "0",
+        #"-iv", # no IV for camellia
+        # "0",
     ]
     sharedObjects = ['libssl', 'libcrypto']
     scd = SCDetector(

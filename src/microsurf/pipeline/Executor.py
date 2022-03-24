@@ -3,8 +3,10 @@ import logging
 import multiprocessing
 import sys
 from typing import List
+from matplotlib.style import available
 import numpy as np
 import ray
+import torch
 from sklearn.ensemble import RandomTreesEmbedding
 from microsurf.pipeline.tracetools.Trace import MemTrace, MemTraceCollection
 from tqdm import tqdm
@@ -29,10 +31,11 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results: List[int] = []
-        self.ITER_COUNT = 100
+        self.ITER_COUNT = 300
         self.multiprocessing = True
 
     def run(self):
+        log.debug(f"CUDA ? -> {torch.cuda.is_available()}")
         if not ray.is_initialized():
             ray.init()
         import time
@@ -44,7 +47,7 @@ class PipeLineExecutor:
         log.info("Estimating whether multiprocessing is worth it")
 
         start_time = time.time()
-        INI_CNT = 3
+        INI_CNT = 10
         memWatchers = [
             MemWatcher.remote(
                 self.loader.binPath,
@@ -77,6 +80,44 @@ class PipeLineExecutor:
         else:
             log.info(f"Enabled multiprocessing using {NB_CORES} (v)cores.")
         log.info(f"Identified {len(mt.possibleLeaks)} candidates")
+
+        log.info("Checking for non determinism")
+        memWatchers = [
+            MemWatcher.remote(
+                self.loader.binPath,
+                self.loader.args,
+                self.loader.rootfs,
+                self.loader.ignoredObjects,
+                self.loader.mappings,
+                locations=mt.possibleLeaks,
+                deterministic=self.loader.deterministic,
+            )
+            for _ in range(INI_CNT)
+        ]
+        [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in memWatchers]
+        futures = [m.getResults.remote() for m in memWatchers]
+        res = ray.get(futures)
+        [ray.kill(m) for m in memWatchers]
+
+        mt2 = MemTraceCollection([r[0] for r in res])
+
+        deterministic = True
+        for t in mt2.traces:
+            for t2 in mt2.traces:
+                for (k1, v1), (k2, v2) in zip(t.trace.items(), t2.trace.items()):
+                    if k1 != k2 or v1 != v2:
+                        deterministic = False
+
+        if not deterministic and self.loader.deterministic:
+            log.warn(
+                "Detected non deterministic behavior even though we are hooking sources of randomness !"
+            )
+        elif not deterministic and not self.loader.deterministic:
+            log.info(
+                "Non deterministic execution obeserved, consider setting deterministic=True"
+            )
+        elif deterministic:
+            log.info("Execution appears to be deterministic, reducing trace count.")
 
         if len(mt.possibleLeaks) > 1000:
             log.warning("!! this is a rare bug that I cannot track down !!")
@@ -124,7 +165,7 @@ class PipeLineExecutor:
         rndTraceCollection.prune()  # populates .possibleLeaks
         log.info("Filtering stochastic events")
         distAnalyzer = DistributionAnalyzer(
-            fixedTraceCollection, rndTraceCollection, self.loader
+            fixedTraceCollection, rndTraceCollection, self.loader, deterministic
         )
         distAnalyzer.exec()
         possibleLeaks = distAnalyzer.finalize()

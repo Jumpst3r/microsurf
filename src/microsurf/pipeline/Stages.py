@@ -365,7 +365,6 @@ class MemWatcher(Stage):
             if self.getlibname(t) in self.ignoredObjects:
                 dropset.append(t)
         self.currenttrace.remove(dropset)
-        log.info(f"dropped {len(dropset)} items")
         endtime = time.time()
         self.tracetime = endtime - start_time
 
@@ -379,12 +378,15 @@ class DistributionAnalyzer(Stage):
         fixedTraceCollection: MemTraceCollection,
         rndTraceCollection: MemTraceCollection,
         binaryLoader: BinaryLoader,
+        deterministic: bool,
     ):
         self.fixedTraceCollection = fixedTraceCollection
         self.rndTraceCollection = rndTraceCollection
         log.debug(f"len rndTraces: {len(self.rndTraceCollection)}")
         log.debug(f"len fixedTraces: {len(self.fixedTraceCollection)}")
+        log.debug(f"possible leaks: {self.rndTraceCollection.possibleLeaks}")
         self.loader = binaryLoader
+        self.deterministic = deterministic
 
     def analyze(self):
         results = []
@@ -450,7 +452,7 @@ class DistributionAnalyzer(Stage):
             # zero var fixed and pos. var. rand should be detected.
             if np.var(addrSetFixed) == 0 and np.var(addrSetRnd) > 0:
                 target_p_val = 0.5
-            if p_value < target_p_val:
+            if p_value < target_p_val or self.deterministic:
                 log.debug(
                     f"{libname}-{hex(offset)} len fixed / rnd = {len(addrSetFixed)}, {len(addrSetRnd)}"
                 )
@@ -504,18 +506,13 @@ class LeakageClassification(Stage):
         slen = -1
         fixedLenSecrets = True
         for s in secrets:
-            try:
-                secret = int(s)
+            secret = int(s, 16)
+            if slen == -1:
+                slen = len(s) * 4
+            elif slen != len(s) * 4:
+                log.error(slen)
+                log.error(s)
                 fixedLenSecrets = False
-            # secret hexadecimal
-            except ValueError:
-                secret = int(s, 16)
-                if slen == -1:
-                    slen = len(s) * 4
-                elif slen != len(s) * 4:
-                    log.error(slen)
-                    log.error(s)
-                    fixedLenSecrets = False
         if fixedLenSecrets:
             CRYPTO_MODELS = getCryptoModels(slen)
             log.info(f"using fixed key leakage models (KEYLEN: {slen})")
@@ -529,17 +526,14 @@ class LeakageClassification(Stage):
             # Store the secret according to the given leakage model
             for t in self.rndTraceCollection.traces:
                 if t.trace[leakAddr]:
-                    try:
-                        addList[int(t.secret)] = t.trace[leakAddr]
-                    except ValueError:
-                        addList[t.secret] = t.trace[leakAddr]
+                    addList[int(t.secret, 16)] = t.trace[leakAddr]
             # check that we have the same number of targets
             tlen = min([len(l) for l in list(addList.values())])
             for k, v in addList.items():
                 if len(v) != tlen:
                     addList[k] = v[:tlen]
             mat = np.zeros(
-                (len(addList), len(list(addList.values())[0])), dtype=np.uint64
+                (len(addList), len(list(addList.values())[0])), dtype=np.int32
             )
             secretMat = np.zeros((len(addList.keys()), len(CRYPTO_MODELS)))
             addList = OrderedDict(sorted(addList.items(), key=self._key))
@@ -550,13 +544,21 @@ class LeakageClassification(Stage):
                 ]
                 secretMat[idx] = [f(k) for f in CRYPTO_MODELS]
 
-            # For now, let's work with the mutual information instead of the more complex RDC
-            # We'll switch to the RDC stat. when we understand the nitty gritty math behind it.
+            from .NeuralLeakage import MIEstimator
+
             mivals = {}
             for col, lmodel in zip(secretMat.T, CRYPTO_MODELS):
-                mivals[lmodel] = np.mean(
-                    mutual_info_regression(mat, col, random_state=42)
-                )
+                # mival = np.mean(
+                #    mutual_info_regression(mat, col, random_state=42)
+                # )
+                mivalsum = []
+                for x in mat.T:
+                    mie = MIEstimator(x[:, None], col[:, None])
+                    mivalsum.append(mie.estimateMI())
+                mivalNeural = np.mean(mivalsum)
+                mivals[lmodel] = mivalNeural
+                # log.debug(f"MI (sklearn) score for {str(lmodel)}: {mival}")
+                log.debug(f"MI (MIE) score for {str(lmodel)}: {mivalNeural}")
             # log.info(f"mat{hex(leakAddr)} = {mat}")
             # log.info(f"secretMat = {secretMat}")
             # log.info(f"MI score for {hex(leakAddr)}: {mival:.2f}")
@@ -599,15 +601,11 @@ class LeakageRegression(Stage):
         # Store the secret according to the given leakage model
         for t in rndTraceCollection.traces:
             if t.trace[leakAddr]:
-                try:
-                    addList[int(t.secret)] = t.trace[leakAddr]
-                except ValueError:
-                    addList[t.secret] = t.trace[leakAddr]
+                addList[int(t.secret, 16)] = t.trace[leakAddr]
         # check that we have the same number of targets
         tlen = min([len(l) for l in list(addList.values())])
         for k, v in addList.items():
             if len(v) != tlen:
-                log.info(f"tlen: {tlen}, len(v):{len(v)}")
                 addList[k] = v[:tlen]
         mat = np.zeros((len(addList), len(list(addList.values())[0])), dtype=np.uint64)
         secretMat = np.zeros((len(addList.keys()), 1))
@@ -649,10 +647,14 @@ class LeakageRegression(Stage):
                 regressor = LinearRegression().fit(X_train, Y_train.ravel())
                 regscore = regressor.score(X_test, Y_test.ravel())
                 classcore = 0
-
-            log.info(
-                f"Linear regression score for {hex(leakAddr - self.loader.getlibbase(self.loader.getlibname(leakAddr)))}: {regscore:.2f}"
-            )
+            if regscore > classcore:
+                log.info(
+                    f"Linear regression score for {hex(leakAddr - self.loader.getlibbase(self.loader.getlibname(leakAddr)))}: {regscore:.2f}"
+                )
+            else:
+                log.info(
+                    f"Prediction score for {hex(leakAddr - self.loader.getlibbase(self.loader.getlibname(leakAddr)))}: {classcore:.2f}"
+                )
             if LOGGING_LEVEL == logging.DEBUG:
                 if tlen >= 2:
                     PLOTSECRETS = 5 if Y_test.shape[0] >= 5 else Y_test.shape[0]
