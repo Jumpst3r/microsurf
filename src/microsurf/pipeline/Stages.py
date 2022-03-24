@@ -18,7 +18,7 @@ import ray
 import scipy.stats as stats
 import seaborn as sns
 from capstone import CS_ARCH_ARM, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_MODE_ARM, Cs
-from microsurf.pipeline.LeakageModels import getCryptoModels
+from microsurf.pipeline.LeakageModels import getCryptoModels, identity
 from qiling import Qiling
 import microsurf
 
@@ -535,40 +535,24 @@ class LeakageClassification(Stage):
             mat = np.zeros(
                 (len(addList), len(list(addList.values())[0])), dtype=np.int32
             )
-            secretMat = np.zeros((len(addList.keys()), len(CRYPTO_MODELS)))
+            secretMat = np.zeros((len(addList.keys()), 1))
             addList = OrderedDict(sorted(addList.items(), key=self._key))
             for idx, k in enumerate(addList):
                 addr = addList[k]
                 mat[idx] = [
                     a - self.loader.getlibbase(self.loader.getlibname(a)) for a in addr
                 ]
-                secretMat[idx] = [f(k) for f in CRYPTO_MODELS]
+                secretMat[idx] = [identity()(k)]
 
-            from .NeuralLeakage import MIEstimator
+            from .NeuralLeakage import NeuralLeakageModel
 
-            mivals = {}
-            for col, lmodel in zip(secretMat.T, CRYPTO_MODELS):
-                # mival = np.mean(
-                #    mutual_info_regression(mat, col, random_state=42)
-                # )
-                mivalsum = []
-                for x in mat.T:
-                    mie = MIEstimator(x[:, None], col[:, None])
-                    mivalsum.append(mie.estimateMI())
-                mivalNeural = np.mean(mivalsum)
-                mivals[lmodel] = mivalNeural
-                # log.debug(f"MI (sklearn) score for {str(lmodel)}: {mival}")
-                log.debug(f"MI (MIE) score for {str(lmodel)}: {mivalNeural}")
+            log.info(f"learning optimal leakage model for PC {hex(leakAddr)}")
+            nleakage = NeuralLeakageModel(mat, secretMat, self.KEYLEN)
+            nleakage.train()
             # log.info(f"mat{hex(leakAddr)} = {mat}")
             # log.info(f"secretMat = {secretMat}")
             # log.info(f"MI score for {hex(leakAddr)}: {mival:.2f}")
-            mivals = {
-                k: v
-                for k, v in sorted(
-                    mivals.items(), key=lambda item: item[1], reverse=True
-                )
-            }
-            self.results[hex(leakAddr)] = mivals
+            self.results[hex(leakAddr)] = {nleakage, nleakage.getMI()}
 
     def exec(self, *args, **kwargs):
         self.analyze()
