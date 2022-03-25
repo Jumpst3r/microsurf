@@ -17,7 +17,7 @@ from microsurf.utils.generators import getRandomHexKeyFunction
 if __name__ == "__main__":
 
     binpath = "/home/nicolas/Documents/msc-thesis-work/tests/binaries/hexbitop/secret-x86-32.bin"
-    #binpath = "/home/nicolas/Documents/msc-thesis-work/tests/binaries/secret1/secret-x86-32.bin"
+    #binpath = "/home/nicolas/Documents/msc-thesis-work/tests/binaries/secret0/secret-x86-32.bin"
 
     args = ['@'] # single secret arg
 

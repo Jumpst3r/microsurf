@@ -547,11 +547,13 @@ class LeakageClassification(Stage):
             from .NeuralLeakage import NeuralLeakageModel
 
             log.info(f"learning optimal leakage model for PC {hex(leakAddr)}")
-            nleakage = NeuralLeakageModel(mat, secretMat, self.KEYLEN)
+            nleakage = NeuralLeakageModel(mat, secretMat, self.KEYLEN, leakAddr)
             nleakage.train()
+
             # log.info(f"mat{hex(leakAddr)} = {mat}")
             # log.info(f"secretMat = {secretMat}")
             # log.info(f"MI score for {hex(leakAddr)}: {mival:.2f}")
+            log.info(f"MI score for {hex(leakAddr)}: {nleakage.getMI()}")
             self.results[hex(leakAddr)] = {nleakage, nleakage.getMI()}
 
     def exec(self, *args, **kwargs):
