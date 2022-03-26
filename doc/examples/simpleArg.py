@@ -24,7 +24,7 @@ if __name__ == "__main__":
     scd = SCDetector(
         binPath=binpath,
         args=args,
-        randGen=getRandomHexKeyFunction(8),
+        randGen=getRandomHexKeyFunction(24),
         deterministic=False,
         asFile=False,
     )

@@ -553,8 +553,8 @@ class LeakageClassification(Stage):
             # log.info(f"mat{hex(leakAddr)} = {mat}")
             # log.info(f"secretMat = {secretMat}")
             # log.info(f"MI score for {hex(leakAddr)}: {mival:.2f}")
-            log.info(f"MI score for {hex(leakAddr)}: {nleakage.getMI()}")
-            self.results[hex(leakAddr)] = {nleakage, nleakage.getMI()}
+            log.info(f"MI score for {hex(leakAddr)}: {nleakage.MIScore}")
+            self.results[hex(leakAddr)] = (nleakage, nleakage.MIScore)
 
     def exec(self, *args, **kwargs):
         self.analyze()
