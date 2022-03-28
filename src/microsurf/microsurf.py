@@ -7,6 +7,7 @@ from typing import Any, Callable
 from .pipeline.Executor import PipeLineExecutor
 from .pipeline.Stages import BinaryLoader
 from .utils.logger import getConsole, getLogger
+from pathlib import Path
 
 console = getConsole()
 log = getLogger()
@@ -31,6 +32,7 @@ class SCDetector:
             Optional for static binaries, defaults to a tmp directory.
         sharedObjects: List of shared libraries to trace. For example ['libssl.so.1.1', 'libcrypto.so.1.1'].
             Defaults to None, tracing only the target binary. Only applicable to dynamic binaries.
+        resultsDir: Directory to which the markdown report will be saved, created if not not already existing.
     """
 
     def __init__(
@@ -42,6 +44,7 @@ class SCDetector:
         asFile: bool,
         sharedObjects: list[str] = [],
         jail: str = None,
+        resultsDir: str = 'results'
     ) -> None:
         self.binPath = binPath
         self.args = args
@@ -50,7 +53,11 @@ class SCDetector:
         self.asFile = asFile
         self.rootfs = jail
         self.sharedObjects = sharedObjects
+        self.resultsDir = resultsDir
         self._validate()
+
+        Path(self.resultsDir + '/assets').mkdir(parents=True, exist_ok=True)
+
 
     def _validate(self):
         resrnd = set()
@@ -79,6 +86,7 @@ class SCDetector:
             asFile=self.asFile,
             jail=self.rootfs,
             sharedObjects=self.sharedObjects,
+            reportDir=self.resultsDir
         )
 
     def exec(self, report=False):

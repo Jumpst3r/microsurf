@@ -20,7 +20,7 @@ from ..pipeline.Stages import (
     MemWatcher,
     LeakageRegression,
 )
-from ..utils.elf import getfnname
+from ..utils.elf import getfnname, getCodeSnippet
 from ..utils.logger import getConsole, getLogger, RayFilter
 
 log = getLogger()
@@ -31,7 +31,7 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results: List[int] = []
-        self.ITER_COUNT = 1000
+        self.ITER_COUNT = 200
         self.multiprocessing = True
 
     def run(self):
@@ -212,6 +212,11 @@ class PipeLineExecutor:
                             if ".so" in label
                             else getfnname(path, k)
                         )
+                        source = getCodeSnippet(
+                            getCodeSnippet(path, offset)
+                            if ".so" in label
+                            else getCodeSnippet(path, k)
+                        )
                         mivals = self.mivals[hex(k)]
                         console.print(
                             f'{offset:#08x} - [MI = {mivals[1]:.2f}] \t at {symbname if symbname else "??":<30} {label}'
@@ -223,10 +228,12 @@ class PipeLineExecutor:
                                 "MI score": mivals[1],
                                 "Leakage model": "neural-learnt",
                                 "Function": f'{symbname if symbname else "??":}',
+                                "src": source
                             }
                         )
                     else:
                         symbname = getfnname(path, k)
+                        source = getCodeSnippet(path, k)
                         mivals = self.mivals[hex(k)]
                         console.print(
                             f'{k:#08x} -[MI = {mivals[1]:.2f}]  \t at {symbname if symbname else "??":<30} {label}'
@@ -239,6 +246,7 @@ class PipeLineExecutor:
                                 "Leakage model": "neural-learnt",
                                 "Function": f'{symbname if symbname else "??":}',
                                 "Object": f'{path.split("/")[-1]}',
+                                "src": source
                             }
                         )
         import pandas as pd
@@ -256,7 +264,7 @@ class PipeLineExecutor:
             if x[["MI score"]].values[0] < 0.1:
                 dropped.append(idx)
         self.resultsDF.drop(dropped, inplace=True)
-        if len(self.resultsDF) == 0:
+        if True or len(self.resultsDF) == 0:
             log.info("no leaks with sufficient MI to attempt regression.")
             self.resultsDFTotal = pd.DataFrame.from_dict(self.MDresults)
             self.resultsDFTotal.drop(columns=["runtime Addr"], inplace=True)

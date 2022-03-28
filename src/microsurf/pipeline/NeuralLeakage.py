@@ -34,13 +34,14 @@ class MIEstimator(nn.Module):
 
 
 class NeuralLeakageModel(nn.Module):
-    def __init__(self, X, Y, keylen, leakAddr) -> None:
+    def __init__(self, X, Y, keylen, leakAddr, assetDir) -> None:
         super().__init__()
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.X = minmax_scale(np.array(X, dtype=np.float64), (-1, 1))
         self.keylen = keylen
         self.Y = self.binary(Y).reshape(Y.shape[0], keylen)
         self.OriginalY = Y
+        self.assetDir = assetDir
         self.HUnits = 300
         self.LeakageModel = nn.Sequential(
             nn.Linear(keylen, self.HUnits),
@@ -83,12 +84,8 @@ class NeuralLeakageModel(nn.Module):
         mest.trainEstimator(lpred)
         self.MIScore = mest.forward(lpred)
 
-        if self.MIScore > 0.1:
+        if self.MIScore > 0.3:
             import matplotlib.pyplot as plt
-            fig1, ax1 = plt.subplots()
-            ax1.plot(X,Y)
-            fig1.savefig(f"loss-{hex(self.leakAddr)}.png")
-            # plot saliency map
             input = self.binary(torch.tensor(2 ** (self.keylen) - 1)).reshape(
                 1, self.keylen
             )
@@ -98,10 +95,9 @@ class NeuralLeakageModel(nn.Module):
             pred.backward()
             keys = minmax_scale(torch.abs(input.grad)[0].detach().cpu().numpy(), (0, 1))
             grid_kws = {"height_ratios": (.9, .05), "hspace": .0001}
-            plt.figure(figsize=(7, 0.2))
-            plt.tight_layout()
             sns.set(font_scale=0.4)
-            f, (ax, cbar_ax) = plt.subplots(2, gridspec_kw=grid_kws)
+            plt.tight_layout()
+            f, (ax, cbar_ax) = plt.subplots(2, gridspec_kw=grid_kws, figsize=(7,2))
             ax = sns.heatmap(
                 keys[:, None].T,
                 ax=ax,
@@ -111,7 +107,7 @@ class NeuralLeakageModel(nn.Module):
                 cmap='Blues',
                 yticklabels=False
             )
-            f.savefig(f"debug/saliency-map-{hex(self.leakAddr)}.png", dpi=300)
+            f.savefig(f"{self.assetDir}/saliency-map-{hex(self.leakAddr)}.png", dpi=200, bbox_inches='tight')
 
     def __call__(self, Y):
         return self.LeakageModel(self.binary(Y).to(self.device))

@@ -65,6 +65,7 @@ class BinaryLoader(Stage):
         self.sharedObjects = kwargs.get("sharedObjects", [])
         self.ignoredObjects = []
         self.newArgs = self.args.copy()
+        self.reportDir = kwargs.get("reportDir", 'results')
         try:
             self.secretArgIndex = args.index("@")
         except IndexError as e:
@@ -547,14 +548,13 @@ class LeakageClassification(Stage):
             from .NeuralLeakage import NeuralLeakageModel
 
             log.info(f"learning optimal leakage model for PC {hex(leakAddr)}")
-            nleakage = NeuralLeakageModel(mat, secretMat, self.KEYLEN, leakAddr)
+            nleakage = NeuralLeakageModel(mat, secretMat, self.KEYLEN, leakAddr, self.loader.reportDir + '/assets')
             nleakage.train()
 
-            # log.info(f"mat{hex(leakAddr)} = {mat}")
-            # log.info(f"secretMat = {secretMat}")
-            # log.info(f"MI score for {hex(leakAddr)}: {mival:.2f}")
             log.info(f"MI score for {hex(leakAddr)}: {nleakage.MIScore}")
-            self.results[hex(leakAddr)] = (nleakage, nleakage.MIScore)
+            # TODO: let the user specify the MI threshold.
+            if nleakage.MIScore >= 0.3:
+                self.results[hex(leakAddr)] = (nleakage, nleakage.MIScore)
 
     def exec(self, *args, **kwargs):
         self.analyze()

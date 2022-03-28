@@ -4,9 +4,9 @@ all: arm intel-ia32 intel-x86-64
 arm: secret.c
 	arm-linux-gnueabi-gcc secret.c -static -g -O0 -o secret-arm.bin
 intel-x86-64: secret.c
-	gcc -g -O0 secret.c -static -o secret-x86-64.bin
+	gcc -gdwarf-4 -O0 secret.c -static -o secret-x86-64.bin
 intel-ia32: secret.c
-	gcc -g -O0 secret.c -static -m32 -o secret-x86-32.bin
+	gcc -gdwarf-4 -O0 secret.c -static -m32 -o secret-x86-32.bin
 
 
 

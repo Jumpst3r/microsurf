@@ -4,6 +4,7 @@ from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.utils.logger import getLogger
 from datetime import datetime
 
+
 log = getLogger()
 
 
@@ -57,9 +58,23 @@ class ReportGenerator:
                 # do something cool here, expected number of traces for leakfree vs our vals.
 
         self.mdString += "### Top 5, sorted by MI\n\n"
-        self.mdString += self.results.sort_values(by=["MI score"], ascending=False)[
-            :5
-        ].to_markdown(index=False)
+        for i in range(5):
+            row = self.results.sort_values(by=["MI score"], ascending=False)[
+                i:i+1
+            ]
+            if len(row) == 0: continue
+            self.mdString += row.loc[:, self.results.columns != "src"].to_markdown(index=False)
+            self.mdString += "\n\nSource code snippet:\n\n"
+            src = row[["src"]].values[0][0]
+            if  len(src) == 0:
+                self.mdString += "\n```\nn/a\n```"
+            else:
+                self.mdString += "```C\n"
+                for l in src:
+                    self.mdString += l
+                self.mdString += '\n```\n\n'
+            self.mdString += "\n\nKey bit dependencies (estimated):\n\n"
+            self.mdString += f"\n\n![saliency map](assets/saliency-map-{row[['offset']].values[0][0]}.png)\n\n"
         self.mdString += "\n ### Grouped by function name\n\n"
         self.mdString += (
             self.results.groupby("Function")
@@ -91,13 +106,13 @@ class ReportGenerator:
                 self.mdString += "\n"
 
         self.mdString += "\n ### All Leaks, sorted by MI\n\n"
-        self.mdString += self.results.sort_values(
+        self.mdString += self.results.loc[:, self.results.columns != "src"].sort_values(
             by=["MI score"], ascending=False
         ).to_markdown(index=False)
 
     def saveMD(self):
         self.generateHeaders()
         self.generateResults()
-        with open(f"results.md", "w") as f:
+        with open(f"{self.loader.reportDir}/results.md", "w") as f:
             f.writelines(self.mdString)
         log.info(f"Saved results to {f.name}")
