@@ -32,7 +32,6 @@ def getfnname(file, loc):
     return ELFSYBOLS[file][key]
 
 
-
 # taken from the pyelf examples page
 def decode_file_line(dwarfinfo, address):
     # Go over all the line programs in the DWARF information, looking for
@@ -62,13 +61,14 @@ def decode_file_line(dwarfinfo, address):
                 prevstate = entry.state
     return None, None
 
+
 def getCodeSnippet(file, loc):
     with open(file, "rb") as f:
         elf = ELFFile(f)
         path, ln = decode_file_line(elf.get_dwarf_info(), loc)
         try:
-            with open(path, 'r') as f2:
+            with open(path, "r") as f2:
                 lines = f2.readlines()
-            return lines[ln-3:ln+3]
+            return lines[ln - 3 : ln + 3]
         except Exception:
             return []

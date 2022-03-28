@@ -44,7 +44,7 @@ class SCDetector:
         asFile: bool,
         sharedObjects: list[str] = [],
         jail: str = None,
-        resultsDir: str = 'results'
+        resultsDir: str = "results",
     ) -> None:
         self.binPath = binPath
         self.args = args
@@ -56,8 +56,7 @@ class SCDetector:
         self.resultsDir = resultsDir
         self._validate()
 
-        Path(self.resultsDir + '/assets').mkdir(parents=True, exist_ok=True)
-
+        Path(self.resultsDir + "/assets").mkdir(parents=True, exist_ok=True)
 
     def _validate(self):
         resrnd = set()
@@ -86,7 +85,7 @@ class SCDetector:
             asFile=self.asFile,
             jail=self.rootfs,
             sharedObjects=self.sharedObjects,
-            reportDir=self.resultsDir
+            reportDir=self.resultsDir,
         )
 
     def exec(self, report=False):

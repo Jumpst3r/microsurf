@@ -10,6 +10,7 @@ from functools import lru_cache
 from pathlib import Path, PurePath
 from typing import Dict, List, Tuple
 import matplotlib.ticker as ticker
+from rich.progress import track
 
 import magic
 import matplotlib.pyplot as plt
@@ -65,7 +66,7 @@ class BinaryLoader(Stage):
         self.sharedObjects = kwargs.get("sharedObjects", [])
         self.ignoredObjects = []
         self.newArgs = self.args.copy()
-        self.reportDir = kwargs.get("reportDir", 'results')
+        self.reportDir = kwargs.get("reportDir", "results")
         try:
             self.secretArgIndex = args.index("@")
         except IndexError as e:
@@ -393,6 +394,9 @@ class DistributionAnalyzer(Stage):
         results = []
         skipped = 0
         for leakAddr in self.rndTraceCollection.possibleLeaks:
+            if self.deterministic:
+                results.append(leakAddr)
+                continue
             addrSetFixed = []
             addrSetRnd = []
             # Convert traces to trace per IP/PC
@@ -522,7 +526,9 @@ class LeakageClassification(Stage):
             log.info("using variable key leakage models.")
             CRYPTO_MODELS = getCryptoModels(0)
         # Convert traces to trace per IP/PC
-        for leakAddr in self.possibleLeaks:
+        for leakAddr in track(
+            self.possibleLeaks, description="training leakage models"
+        ):
             addList = {}
             # Store the secret according to the given leakage model
             for t in self.rndTraceCollection.traces:
@@ -548,12 +554,14 @@ class LeakageClassification(Stage):
             from .NeuralLeakage import NeuralLeakageModel
 
             log.info(f"learning optimal leakage model for PC {hex(leakAddr)}")
-            nleakage = NeuralLeakageModel(mat, secretMat, self.KEYLEN, leakAddr, self.loader.reportDir + '/assets')
+            nleakage = NeuralLeakageModel(
+                mat, secretMat, self.KEYLEN, leakAddr, self.loader.reportDir + "/assets"
+            )
             nleakage.train()
 
             log.info(f"MI score for {hex(leakAddr)}: {nleakage.MIScore}")
             # TODO: let the user specify the MI threshold.
-            if nleakage.MIScore >= 0.3:
+            if nleakage.MIScore >= 0.001:
                 self.results[hex(leakAddr)] = (nleakage, nleakage.MIScore)
 
     def exec(self, *args, **kwargs):

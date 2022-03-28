@@ -59,22 +59,23 @@ class ReportGenerator:
 
         self.mdString += "### Top 5, sorted by MI\n\n"
         for i in range(5):
-            row = self.results.sort_values(by=["MI score"], ascending=False)[
-                i:i+1
-            ]
-            if len(row) == 0: continue
-            self.mdString += row.loc[:, self.results.columns != "src"].to_markdown(index=False)
+            row = self.results.sort_values(by=["MI score"], ascending=False)[i : i + 1]
+            if len(row) == 0:
+                continue
+            self.mdString += row.loc[
+                :, ["offset", "MI score", "Leakage model", "Function"]
+            ].to_markdown(index=False)
             self.mdString += "\n\nSource code snippet:\n\n"
             src = row[["src"]].values[0][0]
-            if  len(src) == 0:
+            if len(src) == 0:
                 self.mdString += "\n```\nn/a\n```"
             else:
                 self.mdString += "```C\n"
                 for l in src:
                     self.mdString += l
-                self.mdString += '\n```\n\n'
-            self.mdString += "\n\nKey bit dependencies (estimated):\n\n"
-            self.mdString += f"\n\n![saliency map](assets/saliency-map-{row[['offset']].values[0][0]}.png)\n\n"
+                self.mdString += "\n```\n"
+            self.mdString += "\nKey bit dependencies (estimated):"
+            self.mdString += f"\n\n![saliency map](assets/saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png)\n\n"
         self.mdString += "\n ### Grouped by function name\n\n"
         self.mdString += (
             self.results.groupby("Function")
@@ -106,9 +107,11 @@ class ReportGenerator:
                 self.mdString += "\n"
 
         self.mdString += "\n ### All Leaks, sorted by MI\n\n"
-        self.mdString += self.results.loc[:, self.results.columns != "src"].sort_values(
-            by=["MI score"], ascending=False
-        ).to_markdown(index=False)
+        self.mdString += (
+            self.results.loc[:, ["offset", "MI score", "Leakage model", "Function"]]
+            .sort_values(by=["MI score"], ascending=False)
+            .to_markdown(index=False)
+        )
 
     def saveMD(self):
         self.generateHeaders()

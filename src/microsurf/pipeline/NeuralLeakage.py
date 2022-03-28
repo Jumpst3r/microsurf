@@ -60,7 +60,7 @@ class NeuralLeakageModel(nn.Module):
         X = []
         Y = []
         icount = 0
-        for e in range(200):
+        for e in range(500):
             lpred = self.LeakageModel(self.Y)
             mest.trainEstimator(lpred)
             loss = -mest.forward(lpred)
@@ -84,30 +84,33 @@ class NeuralLeakageModel(nn.Module):
         mest.trainEstimator(lpred)
         self.MIScore = mest.forward(lpred)
 
-        if self.MIScore > 0.3:
+        if self.MIScore > 0.001:
             import matplotlib.pyplot as plt
-            input = self.binary(torch.tensor(2 ** (self.keylen) - 1)).reshape(
-                1, self.keylen
-            )
+
+            input = torch.ones((1, self.keylen)).to(self.device)
             self.LeakageModel.eval()
             input.requires_grad = True
             pred = self.LeakageModel(input)
             pred.backward()
             keys = minmax_scale(torch.abs(input.grad)[0].detach().cpu().numpy(), (0, 1))
-            grid_kws = {"height_ratios": (.9, .05), "hspace": .0001}
+            grid_kws = {"height_ratios": (0.9, 0.05), "hspace": 0.0001}
             sns.set(font_scale=0.4)
             plt.tight_layout()
-            f, (ax, cbar_ax) = plt.subplots(2, gridspec_kw=grid_kws, figsize=(7,2))
+            f, (ax, cbar_ax) = plt.subplots(2, gridspec_kw=grid_kws, figsize=(7, 2))
             ax = sns.heatmap(
                 keys[:, None].T,
                 ax=ax,
                 cbar_ax=cbar_ax,
                 cbar_kws={"orientation": "horizontal"},
                 square=True,
-                cmap='Blues',
-                yticklabels=False
+                cmap="Blues",
+                yticklabels=False,
             )
-            f.savefig(f"{self.assetDir}/saliency-map-{hex(self.leakAddr)}.png", dpi=200, bbox_inches='tight')
+            f.savefig(
+                f"{self.assetDir}/saliency-map-{hex(self.leakAddr)}.png",
+                dpi=200,
+                bbox_inches="tight",
+            )
 
     def __call__(self, Y):
         return self.LeakageModel(self.binary(Y).to(self.device))

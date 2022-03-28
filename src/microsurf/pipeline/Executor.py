@@ -10,7 +10,7 @@ import torch
 from sklearn.ensemble import RandomTreesEmbedding
 from microsurf.pipeline.tracetools.Trace import MemTrace, MemTraceCollection
 from tqdm import tqdm
-
+from rich.progress import track
 from microsurf.utils.report import ReportGenerator
 
 from ..pipeline.Stages import (
@@ -31,7 +31,7 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results: List[int] = []
-        self.ITER_COUNT = 200
+        self.ITER_COUNT = 250
         self.multiprocessing = True
 
     def run(self):
@@ -119,9 +119,6 @@ class PipeLineExecutor:
         elif deterministic:
             log.info("Execution appears to be deterministic, reducing trace count.")
 
-        if len(mt.possibleLeaks) > 1000:
-            log.warning("!! this is a rare bug that I cannot track down !!")
-
         log.info("Running stage Leak Confirm")
 
         if self.multiprocessing:
@@ -148,12 +145,16 @@ class PipeLineExecutor:
             )
             for _ in range(NB_CORES)
         ]
-        for _ in tqdm(range(0, self.ITER_COUNT, NB_CORES)):
-
-            [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in memWatchers]
-            futuresFixed = [m.getResults.remote() for m in memWatchers]
-            res = ray.get(futuresFixed)
-            resFixed += [r[0] for r in res]
+        factor = 2 if deterministic else 1
+        for _ in track(
+            range(0, factor * self.ITER_COUNT, NB_CORES),
+            description="Collecting traces",
+        ):
+            if not deterministic:
+                [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in memWatchers]
+                futuresFixed = [m.getResults.remote() for m in memWatchers]
+                res = ray.get(futuresFixed)
+                resFixed += [r[0] for r in res]
             [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchers]
             futuresRnd = [m.getResults.remote() for m in memWatchers]
             res = ray.get(futuresRnd)
@@ -212,11 +213,12 @@ class PipeLineExecutor:
                             if ".so" in label
                             else getfnname(path, k)
                         )
-                        source = getCodeSnippet(
+                        source = (
                             getCodeSnippet(path, offset)
                             if ".so" in label
                             else getCodeSnippet(path, k)
                         )
+
                         mivals = self.mivals[hex(k)]
                         console.print(
                             f'{offset:#08x} - [MI = {mivals[1]:.2f}] \t at {symbname if symbname else "??":<30} {label}'
@@ -228,7 +230,7 @@ class PipeLineExecutor:
                                 "MI score": mivals[1],
                                 "Leakage model": "neural-learnt",
                                 "Function": f'{symbname if symbname else "??":}',
-                                "src": source
+                                "src": source,
                             }
                         )
                     else:
@@ -246,7 +248,7 @@ class PipeLineExecutor:
                                 "Leakage model": "neural-learnt",
                                 "Function": f'{symbname if symbname else "??":}',
                                 "Object": f'{path.split("/")[-1]}',
-                                "src": source
+                                "src": source,
                             }
                         )
         import pandas as pd
@@ -267,7 +269,7 @@ class PipeLineExecutor:
         if True or len(self.resultsDF) == 0:
             log.info("no leaks with sufficient MI to attempt regression.")
             self.resultsDFTotal = pd.DataFrame.from_dict(self.MDresults)
-            self.resultsDFTotal.drop(columns=["runtime Addr"], inplace=True)
+            # self.resultsDFTotal.drop(columns=["runtime Addr"], inplace=True)
             self.resultsDF = None
             self.generateReport()
             exit(0)
