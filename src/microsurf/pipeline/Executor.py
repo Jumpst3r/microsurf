@@ -3,12 +3,14 @@ import logging
 import multiprocessing
 import sys
 from typing import List
+from matplotlib.style import available
 import numpy as np
 import ray
+import torch
 from sklearn.ensemble import RandomTreesEmbedding
 from microsurf.pipeline.tracetools.Trace import MemTrace, MemTraceCollection
 from tqdm import tqdm
-
+from rich.progress import track
 from microsurf.utils.report import ReportGenerator
 
 from ..pipeline.Stages import (
@@ -18,7 +20,7 @@ from ..pipeline.Stages import (
     MemWatcher,
     LeakageRegression,
 )
-from ..utils.elf import getfnname
+from ..utils.elf import getfnname, getCodeSnippet
 from ..utils.logger import getConsole, getLogger, RayFilter
 
 log = getLogger()
@@ -29,10 +31,11 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results: List[int] = []
-        self.ITER_COUNT = 100
+        self.ITER_COUNT = 250
         self.multiprocessing = True
 
     def run(self):
+        log.debug(f"CUDA ? -> {torch.cuda.is_available()}")
         if not ray.is_initialized():
             ray.init()
         import time
@@ -44,7 +47,7 @@ class PipeLineExecutor:
         log.info("Estimating whether multiprocessing is worth it")
 
         start_time = time.time()
-        INI_CNT = 3
+        INI_CNT = 10
         memWatchers = [
             MemWatcher.remote(
                 self.loader.binPath,
@@ -78,8 +81,43 @@ class PipeLineExecutor:
             log.info(f"Enabled multiprocessing using {NB_CORES} (v)cores.")
         log.info(f"Identified {len(mt.possibleLeaks)} candidates")
 
-        if len(mt.possibleLeaks) > 1000:
-            log.warning("!! this is a rare bug that I cannot track down !!")
+        log.info("Checking for non determinism")
+        memWatchers = [
+            MemWatcher.remote(
+                self.loader.binPath,
+                self.loader.args,
+                self.loader.rootfs,
+                self.loader.ignoredObjects,
+                self.loader.mappings,
+                locations=mt.possibleLeaks,
+                deterministic=self.loader.deterministic,
+            )
+            for _ in range(INI_CNT)
+        ]
+        [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in memWatchers]
+        futures = [m.getResults.remote() for m in memWatchers]
+        res = ray.get(futures)
+        [ray.kill(m) for m in memWatchers]
+
+        mt2 = MemTraceCollection([r[0] for r in res])
+
+        deterministic = True
+        for t in mt2.traces:
+            for t2 in mt2.traces:
+                for (k1, v1), (k2, v2) in zip(t.trace.items(), t2.trace.items()):
+                    if k1 != k2 or v1 != v2:
+                        deterministic = False
+
+        if not deterministic and self.loader.deterministic:
+            log.warn(
+                "Detected non deterministic behavior even though we are hooking sources of randomness !"
+            )
+        elif not deterministic and not self.loader.deterministic:
+            log.info(
+                "Non deterministic execution obeserved, consider setting deterministic=True"
+            )
+        elif deterministic:
+            log.info("Execution appears to be deterministic, reducing trace count.")
 
         log.info("Running stage Leak Confirm")
 
@@ -107,12 +145,16 @@ class PipeLineExecutor:
             )
             for _ in range(NB_CORES)
         ]
-        for _ in tqdm(range(0, self.ITER_COUNT, NB_CORES)):
-
-            [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in memWatchers]
-            futuresFixed = [m.getResults.remote() for m in memWatchers]
-            res = ray.get(futuresFixed)
-            resFixed += [r[0] for r in res]
+        factor = 2 if deterministic else 1
+        for _ in track(
+            range(0, factor * self.ITER_COUNT, NB_CORES),
+            description="Collecting traces",
+        ):
+            if not deterministic:
+                [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in memWatchers]
+                futuresFixed = [m.getResults.remote() for m in memWatchers]
+                res = ray.get(futuresFixed)
+                resFixed += [r[0] for r in res]
             [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchers]
             futuresRnd = [m.getResults.remote() for m in memWatchers]
             res = ray.get(futuresRnd)
@@ -124,7 +166,7 @@ class PipeLineExecutor:
         rndTraceCollection.prune()  # populates .possibleLeaks
         log.info("Filtering stochastic events")
         distAnalyzer = DistributionAnalyzer(
-            fixedTraceCollection, rndTraceCollection, self.loader
+            fixedTraceCollection, rndTraceCollection, self.loader, deterministic
         )
         distAnalyzer.exec()
         possibleLeaks = distAnalyzer.finalize()
@@ -171,33 +213,42 @@ class PipeLineExecutor:
                             if ".so" in label
                             else getfnname(path, k)
                         )
-                        mivals = list(self.mivals[hex(k)].items())
+                        source = (
+                            getCodeSnippet(path, offset)
+                            if ".so" in label
+                            else getCodeSnippet(path, k)
+                        )
+
+                        mivals = self.mivals[hex(k)]
                         console.print(
-                            f'{offset:#08x} - [MI ({mivals[0][0]}) = {mivals[0][1]:.2f}] \t at {symbname if symbname else "??":<30} {label}'
+                            f'{offset:#08x} - [MI = {mivals[1]:.2f}] \t at {symbname if symbname else "??":<30} {label}'
                         )
                         self.MDresults.append(
                             {
                                 "runtime Addr": k,
                                 "offset": f"{offset:#08x}",
-                                "MI score": mivals[0][1],
-                                "Leakage model": mivals[0][0],
+                                "MI score": mivals[1],
+                                "Leakage model": "neural-learnt",
                                 "Function": f'{symbname if symbname else "??":}',
+                                "src": source,
                             }
                         )
                     else:
                         symbname = getfnname(path, k)
-                        mivals = list(self.mivals[hex(k)].items())
+                        source = getCodeSnippet(path, k)
+                        mivals = self.mivals[hex(k)]
                         console.print(
-                            f'{k:#08x} -[MI ({mivals[0][0]}) = {mivals[0][1]:.2f}]  \t at {symbname if symbname else "??":<30} {label}'
+                            f'{k:#08x} -[MI = {mivals[1]:.2f}]  \t at {symbname if symbname else "??":<30} {label}'
                         )
                         self.MDresults.append(
                             {
                                 "runtime Addr": k,
                                 "offset": f"{k:#08x}",
-                                "MI score": mivals[0][1],
-                                "Leakage model": mivals[0][0],
+                                "MI score": mivals[1],
+                                "Leakage model": "neural-learnt",
                                 "Function": f'{symbname if symbname else "??":}',
                                 "Object": f'{path.split("/")[-1]}',
+                                "src": source,
                             }
                         )
         import pandas as pd
@@ -215,10 +266,10 @@ class PipeLineExecutor:
             if x[["MI score"]].values[0] < 0.1:
                 dropped.append(idx)
         self.resultsDF.drop(dropped, inplace=True)
-        if len(self.resultsDF) == 0:
+        if True or len(self.resultsDF) == 0:
             log.info("no leaks with sufficient MI to attempt regression.")
             self.resultsDFTotal = pd.DataFrame.from_dict(self.MDresults)
-            self.resultsDFTotal.drop(columns=["runtime Addr"], inplace=True)
+            # self.resultsDFTotal.drop(columns=["runtime Addr"], inplace=True)
             self.resultsDF = None
             self.generateReport()
             exit(0)

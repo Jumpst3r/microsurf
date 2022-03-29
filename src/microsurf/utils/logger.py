@@ -4,9 +4,9 @@ import warnings
 from rich.console import Console
 from rich.logging import RichHandler
 
-# warnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore")
 
-LOGGING_LEVEL = logging.INFO
+LOGGING_LEVEL = logging.DEBUG
 
 logging.basicConfig(
     level="INFO",

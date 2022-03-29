@@ -12,19 +12,19 @@ import random
 import sys
 from microsurf.microsurf import SCDetector
 from microsurf.pipeline.LeakageModels import hamming, identity
-from microsurf.utils.generators import genRandInt
+from microsurf.utils.generators import getRandomHexKeyFunction
 
 if __name__ == "__main__":
 
-    binpath = "/home/nicolas/Documents/msc-thesis-work/tests/binaries/multipc/nosecret-x86-32.bin"
-    #binpath = "/home/nicolas/Documents/msc-thesis-work/tests/binaries/secret1/secret-x86-32.bin"
+    binpath = "/home/nicolas/Documents/msc-thesis-work/tests/binaries/hexbitop/secret-x86-64.bin"
+    #binpath = "/home/nicolas/Documents/msc-thesis-work/tests/binaries/secret0/secret-x86-32.bin"
 
     args = ['@'] # single secret arg
 
     scd = SCDetector(
         binPath=binpath,
         args=args,
-        randGen=genRandInt,
+        randGen=getRandomHexKeyFunction(24),
         deterministic=False,
         asFile=False,
     )
