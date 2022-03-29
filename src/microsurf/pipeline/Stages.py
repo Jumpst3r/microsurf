@@ -534,6 +534,8 @@ class LeakageClassification(Stage):
             for t in self.rndTraceCollection.traces:
                 if t.trace[leakAddr]:
                     addList[int(t.secret, 16)] = t.trace[leakAddr]
+                else: 
+                    continue
             # check that we have the same number of targets
             tlen = min([len(l) for l in list(addList.values())])
             for k, v in addList.items():
@@ -596,6 +598,8 @@ class LeakageRegression(Stage):
         for t in rndTraceCollection.traces:
             if t.trace[leakAddr]:
                 addList[int(t.secret, 16)] = t.trace[leakAddr]
+            else:
+                continue
         # check that we have the same number of targets
         tlen = min([len(l) for l in list(addList.values())])
         for k, v in addList.items():

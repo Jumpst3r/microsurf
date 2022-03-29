@@ -3,25 +3,23 @@ import logging
 import multiprocessing
 import sys
 from typing import List
-from matplotlib.style import available
+
 import numpy as np
 import ray
 import torch
-from sklearn.ensemble import RandomTreesEmbedding
-from microsurf.pipeline.tracetools.Trace import MemTrace, MemTraceCollection
-from tqdm import tqdm
-from rich.progress import track
+from microsurf.pipeline.tracetools.Trace import (MemTrace, MemTraceCollection,
+                                                 MemTraceCollectionFixed,
+                                                 MemTraceCollectionRandom)
 from microsurf.utils.report import ReportGenerator
+from rich.progress import track
+from sklearn.ensemble import RandomTreesEmbedding
+from tqdm import tqdm
 
-from ..pipeline.Stages import (
-    BinaryLoader,
-    DistributionAnalyzer,
-    LeakageClassification,
-    MemWatcher,
-    LeakageRegression,
-)
-from ..utils.elf import getfnname, getCodeSnippet
-from ..utils.logger import getConsole, getLogger, RayFilter
+from ..pipeline.Stages import (BinaryLoader, DistributionAnalyzer,
+                               LeakageClassification, LeakageRegression,
+                               MemWatcher)
+from ..utils.elf import getCodeSnippet, getfnname
+from ..utils.logger import RayFilter, getConsole, getLogger
 
 log = getLogger()
 console = getConsole()
@@ -34,7 +32,7 @@ class PipeLineExecutor:
         self.ITER_COUNT = 250
         self.multiprocessing = True
 
-    def run(self):
+    def run(self, detector):
         log.debug(f"CUDA ? -> {torch.cuda.is_available()}")
         if not ray.is_initialized():
             ray.init()
@@ -43,70 +41,12 @@ class PipeLineExecutor:
         starttime = time.time()
 
         log.info("Identifying possible leak locations")
-
-        log.info("Estimating whether multiprocessing is worth it")
-
-        start_time = time.time()
-        INI_CNT = 10
-        memWatchers = [
-            MemWatcher.remote(
-                self.loader.binPath,
-                self.loader.args,
-                self.loader.rootfs,
-                self.loader.ignoredObjects,
-                self.loader.mappings,
-            )
-            for _ in range(INI_CNT)
-        ]
-        [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchers]
-        futures = [m.getResults.remote() for m in memWatchers]
-        res = ray.get(futures)
-        mt = MemTraceCollection([r[0] for r in res])
-        emutime = np.mean([r[1] for r in res])
-        end_time = time.time()
-        [ray.kill(m) for m in memWatchers]
-        mt.prune()
-        NB_CORES = (
-            multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 2 else 1
-        )
-        if (emutime * INI_CNT) < (end_time - start_time):
-            log.warning("multiprocessing overhead too large, switching to sequencial.")
-            ray.shutdown()
-            ray.init(local_mode=True, logging_level=logging.CRITICAL)
-            sys.stdout = RayFilter(sys.stdout)
-            sys.stderr = RayFilter(sys.stderr)
-            self.multiprocessing = False
-            NB_CORES = 1
-        else:
-            log.info(f"Enabled multiprocessing using {NB_CORES} (v)cores.")
-        log.info(f"Identified {len(mt.possibleLeaks)} candidates")
+        tracesRnd = detector.recordTracesRandom(10)
+        possibleLeaks = tracesRnd.possibleLeaks
 
         log.info("Checking for non determinism")
-        memWatchers = [
-            MemWatcher.remote(
-                self.loader.binPath,
-                self.loader.args,
-                self.loader.rootfs,
-                self.loader.ignoredObjects,
-                self.loader.mappings,
-                locations=mt.possibleLeaks,
-                deterministic=self.loader.deterministic,
-            )
-            for _ in range(INI_CNT)
-        ]
-        [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in memWatchers]
-        futures = [m.getResults.remote() for m in memWatchers]
-        res = ray.get(futures)
-        [ray.kill(m) for m in memWatchers]
-
-        mt2 = MemTraceCollection([r[0] for r in res])
-
-        deterministic = True
-        for t in mt2.traces:
-            for t2 in mt2.traces:
-                for (k1, v1), (k2, v2) in zip(t.trace.items(), t2.trace.items()):
-                    if k1 != k2 or v1 != v2:
-                        deterministic = False
+        tracesFixed = detector.recordTracesFixed(5)
+        deterministic = detector.isDeterministic(tracesFixed)
 
         if not deterministic and self.loader.deterministic:
             log.warn(
@@ -121,67 +61,24 @@ class PipeLineExecutor:
 
         log.info("Running stage Leak Confirm")
 
-        if self.multiprocessing:
-            log.info(f"batching {2*self.ITER_COUNT} jobs across {NB_CORES} cores")
+        t_rand = detector.recordTracesRandom(500, pcList=possibleLeaks)
 
-        resFixed = []
-        resRnd = []
-        binPath_id = ray.put(self.loader.binPath)
-        args_id = ray.put(self.loader.args)
-        rootfs_id = ray.put(self.loader.rootfs)
-        ignoredObjects_id = ray.put(self.loader.ignoredObjects)
-        mappings_id = ray.put(self.loader.mappings)
-        deterministic_id = ray.put(self.loader.deterministic)
-        possibleLeaks_id = ray.put(mt.possibleLeaks)
-        memWatchers = [
-            MemWatcher.remote(
-                binPath_id,
-                args_id,
-                rootfs_id,
-                ignoredObjects_id,
-                mappings_id,
-                deterministic=deterministic_id,
-                locations=possibleLeaks_id,
+        if not deterministic:
+            t_fixed = detector.recordTracesFixed(500, pcList=possibleLeaks)
+        else:
+            t_fixed = None
+
+        if not deterministic:
+            log.info("Filtering stochastic events")
+            distAnalyzer = DistributionAnalyzer(
+                t_fixed, t_rand, self.loader, deterministic
             )
-            for _ in range(NB_CORES)
-        ]
-        factor = 2 if deterministic else 1
-        for _ in track(
-            range(0, factor * self.ITER_COUNT, NB_CORES),
-            description="Collecting traces",
-        ):
-            if not deterministic:
-                [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in memWatchers]
-                futuresFixed = [m.getResults.remote() for m in memWatchers]
-                res = ray.get(futuresFixed)
-                resFixed += [r[0] for r in res]
-            [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchers]
-            futuresRnd = [m.getResults.remote() for m in memWatchers]
-            res = ray.get(futuresRnd)
-            resRnd += [r[0] for r in res]
-
-        rndTraceCollection = MemTraceCollection(resRnd)
-        fixedTraceCollection = MemTraceCollection(resFixed)
-
-        rndTraceCollection.prune()  # populates .possibleLeaks
-        log.info("Filtering stochastic events")
-        distAnalyzer = DistributionAnalyzer(
-            fixedTraceCollection, rndTraceCollection, self.loader, deterministic
-        )
-        distAnalyzer.exec()
-        possibleLeaks = distAnalyzer.finalize()
-        degenerateCases = set()
-        # traces which, for non-deterministic reasons, do not contain meaningful info
-        for idx, t in enumerate(rndTraceCollection.traces):
-            for leak in possibleLeaks:
-                if len(t.trace[leak]) == 0:
-                    degenerateCases.add(idx)
-        rndTraceCollection.remove(degenerateCases)
-        for idx, t in enumerate(rndTraceCollection.traces):
-            for leak in possibleLeaks:
-                assert len(t.trace[leak]) > 0
+            distAnalyzer.exec()
+            possibleLeaks = distAnalyzer.finalize()
+        
+        
         log.info("Rating leaks")
-        lc = LeakageClassification(rndTraceCollection, self.loader, possibleLeaks)
+        lc = LeakageClassification(t_rand, self.loader, possibleLeaks)
         self.KEYLEN = lc.KEYLEN
         lc.exec()
         res = lc.finalize()

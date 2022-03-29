@@ -12,5 +12,6 @@ Welcome to microsurf's documentation!
    
    installation.md
    quickstart.md
+   advanced.md
 
 

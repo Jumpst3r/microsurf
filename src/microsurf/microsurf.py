@@ -3,18 +3,23 @@ Microsurf: An architecture independent dynamic side channel detection framework
 @author nicolas
 """
 
-from typing import Any, Callable
+import multiprocessing
+from typing import Any, Callable, List
+
+from microsurf.pipeline.tracetools.Trace import MemTraceCollectionFixed, MemTraceCollectionRandom
 from .pipeline.Executor import PipeLineExecutor
-from .pipeline.Stages import BinaryLoader
+from .pipeline.Stages import BinaryLoader, MemWatcher
 from .utils.logger import getConsole, getLogger
 from pathlib import Path
+import ray
+from rich.progress import track
 
 console = getConsole()
 log = getLogger()
 
 
 class SCDetector:
-    """The SCDetector class can be used to detect secret dependent memory accesses in generic applications
+    """The SCDetector class can be used to detect secret dependent memory accesses in generic applications.
 
     Args:
         binPath: Path to the target binary
@@ -55,8 +60,16 @@ class SCDetector:
         self.sharedObjects = sharedObjects
         self.resultsDir = resultsDir
         self._validate()
-
         Path(self.resultsDir + "/assets").mkdir(parents=True, exist_ok=True)
+        Path(self.resultsDir + "/traces").mkdir(parents=True, exist_ok=True)
+        if not ray.is_initialized():
+            ray.init()
+        self.binPath_id = ray.put(self.loader.binPath)
+        self.args_id = ray.put(self.loader.args)
+        self.rootfs_id = ray.put(self.loader.rootfs)
+        self.ignoredObjects_id = ray.put(self.loader.ignoredObjects)
+        self.mappings_id = ray.put(self.loader.mappings)
+        self.deterministic_id = ray.put(self.loader.deterministic)
 
     def _validate(self):
         resrnd = set()
@@ -76,7 +89,7 @@ class SCDetector:
                 f"Only a single secret marker can be included in the argument list ({self.args})"
             )
             exit(1)
-        self.bl = BinaryLoader(
+        self.loader = BinaryLoader(
             path=self.binPath,
             args=self.args,
             dryRunOnly=True,
@@ -89,7 +102,7 @@ class SCDetector:
         )
 
     def exec(self, report=False):
-        """Executes the side channel analysis (secret dependent memory accesses).
+        """Executes the complete side channel analysis pipeline with sensible defaults (secret dependent memory accesses).
 
         Args:
             report: Generates a markdown report. Defaults to False.
@@ -98,8 +111,110 @@ class SCDetector:
             A list of leak locations, as integers (IP values).
             For dynamic objects, the offsets are reported.
         """
-        pipeline = PipeLineExecutor(loader=self.bl)
-        pipeline.run()
+        pipeline = PipeLineExecutor(loader=self.loader)
+        pipeline.run(self)
         if report:
             pipeline.generateReport()
         return pipeline.finalize()
+
+    def recordTracesFixed(self, n: int, pcList: List = None, **kwargs) -> MemTraceCollectionFixed:
+        """Record memory accesses resulting from repeated execution with the same secret.
+
+        By default, it will target:
+            - For dynamic binaries only the shared objects which were passed to the SCDetector constructor
+            - For static binaries, the entire binary.
+            - Determinism will be fixed if the appropriate parameter was passed to the SCDetector constructor.
+        The last point can be modified by passing deterministic=True or deterministic=False
+
+        Args:
+            n: Number of traces to collect
+            pcList: Specifc PCs to trace. Defaults to None.
+
+        Returns:
+            A MemTraceCollectionFixed object representing the set of traces collected.
+        """
+        self.deterministic = kwargs.get("deterministic", self.loader.deterministic)
+        NB_CORES = multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 2 else 1
+        memWatchers = [
+                    MemWatcher.remote(
+                        self.binPath_id,
+                        self.args_id,
+                        self.rootfs_id,
+                        self.ignoredObjects_id,
+                        self.mappings_id,
+                        locations=pcList,
+                        deterministic=self.deterministic
+                    )
+                    for _ in range(NB_CORES)
+                ]
+        resList = []
+        for _ in track(
+            range(0, n, NB_CORES),
+            description=f"Collecting {n} traces with fixed secrets",
+        ):
+            [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in memWatchers]
+            futures = [m.getResults.remote() for m in memWatchers]
+            res = ray.get(futures)
+            resList += [r[0] for r in res]
+        mt = MemTraceCollectionFixed([r[0] for r in res])
+        return mt
+    
+    def isDeterministic(self, traceCollection: MemTraceCollectionFixed) -> bool:
+        """Determines whether the memory reads are deterministic given a MemTraceCollectionFixed object
+
+        Args:
+            traceCollection: A MemTraceCollectionFixed object with at least two traces.
+
+        Returns:
+            True or False, depending on whether the execution is deterministic.
+        """
+        deterministic = True
+        for t in traceCollection.traces:
+            for t2 in traceCollection.traces:
+                for (k1, v1), (k2, v2) in zip(t.trace.items(), t2.trace.items()):
+                    if k1 != k2 or v1 != v2:
+                        deterministic = False
+        return deterministic
+    
+    def recordTracesRandom(self, n: int, pcList: List = None, **kwargs) -> MemTraceCollectionRandom:
+        """Record memory accesses resulting from repeated execution with random secrets.
+
+        By default, it will target:
+            - For dynamic binaries only the shared objects which were passed to the SCDetector constructor
+            - For static binaries, the entire binary.
+            - Determinism will be fixed if the appropriate parameter was passed to the SCDetector constructor.
+        The last point can be modified by passing deterministic=True or deterministic=False
+
+        Args:
+            n: Number of traces to collect
+            pcList: Specifc PCs to trace. Defaults to None.
+
+        Returns:
+            A MemTraceCollectionRandom object representing the set of traces collected.
+        """
+        self.deterministic = kwargs.get("deterministic", self.loader.deterministic)
+        NB_CORES = multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 2 else 1
+        memWatchers = [
+                    MemWatcher.remote(
+                        self.binPath_id,
+                        self.args_id,
+                        self.rootfs_id,
+                        self.ignoredObjects_id,
+                        self.mappings_id,
+                        locations=pcList,
+                        deterministic=self.deterministic
+                    )
+                    for _ in range(NB_CORES)
+                ]
+        resList = []
+        for _ in track(
+            range(0, n, NB_CORES),
+            description=f"Collecting {n} traces with random secrets",
+        ):
+            [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchers]
+            futures = [m.getResults.remote() for m in memWatchers]
+            res = ray.get(futures)
+            resList += [r[0] for r in res]
+        mt = MemTraceCollectionRandom([r[0] for r in res])
+        mt.prune()
+        return mt
