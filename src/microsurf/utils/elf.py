@@ -11,6 +11,7 @@ ELFSYBOLS = {}
 
 log = getLogger()
 
+
 def getfnname(file: str, loc: int):
     """Returns the symbol of the function for a given PC
 
@@ -21,7 +22,7 @@ def getfnname(file: str, loc: int):
     Returns:
        the symbol name of the function for a given PC
        if the symbols are not stripped, None otherwise.
-    
+
     Raises:
         FileNotFoundError: If the given file does not exist.
     """

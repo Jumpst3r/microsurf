@@ -9,13 +9,14 @@ console = getConsole()
 class MemTrace:
     """Represents a single Memory Trace object.
 
-        Initialized with a secret, trace items are then
-        added by calling the .add(ip, memaddr) method.
+    Initialized with a secret, trace items are then
+    added by calling the .add(ip, memaddr) method.
 
-        Args:
-            secret: The secret that was used when the trace
-            was recorded.
-        """
+    Args:
+        secret: The secret that was used when the trace
+        was recorded.
+    """
+
     def __init__(self, secret) -> None:
         self.secret = secret
         self.trace: Dict[int, List[int]] = defaultdict(list)
@@ -46,9 +47,10 @@ class MemTrace:
 class MemTraceCollection:
     """A generic MemorTraceCollection object.
 
-        Args:
-            traces: The traces that make up the collection.
-        """
+    Args:
+        traces: The traces that make up the collection.
+    """
+
     def __init__(self, traces: list[MemTrace]):
         self.traces = traces
         self.possibleLeaks: Set[int] = set()
@@ -81,42 +83,46 @@ class MemTraceCollection:
                     res.append(t)
         return res
 
-    def toDisk(self, path:str):
+    def toDisk(self, path: str):
         pass
 
     def __len__(self):
         return len(self.traces)
 
+
 class MemTraceCollectionFixed(MemTraceCollection):
     """Creates a Memory trace collection object.
-        The secrets of the individual traces must be fixed.
+    The secrets of the individual traces must be fixed.
 
-        Args:
-            traces: List of memory traces
-        """
+    Args:
+        traces: List of memory traces
+    """
+
     def __init__(self, traces: list[MemTrace]):
         super().__init__(traces)
         secrets = set()
         for t in self.traces:
             secrets.add(t.secret)
-        assert(len(secrets) == 1)
+        assert len(secrets) == 1
+
 
 class MemTraceCollectionRandom(MemTraceCollection):
     """Creates a Memory trace collection object.
-        The secrets of the individual traces must be random.
+    The secrets of the individual traces must be random.
 
-        Args:
-            traces: List of memory traces
-        """
+    Args:
+        traces: List of memory traces
+    """
+
     def __init__(self, traces: list[MemTrace]):
         super().__init__(traces)
         self.possibleLeaks: Set[int] = set()
 
     def prune(self) -> None:
         """Automatically prunes the trace collection:
-        Iterates pairwise over all traces, if they have differing secrets but 
+        Iterates pairwise over all traces, if they have differing secrets but
         the same list of memory accesses for a given PC, remove the PC from both traces.
-        
+
         Calling .prune() populates the field .possibleLeaks which contains:
         Every PC for which different secrets resulted in different memory accesses.
         Note that these may not automatically be directly secret dependent and may

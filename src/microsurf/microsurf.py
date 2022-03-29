@@ -6,7 +6,10 @@ Microsurf: An architecture independent dynamic side channel detection framework
 import multiprocessing
 from typing import Any, Callable, List
 
-from microsurf.pipeline.tracetools.Trace import MemTraceCollectionFixed, MemTraceCollectionRandom
+from microsurf.pipeline.tracetools.Trace import (
+    MemTraceCollectionFixed,
+    MemTraceCollectionRandom,
+)
 from .pipeline.Executor import PipeLineExecutor
 from .pipeline.Stages import BinaryLoader, MemWatcher
 from .utils.logger import getConsole, getLogger
@@ -117,7 +120,9 @@ class SCDetector:
             pipeline.generateReport()
         return pipeline.finalize()
 
-    def recordTracesFixed(self, n: int, pcList: List = None, **kwargs) -> MemTraceCollectionFixed:
+    def recordTracesFixed(
+        self, n: int, pcList: List = None, **kwargs
+    ) -> MemTraceCollectionFixed:
         """Record memory accesses resulting from repeated execution with the same secret.
 
         By default, it will target:
@@ -134,19 +139,21 @@ class SCDetector:
             A MemTraceCollectionFixed object representing the set of traces collected.
         """
         self.deterministic = kwargs.get("deterministic", self.loader.deterministic)
-        NB_CORES = multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 2 else 1
+        NB_CORES = (
+            multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 2 else 1
+        )
         memWatchers = [
-                    MemWatcher.remote(
-                        self.binPath_id,
-                        self.args_id,
-                        self.rootfs_id,
-                        self.ignoredObjects_id,
-                        self.mappings_id,
-                        locations=pcList,
-                        deterministic=self.deterministic
-                    )
-                    for _ in range(NB_CORES)
-                ]
+            MemWatcher.remote(
+                self.binPath_id,
+                self.args_id,
+                self.rootfs_id,
+                self.ignoredObjects_id,
+                self.mappings_id,
+                locations=pcList,
+                deterministic=self.deterministic,
+            )
+            for _ in range(NB_CORES)
+        ]
         resList = []
         for _ in track(
             range(0, n, NB_CORES),
@@ -158,7 +165,7 @@ class SCDetector:
             resList += [r[0] for r in res]
         mt = MemTraceCollectionFixed([r[0] for r in res])
         return mt
-    
+
     def isDeterministic(self, traceCollection: MemTraceCollectionFixed) -> bool:
         """Determines whether the memory reads are deterministic given a MemTraceCollectionFixed object
 
@@ -175,8 +182,10 @@ class SCDetector:
                     if k1 != k2 or v1 != v2:
                         deterministic = False
         return deterministic
-    
-    def recordTracesRandom(self, n: int, pcList: List = None, **kwargs) -> MemTraceCollectionRandom:
+
+    def recordTracesRandom(
+        self, n: int, pcList: List = None, **kwargs
+    ) -> MemTraceCollectionRandom:
         """Record memory accesses resulting from repeated execution with random secrets.
 
         By default, it will target:
@@ -193,19 +202,21 @@ class SCDetector:
             A MemTraceCollectionRandom object representing the set of traces collected.
         """
         self.deterministic = kwargs.get("deterministic", self.loader.deterministic)
-        NB_CORES = multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 2 else 1
+        NB_CORES = (
+            multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 2 else 1
+        )
         memWatchers = [
-                    MemWatcher.remote(
-                        self.binPath_id,
-                        self.args_id,
-                        self.rootfs_id,
-                        self.ignoredObjects_id,
-                        self.mappings_id,
-                        locations=pcList,
-                        deterministic=self.deterministic
-                    )
-                    for _ in range(NB_CORES)
-                ]
+            MemWatcher.remote(
+                self.binPath_id,
+                self.args_id,
+                self.rootfs_id,
+                self.ignoredObjects_id,
+                self.mappings_id,
+                locations=pcList,
+                deterministic=self.deterministic,
+            )
+            for _ in range(NB_CORES)
+        ]
         resList = []
         for _ in track(
             range(0, n, NB_CORES),

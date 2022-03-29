@@ -534,7 +534,7 @@ class LeakageClassification(Stage):
             for t in self.rndTraceCollection.traces:
                 if t.trace[leakAddr]:
                     addList[int(t.secret, 16)] = t.trace[leakAddr]
-                else: 
+                else:
                     continue
             # check that we have the same number of targets
             tlen = min([len(l) for l in list(addList.values())])

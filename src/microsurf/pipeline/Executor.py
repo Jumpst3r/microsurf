@@ -7,17 +7,24 @@ from typing import List
 import numpy as np
 import ray
 import torch
-from microsurf.pipeline.tracetools.Trace import (MemTrace, MemTraceCollection,
-                                                 MemTraceCollectionFixed,
-                                                 MemTraceCollectionRandom)
+from microsurf.pipeline.tracetools.Trace import (
+    MemTrace,
+    MemTraceCollection,
+    MemTraceCollectionFixed,
+    MemTraceCollectionRandom,
+)
 from microsurf.utils.report import ReportGenerator
 from rich.progress import track
 from sklearn.ensemble import RandomTreesEmbedding
 from tqdm import tqdm
 
-from ..pipeline.Stages import (BinaryLoader, DistributionAnalyzer,
-                               LeakageClassification, LeakageRegression,
-                               MemWatcher)
+from ..pipeline.Stages import (
+    BinaryLoader,
+    DistributionAnalyzer,
+    LeakageClassification,
+    LeakageRegression,
+    MemWatcher,
+)
 from ..utils.elf import getCodeSnippet, getfnname
 from ..utils.logger import RayFilter, getConsole, getLogger
 
@@ -75,8 +82,7 @@ class PipeLineExecutor:
             )
             distAnalyzer.exec()
             possibleLeaks = distAnalyzer.finalize()
-        
-        
+
         log.info("Rating leaks")
         lc = LeakageClassification(t_rand, self.loader, possibleLeaks)
         self.KEYLEN = lc.KEYLEN
