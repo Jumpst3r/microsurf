@@ -36,11 +36,11 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results: List[int] = []
-        self.ITER_COUNT = 250
+        self.ITER_COUNT = 200
         self.multiprocessing = True
 
     def run(self, detector):
-        log.debug(f"CUDA ? -> {torch.cuda.is_available()}")
+        log.info(f"CUDA ? -> {torch.cuda.is_available()}")
         if not ray.is_initialized():
             ray.init()
         import time
@@ -48,7 +48,7 @@ class PipeLineExecutor:
         starttime = time.time()
 
         log.info("Identifying possible leak locations")
-        tracesRnd = detector.recordTracesRandom(10)
+        tracesRnd = detector.recordTracesRandom(20)
         possibleLeaks = tracesRnd.possibleLeaks
 
         log.info("Checking for non determinism")
@@ -66,12 +66,12 @@ class PipeLineExecutor:
         elif deterministic:
             log.info("Execution appears to be deterministic, reducing trace count.")
 
-        log.info("Running stage Leak Confirm")
+        log.info(f"Running stage Leak Confirm ({len(possibleLeaks)} possible leaks)")
 
-        t_rand = detector.recordTracesRandom(500, pcList=possibleLeaks)
+        t_rand = detector.recordTracesRandom(self.ITER_COUNT, pcList=possibleLeaks)
 
         if not deterministic:
-            t_fixed = detector.recordTracesFixed(500, pcList=possibleLeaks)
+            t_fixed = detector.recordTracesFixed(self.ITER_COUNT, pcList=possibleLeaks)
         else:
             t_fixed = None
 
@@ -113,12 +113,12 @@ class PipeLineExecutor:
                         offset = k - self.loader.getlibbase(label)
                         symbname = (
                             getfnname(path, offset)
-                            if ".so" in label
+                            if ".so" in label or self.loader.dynamic
                             else getfnname(path, k)
                         )
                         source = (
                             getCodeSnippet(path, offset)
-                            if ".so" in label
+                            if ".so" in label or self.loader.dynamic
                             else getCodeSnippet(path, k)
                         )
 

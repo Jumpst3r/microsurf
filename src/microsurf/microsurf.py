@@ -163,7 +163,7 @@ class SCDetector:
             futures = [m.getResults.remote() for m in memWatchers]
             res = ray.get(futures)
             resList += [r[0] for r in res]
-        mt = MemTraceCollectionFixed([r[0] for r in res])
+        mt = MemTraceCollectionFixed([r for r in resList])
         return mt
 
     def isDeterministic(self, traceCollection: MemTraceCollectionFixed) -> bool:
@@ -226,6 +226,6 @@ class SCDetector:
             futures = [m.getResults.remote() for m in memWatchers]
             res = ray.get(futures)
             resList += [r[0] for r in res]
-        mt = MemTraceCollectionRandom([r[0] for r in res])
+        mt = MemTraceCollectionRandom([r for r in resList])
         mt.prune()
         return mt

@@ -7,8 +7,20 @@ from sklearn.preprocessing import minmax_scale
 import torch
 from microsurf.utils.logger import LOGGING_LEVEL, getLogger
 import seaborn as sns
+import torch.nn.functional as F
 
 log = getLogger()
+
+class shiftedRELU(nn.Module):
+    __constants__ = ['inplace']
+    inplace: bool
+    def __init__(self, weights = 1,  inplace: bool = False):
+        super().__init__()
+        self.inplace = inplace
+        self.weights = weights
+
+    def forward(self, input):
+        return F.relu(input-0.5, inplace=self.inplace)
 
 
 class MIEstimator(nn.Module):
@@ -42,41 +54,54 @@ class NeuralLeakageModel(nn.Module):
         self.Y = self.binary(Y).reshape(Y.shape[0], keylen)
         self.OriginalY = Y
         self.assetDir = assetDir
-        self.HUnits = 300
+        self.HUnits = 2 * keylen
         self.LeakageModel = nn.Sequential(
             nn.Linear(keylen, self.HUnits),
             nn.ReLU(),
             nn.Dropout(0.3),
             nn.Linear(self.HUnits, self.HUnits),
             nn.ReLU(),
-            nn.Dropout(0.3),
             nn.Linear(self.HUnits, 1),
         ).to(self.device)
         self.leakAddr = leakAddr
+        log.debug(f"{X.shape[0]} samples")
 
     def train(self):
-        optim = torch.optim.Adam(self.LeakageModel.parameters(), lr=1e-3)
+        optim = torch.optim.Adam(self.LeakageModel.parameters(), lr=1e-4)
         mest = MIEstimator(self.X)
         X = []
         Y = []
         icount = 0
-        for e in range(500):
+        l30 = 0
+        l30avg = []
+        earlyStop = False
+        for e in range(1,100):
             lpred = self.LeakageModel(self.Y)
             mest.trainEstimator(lpred)
             loss = -mest.forward(lpred)
             optim.zero_grad()
             loss.backward()
+            l30avg.append(loss.cpu().item())
             # stop learning if MI doesn't increase => FP
-            if e >= 40 and -loss < 0.001:
+            if e >= 100 and -loss < 0.0001:
                 break
             optim.step()
             # good enough, stop
             if -loss > 1.0:
                 icount += 1
-                if icount > 10:
+                if icount > 30:
                     break
             if e % 10 == 0:
                 log.debug(f"loss at epoch {e} is {loss:.8f}")
+            if earlyStop:
+                if e % 50 == 0:
+                    if l30 == 0:
+                        l30 = np.mean(l30avg)
+                        l30avg = []
+                    else:
+                        if np.abs(np.mean(l30avg) - l30) < 0.1:
+                            log.info("early stop !")
+                            break
             X.append(e)
             Y.append(loss.cpu().detach().numpy())
         self.LeakageModel.eval()
@@ -84,15 +109,18 @@ class NeuralLeakageModel(nn.Module):
         mest.trainEstimator(lpred)
         self.MIScore = mest.forward(lpred)
 
-        if self.MIScore > 0.001:
-            import matplotlib.pyplot as plt
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        ax.plot(X,Y)
+        fig.savefig(f"loss{hex(self.leakAddr)}.png")
+        if self.MIScore > 0.1:
 
             input = torch.ones((1, self.keylen)).to(self.device)
             self.LeakageModel.eval()
             input.requires_grad = True
             pred = self.LeakageModel(input)
-            pred.backward()
-            keys = minmax_scale(torch.abs(input.grad)[0].detach().cpu().numpy(), (0, 1))
+            grad = torch.autograd.grad(pred, input, retain_graph=True)[0]
+            keys = minmax_scale(torch.abs(grad)[0].detach().cpu().numpy(), (0, 1))
             grid_kws = {"height_ratios": (0.9, 0.05), "hspace": 0.0001}
             sns.set(font_scale=0.4)
             plt.tight_layout()
@@ -116,12 +144,9 @@ class NeuralLeakageModel(nn.Module):
         return self.LeakageModel(self.binary(Y).to(self.device))
 
     def binary(self, Y):
-        Y = torch.tensor(Y, dtype=torch.int64)
-        mask = 2 ** torch.arange(self.keylen)
-        return (
-            Y.unsqueeze(-1)
-            .bitwise_and(mask)
-            .ne(0)
-            .byte()
-            .to(self.device, dtype=torch.float32)
-        )
+        YL = np.zeros((Y.shape[0], self.keylen))
+        for i,x in enumerate(Y): # row
+            binR = bin(x[0].item())[2:].zfill(self.keylen)
+            for j,bit in enumerate(binR): # col
+                YL[i][j] = int(bit)
+        return  torch.tensor(YL).to(self.device, dtype=torch.float32)

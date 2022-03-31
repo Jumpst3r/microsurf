@@ -101,5 +101,5 @@ def getCodeSnippet(file: str, loc: int) -> List[str]:
                 lines = f2.readlines()
             return lines[ln - 3 : ln + 3]
         except Exception as e:
-            log.error(f"Fetching source lines failed: {str(e)}, returning []")
+            log.debug(f"source lines not available for PC {hex(loc)}")
             return []

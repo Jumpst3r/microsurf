@@ -21,6 +21,7 @@ import seaborn as sns
 from capstone import CS_ARCH_ARM, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_MODE_ARM, Cs
 from microsurf.pipeline.LeakageModels import getCryptoModels, identity
 from qiling import Qiling
+from qiling.const import QL_VERBOSE
 import microsurf
 
 from ..utils.hijack import (
@@ -327,6 +328,7 @@ class MemWatcher(Stage):
             [str(self.binPath), *[str(a) for a in args]],
             str(self.rootfs),
             console=False,
+            verbose=QL_VERBOSE.DISABLED,
             multithread=True,
             libcache=True,
         )
@@ -537,6 +539,8 @@ class LeakageClassification(Stage):
                 else:
                     continue
             # check that we have the same number of targets
+            if not addList.values():
+                continue
             tlen = min([len(l) for l in list(addList.values())])
             for k, v in addList.items():
                 if len(v) != tlen:
@@ -544,7 +548,7 @@ class LeakageClassification(Stage):
             mat = np.zeros(
                 (len(addList), len(list(addList.values())[0])), dtype=np.int32
             )
-            secretMat = np.zeros((len(addList.keys()), 1))
+            secretMat = np.zeros((len(addList.keys()), 1), dtype=object)
             addList = OrderedDict(sorted(addList.items(), key=self._key))
             for idx, k in enumerate(addList):
                 addr = addList[k]
@@ -563,7 +567,7 @@ class LeakageClassification(Stage):
 
             log.info(f"MI score for {hex(leakAddr)}: {nleakage.MIScore}")
             # TODO: let the user specify the MI threshold.
-            if nleakage.MIScore >= 0.001:
+            if nleakage.MIScore >= 0.1:
                 self.results[hex(leakAddr)] = (nleakage, nleakage.MIScore)
 
     def exec(self, *args, **kwargs):
