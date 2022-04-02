@@ -1,3 +1,4 @@
+import pickle
 from typing import Dict, List, Set
 from collections import defaultdict
 from microsurf.utils.logger import getConsole, getLogger
@@ -84,7 +85,8 @@ class MemTraceCollection:
         return res
 
     def toDisk(self, path: str):
-        pass
+        with open(path, 'wb') as f:
+            pickle.dump(self, f)
 
     def __len__(self):
         return len(self.traces)

@@ -10,7 +10,6 @@ def getRandomHexKeyFunction(keylen: int):
     """
     return lambda: _genRandomHexKey(keylen)
 
-
 def _genRandomHexKey(keylen: int) -> str:
     kbytes = keylen // 8
     rbytes = os.urandom(kbytes)

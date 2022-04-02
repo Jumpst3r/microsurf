@@ -14,8 +14,8 @@ int main(int argc, char *argv[]) {
     int bval4 = CHECK_BIT(secret, 4);
     int bval5 = CHECK_BIT(secret, 5);
     int bval6 = CHECK_BIT(secret, 6);
-    for(int i = 0; i < 10; i++){
-        int val = T[i + (bval4 & bval5)];
+    for(int i = 0; i < 1; i++){
+        int val = T[i + (bval4 & bval6)];
     }
     return 0;
 }

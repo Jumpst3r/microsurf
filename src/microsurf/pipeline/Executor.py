@@ -3,7 +3,7 @@ import logging
 import multiprocessing
 import sys
 from typing import List
-
+import pickle
 import numpy as np
 import ray
 import torch
@@ -36,7 +36,7 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results: List[int] = []
-        self.ITER_COUNT = 200
+        self.ITER_COUNT = 500
         self.multiprocessing = True
 
     def run(self, detector):
@@ -48,7 +48,8 @@ class PipeLineExecutor:
         starttime = time.time()
 
         log.info("Identifying possible leak locations")
-        tracesRnd = detector.recordTracesRandom(20)
+        tracesRnd = detector.recordTracesRandom(5)
+        
         possibleLeaks = tracesRnd.possibleLeaks
 
         log.info("Checking for non determinism")
@@ -68,7 +69,11 @@ class PipeLineExecutor:
 
         log.info(f"Running stage Leak Confirm ({len(possibleLeaks)} possible leaks)")
 
-        t_rand = detector.recordTracesRandom(self.ITER_COUNT, pcList=possibleLeaks)
+        # t_rand = detector.recordTracesRandom(self.ITER_COUNT, pcList=possibleLeaks)
+        # t_rand.toDisk('rnd.pickle')
+        
+        with open('rnd.pickle', 'rb') as f:
+            t_rand = pickle.load(f)
 
         if not deterministic:
             t_fixed = detector.recordTracesFixed(self.ITER_COUNT, pcList=possibleLeaks)
