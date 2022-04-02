@@ -136,7 +136,7 @@ class NeuralLeakageModel(nn.Module):
             ax = sns.heatmap(
                 keys[::-1, None].T,
                 ax=ax,
-                xticklabels=[(self.keylen - i) for i in range(self.keylen) if i % 2 == 0], # MSB to LSB
+                xticklabels=[(self.keylen - i) for i in range(self.keylen) if i % 2 == 0 else " "], # MSB to LSB
                 cbar_ax=cbar_ax,
                 cbar_kws={"orientation": "horizontal"},
                 square=True,
