@@ -95,6 +95,7 @@ class NeuralLeakageModel(nn.Module):
             mest_val = MIEstimator(x_val)
             mest_train = MIEstimator(x_train)
             old_val_mean = 0
+            new_val_mean = 0
             for e in range(1, 5):
                 lpred = lm(y_train)
                 mest_train.trainEstimator(lpred)
@@ -106,7 +107,7 @@ class NeuralLeakageModel(nn.Module):
                     icount += 1
                     if icount > 30:
                         break
-                if e % 5 == 0:
+                if e % 10 == 0:
                     lm.eval()
                     with torch.no_grad():
                         lpred = lm(y_val)
@@ -114,10 +115,10 @@ class NeuralLeakageModel(nn.Module):
                     loss_val = -mest_val.forward(lpred)
                     Y_val.append(loss_val.cpu().detach().numpy())
                     X_val.append(e)
-                    if len(Y_val) > 5:
-                        if not old_val_mean:
-                            old_val_mean = np.mean(Y_val[-5:])
-                        eps = (np.mean(Y_val[-5:]) - old_val_mean)
+                    if len(Y_val) > 10:
+                        new_val_mean = np.mean(Y_val[-5:])
+                        old_val_mean = np.mean(Y_val[-10:-5])
+                        eps = (new_val_mean - old_val_mean)
                         log.debug(f"eps={eps}")
                         if eps > 0:
                             log.debug(f"early stopping (eps={eps})")
@@ -146,13 +147,12 @@ class NeuralLeakageModel(nn.Module):
             ax.plot(X_val, Y_val)
             fig.savefig(f"loss{hex(self.leakAddr)}-{idx}.png")
         if self.MIScore > 0.00001:
-            grid_kws = {"height_ratios": (0.7, 0.05, 0.05),}
             sns.set(font_scale=0.3)
             plt.tight_layout()
             f, ax = plt.subplots()
             dependencies =  np.stack(heatmaps, axis=0).reshape(-1, heatmaps[0].shape[1])
             # add a column to the far right to include the MI score in the heatmap
-            np.c_[dependencies, self.MIScores[:dependencies.shape[0]]]
+            dependencies = np.c_[dependencies, self.MIScores[:dependencies.shape[0]]]
             deps = dependencies.copy()
             mi = dependencies.copy()
             deps.T[-1] = np.nan
