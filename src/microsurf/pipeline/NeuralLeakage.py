@@ -68,11 +68,11 @@ class NeuralLeakageModel(nn.Module):
         log.debug(f"{X.shape[1]} entries / samples")
 
     def train(self):
-        self.MIScores = []
+        self.MIScores = np.zeros((self.X.shape[1]))
         heatmaps = []
 
         for idx, x in tqdm(enumerate(self.X.T)):
-            if idx == 3:
+            if idx == 6:
                 break
             x = x[:, None]
             x_train, x_val, y_train, y_val = train_test_split(
@@ -94,7 +94,8 @@ class NeuralLeakageModel(nn.Module):
             icount = 0
             mest_val = MIEstimator(x_val)
             mest_train = MIEstimator(x_train)
-            for e in range(1, 500):
+            old_val_mean = 0
+            for e in range(1, 5):
                 lpred = lm(y_train)
                 mest_train.trainEstimator(lpred)
                 loss = -mest_train.forward(lpred)
@@ -105,7 +106,7 @@ class NeuralLeakageModel(nn.Module):
                     icount += 1
                     if icount > 30:
                         break
-                if e % 10 == 0:
+                if e % 5 == 0:
                     lm.eval()
                     with torch.no_grad():
                         lpred = lm(y_val)
@@ -113,6 +114,14 @@ class NeuralLeakageModel(nn.Module):
                     loss_val = -mest_val.forward(lpred)
                     Y_val.append(loss_val.cpu().detach().numpy())
                     X_val.append(e)
+                    if len(Y_val) > 5:
+                        if not old_val_mean:
+                            old_val_mean = np.mean(Y_val[-5:])
+                        eps = (np.mean(Y_val[-5:]) - old_val_mean)
+                        log.debug(f"eps={eps}")
+                        if eps > 0:
+                            log.debug(f"early stopping (eps={eps})")
+                            break
                     log.debug(f"val loss at epoch {e} is {loss_val:.8f}")
                     lm.train()
                 Y.append(loss.cpu().detach().numpy())
@@ -123,7 +132,7 @@ class NeuralLeakageModel(nn.Module):
             score = mest_total.forward(lpred).detach().cpu().numpy()
             # TODO add sklearn call for comp.
             log.info(f"MI for iter {idx} of {hex(self.leakAddr)}: {score}")
-            self.MIScores.append(score)
+            self.MIScores[idx] = score
             input = torch.ones((1, self.keylen)) - 0.5
             lm.eval()
             input.requires_grad = True
@@ -137,29 +146,40 @@ class NeuralLeakageModel(nn.Module):
             ax.plot(X_val, Y_val)
             fig.savefig(f"loss{hex(self.leakAddr)}-{idx}.png")
         if self.MIScore > 0.00001:
-            grid_kws = {"height_ratios": (0.9, 0.05), "hspace": 0.5}
-            sns.set(font_scale=0.4)
+            grid_kws = {"height_ratios": (0.7, 0.05, 0.05),}
+            sns.set(font_scale=0.3)
             plt.tight_layout()
-            f, (ax, cbar_ax) = plt.subplots(2, gridspec_kw=grid_kws, figsize=(10, 2))
+            f, ax = plt.subplots()
+            dependencies =  np.stack(heatmaps, axis=0).reshape(-1, heatmaps[0].shape[1])
+            # add a column to the far right to include the MI score in the heatmap
+            np.c_[dependencies, self.MIScores[:dependencies.shape[0]]]
+            deps = dependencies.copy()
+            mi = dependencies.copy()
+            deps.T[-1] = np.nan
+            mi.T[:-1] = np.nan
             ax = sns.heatmap(
-                np.stack(heatmaps, axis=0).reshape(-1, heatmaps[0].shape[1]),
+                deps,
                 ax=ax,
+                cbar_kws={"orientation": "horizontal", 'label': 'Estimated key bit dependency', 'shrink': 0.5, },
+                cmap="Blues",                
+            )
+            sns.heatmap(
+                mi,
+                cmap="Reds",
+                ax = ax,
+                cbar_kws={'label': 'Estimated MI score per call', 'location': 'top', 'shrink': 0.5},
                 xticklabels=[
-                    (self.keylen - i) if i % 2 else " " for i in range(self.keylen)
-                ],  # MSB to LSB
+                    (self.keylen - i) if i % 2 == 0 else " " for i in range(self.keylen)
+                ]+ ["MI"],
                 yticklabels=[
                     f"inv-{i}" if i % 2 else " " for i in range(self.X.shape[1])
                 ],  # MSB to LSB
-                cbar_ax=cbar_ax,
-                cbar_kws={"orientation": "horizontal"},
-                square=True,
-                cmap="Blues",
-                linewidths=0.25,
+                linewidths=0.5,
             )
             ax.xaxis.set_label_position("top")
             f.savefig(
                 f"{self.assetDir}/saliency-map-{hex(self.leakAddr)}.png",
-                dpi=200,
+                dpi=300,
                 bbox_inches="tight",
             )
 
