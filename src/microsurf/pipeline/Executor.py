@@ -49,7 +49,7 @@ class PipeLineExecutor:
 
         log.info("Identifying possible leak locations")
         tracesRnd = detector.recordTracesRandom(5)
-        
+
         possibleLeaks = tracesRnd.possibleLeaks
 
         log.info("Checking for non determinism")
@@ -71,8 +71,8 @@ class PipeLineExecutor:
 
         # t_rand = detector.recordTracesRandom(self.ITER_COUNT, pcList=possibleLeaks)
         # t_rand.toDisk('rnd.pickle')
-        
-        with open('rnd.pickle', 'rb') as f:
+
+        with open("aes-key-expand-700.pickle", "rb") as f:
             t_rand = pickle.load(f)
 
         if not deterministic:

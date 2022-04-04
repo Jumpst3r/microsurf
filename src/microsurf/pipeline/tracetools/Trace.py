@@ -85,7 +85,7 @@ class MemTraceCollection:
         return res
 
     def toDisk(self, path: str):
-        with open(path, 'wb') as f:
+        with open(path, "wb") as f:
             pickle.dump(self, f)
 
     def __len__(self):
