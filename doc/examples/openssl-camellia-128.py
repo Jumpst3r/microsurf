@@ -34,7 +34,7 @@ if __name__ == "__main__":
         #"cast5-ecb",
         #"bf-ecb",
         #"des3",
-        "des-ecb",
+        "aes-128-ecb",
         "-e",
         "-in",
         "input.bin",

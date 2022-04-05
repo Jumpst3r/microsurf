@@ -72,8 +72,6 @@ class NeuralLeakageModel(nn.Module):
         heatmaps = []
 
         for idx, x in tqdm(enumerate(self.X.T)):
-            if idx > 6:
-                break
             x = x[:, None]
             x_train, x_val, y_train, y_val = train_test_split(
                 x, self.Y, test_size=0.5, random_state=42
@@ -96,7 +94,7 @@ class NeuralLeakageModel(nn.Module):
             mest_train = MIEstimator(x_train)
             old_val_mean = 0
             new_val_mean = 0
-            for e in range(1, 200):
+            for e in range(1, 150):
                 lpred = lm(y_train)
                 mest_train.trainEstimator(lpred)
                 loss = -mest_train.forward(lpred)
@@ -107,7 +105,7 @@ class NeuralLeakageModel(nn.Module):
                     icount += 1
                     if icount > 30:
                         break
-                if e % 10 == 0:
+                if e % 20 == 0:
                     lm.eval()
                     with torch.no_grad():
                         lpred = lm(y_val)
