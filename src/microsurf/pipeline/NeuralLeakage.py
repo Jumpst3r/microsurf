@@ -72,7 +72,7 @@ class NeuralLeakageModel(nn.Module):
         heatmaps = []
 
         for idx, x in tqdm(enumerate(self.X.T)):
-            if idx == 6:
+            if idx > 6:
                 break
             x = x[:, None]
             x_train, x_val, y_train, y_val = train_test_split(
@@ -96,7 +96,7 @@ class NeuralLeakageModel(nn.Module):
             mest_train = MIEstimator(x_train)
             old_val_mean = 0
             new_val_mean = 0
-            for e in range(1, 5):
+            for e in range(1, 200):
                 lpred = lm(y_train)
                 mest_train.trainEstimator(lpred)
                 loss = -mest_train.forward(lpred)
@@ -141,12 +141,12 @@ class NeuralLeakageModel(nn.Module):
             grad = torch.autograd.grad(pred, input)[0]
             keys = minmax_scale(torch.abs(grad)[0].detach().cpu().numpy(), (0, 1))
             heatmaps.append(keys[::-1, None].T)
-            self.MIScore = np.mean(self.MIScores)
+            self.MIScore = np.max(self.MIScores)
             fig, ax = plt.subplots()
             ax.plot(Y)
             ax.plot(X_val, Y_val)
             fig.savefig(f"loss{hex(self.leakAddr)}-{idx}.png")
-        if self.MIScore > 0.00001:
+        if self.MIScore > 0.0001:
             sns.set(font_scale=0.3)
             plt.tight_layout()
             f, ax = plt.subplots()

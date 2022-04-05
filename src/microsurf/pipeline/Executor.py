@@ -70,9 +70,9 @@ class PipeLineExecutor:
         log.info(f"Running stage Leak Confirm ({len(possibleLeaks)} possible leaks)")
 
         # t_rand = detector.recordTracesRandom(self.ITER_COUNT, pcList=possibleLeaks)
-        # t_rand.toDisk('rnd.pickle')
+        # t_rand.toDisk('aes-enc-500.pickle')
 
-        with open("aes-key-expand-700.pickle", "rb") as f:
+        with open("aes-enc-500.pickle", "rb") as f:
             t_rand = pickle.load(f)
 
         if not deterministic:

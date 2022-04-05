@@ -21,10 +21,12 @@ if __name__ == "__main__":
 
     jailroot = "/home/nicolas/Documents/msc-thesis-work/doc/examples/rootfs/jail-toy-aes32/"
 
-    binpath = jailroot + "aes_keyexpand"
+    binpath = jailroot + "aes_process"
     # openssl args, the secret part is marked with '@'
     args = [
+        "0",
         "@",
+        "AABBCCDDEEFF0001AABBCCDDEEFF0001"
     ]
     sharedObjects = []
     scd = SCDetector(
