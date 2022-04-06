@@ -52,26 +52,24 @@ class MIEstimator(nn.Module):
 
 
 class NeuralLeakageModel(nn.Module):
-    def __init__(self, X, Y, keylen, leakAddr, assetDir) -> None:
+    def __init__(self, X, Y, leakAddr, keylen, assetDir) -> None:
         super().__init__()
         self.X = X
         self.device = "cpu"
         self.X = (X - X.mean()) / (X.std() + 1e-5)
         self.keylen = keylen
-        self.Y = self.binary(Y).reshape(Y.shape[0], keylen)
+        self.Y = self.binary(Y).reshape(Y.shape[0], self.keylen)
         self.OriginalY = Y
         self.assetDir = assetDir
         self.HUnits = 50
         self.LeakageModels = []
         self.leakAddr = leakAddr
-        log.debug(f"{X.shape[0]} samples")
-        log.debug(f"{X.shape[1]} entries / samples")
 
     def train(self):
         self.MIScores = np.zeros((self.X.shape[1]))
         heatmaps = []
 
-        for idx, x in tqdm(enumerate(self.X.T)):
+        for idx, x in enumerate(self.X.T):
             x = x[:, None]
             x_train, x_val, y_train, y_val = train_test_split(
                 x, self.Y, test_size=0.5, random_state=42
@@ -94,7 +92,7 @@ class NeuralLeakageModel(nn.Module):
             mest_train = MIEstimator(x_train)
             old_val_mean = 0
             new_val_mean = 0
-            for e in range(1, 250):
+            for e in range(1, 10):
                 lpred = lm(y_train)
                 mest_train.trainEstimator(lpred)
                 loss = -mest_train.forward(lpred)
@@ -116,12 +114,9 @@ class NeuralLeakageModel(nn.Module):
                     if len(Y_val) > 10:
                         new_val_mean = np.mean(Y_val[-5:])
                         old_val_mean = np.mean(Y_val[-10:-5])
-                        eps = (new_val_mean - old_val_mean)
-                        log.debug(f"eps={eps}")
+                        eps = new_val_mean - old_val_mean
                         if abs(eps) < 0.001 or eps > 0:
-                            log.debug(f"early stopping (eps={eps})")
                             break
-                    log.debug(f"val loss at epoch {e} is {loss_val:.8f}")
                     lm.train()
                 Y.append(loss.cpu().detach().numpy())
             lm.eval()
@@ -130,9 +125,8 @@ class NeuralLeakageModel(nn.Module):
             mest_total.trainEstimator(lpred)
             score = mest_total.forward(lpred).detach().cpu().numpy()
             # TODO add sklearn call for comp.
-            log.info(f"MI for iter {idx} of {hex(self.leakAddr)}: {score}")
             self.MIScores[idx] = score
-            if score < 0.1: 
+            if score < 0.1:
                 self.MIScore = np.max(self.MIScores)
                 break
             input = torch.ones((1, self.keylen)) - 0.5
@@ -147,9 +141,9 @@ class NeuralLeakageModel(nn.Module):
             sns.set(font_scale=0.3)
             plt.tight_layout()
             f, ax = plt.subplots()
-            dependencies =  np.stack(heatmaps, axis=0).reshape(-1, heatmaps[0].shape[1])
+            dependencies = np.stack(heatmaps, axis=0).reshape(-1, heatmaps[0].shape[1])
             # add a column to the far right to include the MI score in the heatmap
-            dependencies = np.c_[dependencies, self.MIScores[:dependencies.shape[0]]]
+            dependencies = np.c_[dependencies, self.MIScores[: dependencies.shape[0]]]
             deps = dependencies.copy()
             mi = dependencies.copy()
             deps.T[-1] = np.nan
@@ -157,17 +151,26 @@ class NeuralLeakageModel(nn.Module):
             ax = sns.heatmap(
                 deps,
                 ax=ax,
-                cbar_kws={"orientation": "horizontal", 'label': 'Estimated key bit dependency', 'shrink': 0.5, },
-                cmap="Blues",                
+                cbar_kws={
+                    "orientation": "horizontal",
+                    "label": "Estimated key bit dependency",
+                    "shrink": 0.5,
+                },
+                cmap="Blues",
             )
             sns.heatmap(
                 mi,
                 cmap="Reds",
-                ax = ax,
-                cbar_kws={'label': 'Estimated MI score per call', 'location': 'top', 'shrink': 0.5},
+                ax=ax,
+                cbar_kws={
+                    "label": "Estimated MI score per call",
+                    "location": "top",
+                    "shrink": 0.5,
+                },
                 xticklabels=[
                     (self.keylen - i) if i % 2 == 0 else " " for i in range(self.keylen)
-                ]+ ["MI"],
+                ]
+                + ["MI"],
                 yticklabels=[
                     f"inv-{i}" if i % 2 else " " for i in range(self.X.shape[1])
                 ],  # MSB to LSB

@@ -57,10 +57,14 @@ class ReportGenerator:
                     self.mdString += l
                 self.mdString += "\n```\n"
             self.mdString += "\nKey bit dependencies (estimated):"
-            if Path.is_file(f"saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png"):
+            if Path.is_file(
+                f"saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png"
+            ):
                 self.mdString += f"\n\n![saliency map](assets/saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png)\n\n"
             else:
-                self.mdString += "\n\n MI not significant enough to estimate dependencies. \n\n"
+                self.mdString += (
+                    "\n\n MI not significant enough to estimate dependencies. \n\n"
+                )
         self.mdString += "\n ### Grouped by function name\n\n"
         self.mdString += (
             self.results.groupby("Function")

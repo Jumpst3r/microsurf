@@ -8,8 +8,7 @@ import torch
 
 from microsurf.utils.report import ReportGenerator
 
-from ..pipeline.Stages import (BinaryLoader, DistributionAnalyzer,
-                               LeakageClassification)
+from ..pipeline.Stages import BinaryLoader, DistributionAnalyzer, LeakageClassification
 from ..utils.elf import getCodeSnippet, getfnname
 from ..utils.logger import getConsole, getLogger
 
@@ -54,11 +53,11 @@ class PipeLineExecutor:
 
         log.info(f"Running stage Leak Confirm ({len(possibleLeaks)} possible leaks)")
 
-        #t_rand = detector.recordTracesRandom(self.ITER_COUNT, pcList=possibleLeaks)
-        #t_rand.toDisk('camellia-enc-500-x64.pickle')
+        t_rand = detector.recordTracesRandom(self.ITER_COUNT, pcList=possibleLeaks)
+        # t_rand.toDisk('camellia-enc-500-x64.pickle')
 
-        with open("camellia-enc-500-x64.pickle", "rb") as f:
-            t_rand = pickle.load(f)
+        # with open("camellia-enc-500-x64.pickle", "rb") as f:
+        #    t_rand = pickle.load(f)
 
         if not deterministic:
             t_fixed = detector.recordTracesFixed(self.ITER_COUNT, pcList=possibleLeaks)
@@ -144,7 +143,6 @@ class PipeLineExecutor:
                                 "src": source,
                             }
                         )
-       
 
     def generateReport(self):
         if not self.MDresults:

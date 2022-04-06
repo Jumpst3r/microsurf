@@ -139,8 +139,8 @@ class SCDetector:
             A MemTraceCollectionFixed object representing the set of traces collected.
         """
         self.deterministic = kwargs.get("deterministic", self.loader.deterministic)
-        NB_CORES = (
-            multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 2 else 1
+        NB_CORES = min(
+            multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 2 else 1, n
         )
         memWatchers = [
             MemWatcher.remote(
@@ -202,8 +202,8 @@ class SCDetector:
             A MemTraceCollectionRandom object representing the set of traces collected.
         """
         self.deterministic = kwargs.get("deterministic", self.loader.deterministic)
-        NB_CORES = (
-            multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 2 else 1
+        NB_CORES = min(
+            multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 2 else 1, n
         )
         memWatchers = [
             MemWatcher.remote(

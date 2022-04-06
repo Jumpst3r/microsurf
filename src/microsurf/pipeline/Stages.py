@@ -1,4 +1,5 @@
 import logging
+import multiprocessing
 import os
 import random
 import tempfile
@@ -23,6 +24,8 @@ from microsurf.pipeline.LeakageModels import getCryptoModels, identity
 from qiling import Qiling
 from qiling.const import QL_VERBOSE
 import microsurf
+from .NeuralLeakage import NeuralLeakageModel
+
 
 from ..utils.hijack import (
     const_clock_gettime,
@@ -488,6 +491,13 @@ class DistributionAnalyzer(Stage):
         return self.results
 
 
+@ray.remote
+def train(X, Y, leakAddr, keylen, reportDir):
+    nleakage = NeuralLeakageModel(X, Y, leakAddr, keylen, reportDir + "/assets")
+    nleakage.train()
+    return (nleakage.MIScore, leakAddr)
+
+
 class LeakageClassification(Stage):
     def __init__(
         self,
@@ -500,37 +510,16 @@ class LeakageClassification(Stage):
         # The leakage function can return one dimensional data (ex. hamm. dist.) or multidimensional data (bit/byte slices)
         self.loader = binaryLoader
         self.results: Dict[str, float] = {}
-        self.KEYLEN = None
+        self.KEYLEN = int(len(self.loader.rndGen()) * 4)
 
     def _key(self, t):
         return t[0]
 
-    def analyze(self):
-        import numpy as np
-        from sklearn.feature_selection import mutual_info_regression
-
-        secrets = [t.secret for t in self.rndTraceCollection.traces]
-        slen = -1
-        fixedLenSecrets = True
-        for s in secrets:
-            secret = int(s, 16)
-            if slen == -1:
-                slen = len(s) * 4
-            elif slen != len(s) * 4:
-                log.error(slen)
-                log.error(s)
-                fixedLenSecrets = False
-        if fixedLenSecrets:
-            CRYPTO_MODELS = getCryptoModels(slen)
-            log.info(f"using fixed key leakage models (KEYLEN: {slen})")
-            self.KEYLEN = slen
-        else:
-            log.info("using variable key leakage models.")
-            CRYPTO_MODELS = getCryptoModels(0)
-        # Convert traces to trace per IP/PC
-        for leakAddr in track(
-            self.possibleLeaks, description="training leakage models"
-        ):
+    def get_per_leakage_mats(self):
+        X = []
+        Y = []
+        leakages = []
+        for leakAddr in self.possibleLeaks:
             addList = {}
             # Store the secret according to the given leakage model
             for t in self.rndTraceCollection.traces:
@@ -557,23 +546,38 @@ class LeakageClassification(Stage):
                 ]
                 secretMat[idx] = [identity()(k)]
 
-            from .NeuralLeakage import NeuralLeakageModel
+            X.append(mat)
+            Y.append(secretMat)
+            leakages.append(leakAddr)
 
-            log.info(f"learning optimal leakage model for PC {hex(leakAddr)}")
-            nleakage = NeuralLeakageModel(
-                mat, secretMat, self.KEYLEN, leakAddr, self.loader.reportDir + "/assets"
-            )
-            nleakage.train()
+        return X, Y, leakages
 
-            log.info(f"MI score for {hex(leakAddr)}: {nleakage.MIScore}")
-            # TODO: let the user specify the MI threshold.
-            if nleakage.MIScore >= 0.1:
-                self.results[hex(leakAddr)] = (nleakage, nleakage.MIScore)
+    def analyze(self):
+        import numpy as np
+
+        X, Y, addrs = self.get_per_leakage_mats()
+        cpu_count = multiprocessing.cpu_count() - 1
+        i = 0
+        futures = []
+        results = []
+        for x, y, addr in track(
+            zip(X, Y, addrs), description="Training leakage models", total=len(X)
+        ):
+            futures.append(train.remote(x, y, addr, self.KEYLEN, self.loader.reportDir))
+            i += 1
+            if i == cpu_count or i == len(addrs):
+                log.info(len(futures))
+                res = ray.get(futures)
+                results += res
+                futures = []
+                i = 0
+        for r in results:
+            (MIScore, leakAddr) = r
+            if MIScore > 0.1:
+                self.results[hex(leakAddr)] = MIScore
 
     def exec(self, *args, **kwargs):
         self.analyze()
 
     def finalize(self, *args, **kwargs):
         return self.results
-
-
