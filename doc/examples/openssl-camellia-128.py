@@ -24,17 +24,17 @@ if __name__ == "__main__":
     elif len(sys.argv) > 1 and sys.argv[1] == 'x8664':
         jailroot = "/home/nicolas/Documents/msc-thesis-work/doc/examples/rootfs/jail-openssl-x8664/"
     else:
-        print("usage: openssl-camillia-128.py [arm64, x8632]")
+        print("usage: openssl-camillia-128.py [arm64, x8632, x8664]")
         exit(0)
 
     binpath = jailroot + "openssl"
     # openssl args, the secret part is marked with '@'
     opensslArgs = [
-        # "camellia-128-ecb",
+        "camellia-128-ecb",
         #"cast5-ecb",
         #"bf-ecb",
         #"des3",
-        "aes-128-ecb",
+        #"aes-128-ecb",
         "-e",
         "-in",
         "input.bin",
@@ -50,7 +50,7 @@ if __name__ == "__main__":
     scd = SCDetector(
         binPath=binpath,
         args=opensslArgs,
-        randGen=getRandomHexKeyFunction(64),
+        randGen=getRandomHexKeyFunction(128),
         deterministic=False,
         asFile=False,
         jail=jailroot,

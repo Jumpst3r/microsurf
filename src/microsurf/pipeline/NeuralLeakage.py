@@ -94,7 +94,7 @@ class NeuralLeakageModel(nn.Module):
             mest_train = MIEstimator(x_train)
             old_val_mean = 0
             new_val_mean = 0
-            for e in range(1, 150):
+            for e in range(1, 250):
                 lpred = lm(y_train)
                 mest_train.trainEstimator(lpred)
                 loss = -mest_train.forward(lpred)
@@ -105,7 +105,7 @@ class NeuralLeakageModel(nn.Module):
                     icount += 1
                     if icount > 30:
                         break
-                if e % 20 == 0:
+                if e % 10 == 0:
                     lm.eval()
                     with torch.no_grad():
                         lpred = lm(y_val)
@@ -118,7 +118,7 @@ class NeuralLeakageModel(nn.Module):
                         old_val_mean = np.mean(Y_val[-10:-5])
                         eps = (new_val_mean - old_val_mean)
                         log.debug(f"eps={eps}")
-                        if eps > 0:
+                        if abs(eps) < 0.001 or eps > 0:
                             log.debug(f"early stopping (eps={eps})")
                             break
                     log.debug(f"val loss at epoch {e} is {loss_val:.8f}")
@@ -132,6 +132,9 @@ class NeuralLeakageModel(nn.Module):
             # TODO add sklearn call for comp.
             log.info(f"MI for iter {idx} of {hex(self.leakAddr)}: {score}")
             self.MIScores[idx] = score
+            if score < 0.1: 
+                self.MIScore = np.max(self.MIScores)
+                break
             input = torch.ones((1, self.keylen)) - 0.5
             lm.eval()
             input.requires_grad = True
@@ -140,11 +143,7 @@ class NeuralLeakageModel(nn.Module):
             keys = minmax_scale(torch.abs(grad)[0].detach().cpu().numpy(), (0, 1))
             heatmaps.append(keys[::-1, None].T)
             self.MIScore = np.max(self.MIScores)
-            fig, ax = plt.subplots()
-            ax.plot(Y)
-            ax.plot(X_val, Y_val)
-            fig.savefig(f"loss{hex(self.leakAddr)}-{idx}.png")
-        if self.MIScore > 0.0001:
+        if self.MIScore > 0.1:
             sns.set(font_scale=0.3)
             plt.tight_layout()
             f, ax = plt.subplots()
@@ -180,10 +179,6 @@ class NeuralLeakageModel(nn.Module):
                 dpi=300,
                 bbox_inches="tight",
             )
-
-    def __call__(self, Y):
-        return 1
-        return self.LeakageModel(self.binary(Y).to(self.device))
 
     def binary(self, Y):
         YL = np.zeros((Y.shape[0], self.keylen))

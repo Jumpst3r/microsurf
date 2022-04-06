@@ -1,32 +1,17 @@
 import glob
-import logging
-import multiprocessing
-import sys
-from typing import List
+
 import pickle
-import numpy as np
+from typing import List
+
 import ray
 import torch
-from microsurf.pipeline.tracetools.Trace import (
-    MemTrace,
-    MemTraceCollection,
-    MemTraceCollectionFixed,
-    MemTraceCollectionRandom,
-)
-from microsurf.utils.report import ReportGenerator
-from rich.progress import track
-from sklearn.ensemble import RandomTreesEmbedding
-from tqdm import tqdm
 
-from ..pipeline.Stages import (
-    BinaryLoader,
-    DistributionAnalyzer,
-    LeakageClassification,
-    LeakageRegression,
-    MemWatcher,
-)
+from microsurf.utils.report import ReportGenerator
+
+from ..pipeline.Stages import (BinaryLoader, DistributionAnalyzer,
+                               LeakageClassification)
 from ..utils.elf import getCodeSnippet, getfnname
-from ..utils.logger import RayFilter, getConsole, getLogger
+from ..utils.logger import getConsole, getLogger
 
 log = getLogger()
 console = getConsole()
@@ -69,11 +54,11 @@ class PipeLineExecutor:
 
         log.info(f"Running stage Leak Confirm ({len(possibleLeaks)} possible leaks)")
 
-        t_rand = detector.recordTracesRandom(self.ITER_COUNT, pcList=possibleLeaks)
-        #t_rand.toDisk('aes-enc-500.pickle')
+        #t_rand = detector.recordTracesRandom(self.ITER_COUNT, pcList=possibleLeaks)
+        #t_rand.toDisk('camellia-enc-500-x64.pickle')
 
-        #with open("aes-enc-500.pickle", "rb") as f:
-        #    t_rand = pickle.load(f)
+        with open("camellia-enc-500-x64.pickle", "rb") as f:
+            t_rand = pickle.load(f)
 
         if not deterministic:
             t_fixed = detector.recordTracesFixed(self.ITER_COUNT, pcList=possibleLeaks)
@@ -159,75 +144,7 @@ class PipeLineExecutor:
                                 "src": source,
                             }
                         )
-        import pandas as pd
-
-        self.resultsDF = pd.DataFrame.from_dict(self.MDresults)
-        if len(self.resultsDF) == 0:
-            log.info("No leaks found")
-            return
-        console.rule("Regression on high MI leaks")
-        log.info("Trying to learn secret-trace mappings for high (>=0.1) MI leaks")
-        dropped = []
-        for idx, x in self.resultsDF.sort_values(
-            by=["MI score"], ascending=False
-        ).iterrows():
-            if x[["MI score"]].values[0] < 0.1:
-                dropped.append(idx)
-        self.resultsDF.drop(dropped, inplace=True)
-        if True or len(self.resultsDF) == 0:
-            log.info("no leaks with sufficient MI to attempt regression.")
-            self.resultsDFTotal = pd.DataFrame.from_dict(self.MDresults)
-            # self.resultsDFTotal.drop(columns=["runtime Addr"], inplace=True)
-            self.resultsDF = None
-            self.generateReport()
-            exit(0)
-        log.info(f"gathering extra traces at {len(self.resultsDF)} locations")
-        regressionTargets = self.resultsDF[["runtime Addr"]].values.tolist()
-        regressionTargets = [i for sl in regressionTargets for i in sl]
-        resultsRnd = []
-        memWatchersRand = [
-            MemWatcher.remote(
-                binPath_id,
-                args_id,
-                rootfs_id,
-                ignoredObjects_id,
-                mappings_id,
-                deterministic=deterministic_id,
-                locations=regressionTargets,
-            )
-            for _ in range(NB_CORES)
-        ]
-        for _ in tqdm(range(0, 2 * self.ITER_COUNT, NB_CORES)):
-            [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchersRand]
-            futuresRnd = [m.getResults.remote() for m in memWatchersRand]
-            res = ray.get(futuresRnd)
-            resultsRnd += [r[0] for r in res]
-        ray.shutdown()
-        regressionTracesTrain = MemTraceCollection(
-            resRnd
-        )  # increase sample size by reusing previously collected traces
-        regressionTracesTest = MemTraceCollection(
-            rndTraceCollection.get(regressionTargets)
-        )
-
-        regressor = LeakageRegression(
-            regressionTracesTrain,
-            regressionTracesTest,
-            self.loader,
-            regressionTargets,
-            self.mivals,
-        )
-        regressor.exec()
-        res = regressor.finalize()
-        self.resultsDF["Linear regression score"] = [a[0] for a in res.values()]
-        self.resultsDF["Prediction accuracy"] = [a[1] for a in res.values()]
-        self.resultsDFTotal = pd.DataFrame.from_dict(self.MDresults)
-        self.resultsDFTotal.drop(columns=["runtime Addr"], inplace=True)
-        self.resultsDF.drop(columns=["runtime Addr"], inplace=True)
-        endtime = time.time()
-        self.loader.runtime = time.strftime(
-            "%H:%M:%S", time.gmtime(endtime - starttime)
-        )
+       
 
     def generateReport(self):
         if not self.MDresults:
@@ -235,7 +152,6 @@ class PipeLineExecutor:
             return
         rg = ReportGenerator(
             results=self.resultsDFTotal,
-            resultsReg=self.resultsDF,
             loader=self.loader,
             keylen=self.KEYLEN,
         )
