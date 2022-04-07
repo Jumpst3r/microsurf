@@ -495,7 +495,14 @@ class DistributionAnalyzer(Stage):
 @ray.remote(num_cpus=1)
 def train(X, Y, leakAddr, keylen, reportDir, pba):
     nleakage = NeuralLeakageModel(X, Y, leakAddr, keylen, reportDir + "/assets")
-    nleakage.train()
+    try:
+        nleakage.train()
+    except Exception as e:
+        log.error("worked encountered exception:")
+        log.error(str(e))
+        log.error(traceback.format_exc())
+        pba.update.remote(1)
+        return (-1, leakAddr)
     pba.update.remote(1)
     return (nleakage.MIScore, leakAddr)
 

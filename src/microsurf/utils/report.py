@@ -40,11 +40,9 @@ class ReportGenerator:
     def generateResults(self):
         self.mdString += "## Results\n\n"
 
-        self.mdString += "### Top 5, sorted by MI\n\n"
-        for i in range(5):
-            row = self.results.sort_values(by=["MI score"], ascending=False)[i : i + 1]
-            if len(row) == 0:
-                continue
+        self.mdString += "### Leaks with MI > 0.1\n\n"
+        significant = self.results[self.results['MI score'] > 0.1].sort_values(by=["MI score"], ascending=False)
+        for row in significant:
             self.mdString += row.loc[
                 :, ["offset", "MI score", "Leakage model", "Symbol Name", "Path"]
             ].to_markdown(index=False)

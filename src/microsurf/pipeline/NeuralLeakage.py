@@ -140,8 +140,9 @@ class NeuralLeakageModel(nn.Module):
                 dependencies = np.stack(heatmaps, axis=0).reshape(-1, heatmaps[0].shape[1])
             except Exception as e:
                 return
+            self.MIScores = self.MIScores[:len(heatmaps)]
             # add a column to the far right to include the MI score in the heatmap
-            dependencies = np.c_[dependencies, self.MIScores[: dependencies.shape[0]]]
+            dependencies = np.c_[dependencies, self.MIScores]
             deps = dependencies.copy()
             mi = dependencies.copy()
             deps.T[-1] = np.nan

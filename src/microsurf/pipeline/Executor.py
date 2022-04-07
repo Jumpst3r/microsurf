@@ -160,6 +160,11 @@ class PipeLineExecutor:
                                 "Path": path
                             }
                         )
+        endtime = time.time()
+        self.loader.runtime = time.strftime(
+            "%H:%M:%S", time.gmtime(endtime - starttime)
+        )
+        log.info(f"total runtime: {self.loader.runtime}")
 
     def generateReport(self):
         if not self.MDresults:
