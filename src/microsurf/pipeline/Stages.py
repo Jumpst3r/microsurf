@@ -12,6 +12,7 @@ from pathlib import Path, PurePath
 from typing import Dict, List, Tuple
 import matplotlib.ticker as ticker
 from rich.progress import track
+from asyncio import Event
 
 import magic
 import matplotlib.pyplot as plt
@@ -492,10 +493,87 @@ class DistributionAnalyzer(Stage):
 
 
 @ray.remote
-def train(X, Y, leakAddr, keylen, reportDir):
+def train(X, Y, leakAddr, keylen, reportDir, pba):
     nleakage = NeuralLeakageModel(X, Y, leakAddr, keylen, reportDir + "/assets")
     nleakage.train()
+    pba.update.remote(1)
     return (nleakage.MIScore, leakAddr)
+
+
+## BEGIN RAY UTILS PROGRESS BAR (taken from https://docs.ray.io/en/latest/ray-core/examples/progress_bar.html)
+from ray.actor import ActorHandle
+from tqdm.rich import tqdm
+
+
+@ray.remote
+class ProgressBarActor:
+    def __init__(self) -> None:
+        self.counter = 0
+        self.delta = 0
+        self.event = Event()
+
+    def update(self, num_items_completed: int) -> None:
+        """Updates the ProgressBar with the incremental
+        number of items that were just completed.
+        """
+        self.counter += num_items_completed
+        self.delta += num_items_completed
+        self.event.set()
+
+    async def wait_for_update(self) -> Tuple[int, int]:
+        """Blocking call.
+
+        Waits until somebody calls `update`, then returns a tuple of
+        the number of updates since the last call to
+        `wait_for_update`, and the total number of completed items.
+        """
+        await self.event.wait()
+        self.event.clear()
+        saved_delta = self.delta
+        self.delta = 0
+        return saved_delta, self.counter
+
+    def get_counter(self) -> int:
+        """
+        Returns the total number of complete items.
+        """
+        return self.counter
+
+
+class ProgressBar:
+    def __init__(self, total: int, description: str = ""):
+        # Ray actors don't seem to play nice with mypy, generating
+        # a spurious warning for the following line,
+        # which we need to suppress. The code is fine.
+        self.progress_actor = ProgressBarActor.remote()  # type: ignore
+        self.total = total
+        self.description = description
+
+    @property
+    def actor(self) -> ActorHandle:
+        """Returns a reference to the remote `ProgressBarActor`.
+
+        When you complete tasks, call `update` on the actor.
+        """
+        return self.progress_actor
+
+    def print_until_done(self) -> None:
+        """Blocking call.
+
+        Do this after starting a series of remote Ray tasks, to which you've
+        passed the actor handle. Each of them calls `update` on the actor.
+        When the progress meter reaches 100%, this method returns.
+        """
+        pbar = tqdm(desc=self.description, total=self.total)
+        while True:
+            delta, counter = ray.get(self.actor.wait_for_update.remote())
+            pbar.update(delta)
+            if counter >= self.total:
+                pbar.close()
+                return
+
+
+### END RAY PROGRESSBAR SNIPPET
 
 
 class LeakageClassification(Stage):
@@ -556,25 +634,22 @@ class LeakageClassification(Stage):
         import numpy as np
 
         X, Y, addrs = self.get_per_leakage_mats()
-        cpu_count = multiprocessing.cpu_count() - 1
-        i = 0
         futures = []
-        results = []
-        for x, y, addr in track(
-            zip(X, Y, addrs), description="Training leakage models", total=len(X)
-        ):
-            futures.append(train.remote(x, y, addr, self.KEYLEN, self.loader.reportDir))
-            i += 1
-            if i == cpu_count or i == len(addrs):
-                log.info(len(futures))
-                res = ray.get(futures)
-                results += res
-                futures = []
-                i = 0
+        num_ticks = len(X)
+        pb = ProgressBar(num_ticks)
+        actor = pb.actor
+        for x, y, addr in zip(X, Y, addrs):
+            futures.append(
+                train.remote(x, y, addr, self.KEYLEN, self.loader.reportDir, actor)
+            )
+
+        pb.print_until_done()
+        results = ray.get(futures)
         for r in results:
             (MIScore, leakAddr) = r
             if MIScore > 0.1:
                 self.results[hex(leakAddr)] = MIScore
+
 
     def exec(self, *args, **kwargs):
         self.analyze()

@@ -1,4 +1,5 @@
 import glob
+import multiprocessing
 
 import pickle
 from typing import List
@@ -26,7 +27,7 @@ class PipeLineExecutor:
     def run(self, detector):
         log.info(f"CUDA ? -> {torch.cuda.is_available()}")
         if not ray.is_initialized():
-            ray.init()
+            ray.init(num_cpu=multiprocessing.cpu_count() - 1)
         import time
 
         starttime = time.time()
@@ -53,11 +54,11 @@ class PipeLineExecutor:
 
         log.info(f"Running stage Leak Confirm ({len(possibleLeaks)} possible leaks)")
 
-        t_rand = detector.recordTracesRandom(self.ITER_COUNT, pcList=possibleLeaks)
+        # t_rand = detector.recordTracesRandom(self.ITER_COUNT, pcList=possibleLeaks)
         # t_rand.toDisk('camellia-enc-500-x64.pickle')
 
-        # with open("camellia-enc-500-x64.pickle", "rb") as f:
-        #    t_rand = pickle.load(f)
+        with open("camellia-enc-500-x64.pickle", "rb") as f:
+            t_rand = pickle.load(f)
 
         if not deterministic:
             t_fixed = detector.recordTracesFixed(self.ITER_COUNT, pcList=possibleLeaks)

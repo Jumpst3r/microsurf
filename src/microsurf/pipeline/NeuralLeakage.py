@@ -55,7 +55,6 @@ class NeuralLeakageModel(nn.Module):
     def __init__(self, X, Y, leakAddr, keylen, assetDir) -> None:
         super().__init__()
         self.X = X
-        self.device = "cpu"
         self.X = (X - X.mean()) / (X.std() + 1e-5)
         self.keylen = keylen
         self.Y = self.binary(Y).reshape(Y.shape[0], self.keylen)
@@ -82,7 +81,7 @@ class NeuralLeakageModel(nn.Module):
                 nn.Dropout(0.5),
                 nn.ReLU(),
                 nn.Linear(self.HUnits, 1),
-            ).to(self.device)
+            )
             optim = torch.optim.Adam(lm.parameters(), lr=1e-3)
             Y = []
             X_val = []
@@ -92,24 +91,20 @@ class NeuralLeakageModel(nn.Module):
             mest_train = MIEstimator(x_train)
             old_val_mean = 0
             new_val_mean = 0
-            for e in range(1, 10):
+            for e in range(1, 200):
                 lpred = lm(y_train)
                 mest_train.trainEstimator(lpred)
                 loss = -mest_train.forward(lpred)
                 optim.zero_grad()
                 loss.backward()
                 optim.step()
-                if -loss > 1.0:
-                    icount += 1
-                    if icount > 30:
-                        break
                 if e % 10 == 0:
                     lm.eval()
                     with torch.no_grad():
                         lpred = lm(y_val)
                     mest_val.trainEstimator(lpred)
                     loss_val = -mest_val.forward(lpred)
-                    Y_val.append(loss_val.cpu().detach().numpy())
+                    Y_val.append(loss_val.detach().numpy())
                     X_val.append(e)
                     if len(Y_val) > 10:
                         new_val_mean = np.mean(Y_val[-5:])
@@ -118,12 +113,12 @@ class NeuralLeakageModel(nn.Module):
                         if abs(eps) < 0.001 or eps > 0:
                             break
                     lm.train()
-                Y.append(loss.cpu().detach().numpy())
+                Y.append(loss.detach().numpy())
             lm.eval()
             lpred = lm(self.Y)
             mest_total = MIEstimator(x)
             mest_total.trainEstimator(lpred)
-            score = mest_total.forward(lpred).detach().cpu().numpy()
+            score = mest_total.forward(lpred).detach().numpy()
             # TODO add sklearn call for comp.
             self.MIScores[idx] = score
             if score < 0.1:
@@ -134,7 +129,7 @@ class NeuralLeakageModel(nn.Module):
             input.requires_grad = True
             pred = lm.forward(input)
             grad = torch.autograd.grad(pred, input)[0]
-            keys = minmax_scale(torch.abs(grad)[0].detach().cpu().numpy(), (0, 1))
+            keys = minmax_scale(torch.abs(grad)[0].detach().numpy(), (0, 1))
             heatmaps.append(keys[::-1, None].T)
             self.MIScore = np.max(self.MIScores)
         if self.MIScore > 0.1:
@@ -189,7 +184,4 @@ class NeuralLeakageModel(nn.Module):
             binR = bin(x[0].item())[2:].zfill(self.keylen)[::-1]
             for j, bit in enumerate(binR):  # col
                 YL[i][j] = int(bit)
-        return (
-            torch.tensor(YL, dtype=torch.float32).to(self.device, dtype=torch.float32)
-            - 0.5
-        )
+        return torch.tensor(YL, dtype=torch.float32) - 0.5

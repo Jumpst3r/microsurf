@@ -139,9 +139,6 @@ class SCDetector:
             A MemTraceCollectionFixed object representing the set of traces collected.
         """
         self.deterministic = kwargs.get("deterministic", self.loader.deterministic)
-        NB_CORES = min(
-            multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 2 else 1, n
-        )
         memWatchers = [
             MemWatcher.remote(
                 self.binPath_id,
@@ -152,17 +149,13 @@ class SCDetector:
                 locations=pcList,
                 deterministic=self.deterministic,
             )
-            for _ in range(NB_CORES)
+            for _ in range(n)
         ]
         resList = []
-        for _ in track(
-            range(0, n, NB_CORES),
-            description=f"Collecting {n} traces with fixed secrets",
-        ):
-            [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in memWatchers]
-            futures = [m.getResults.remote() for m in memWatchers]
-            res = ray.get(futures)
-            resList += [r[0] for r in res]
+        [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in memWatchers]
+        futures = [m.getResults.remote() for m in memWatchers]
+        res = ray.get(futures)
+        resList += [r[0] for r in res]
         mt = MemTraceCollectionFixed([r for r in resList])
         return mt
 
@@ -202,9 +195,7 @@ class SCDetector:
             A MemTraceCollectionRandom object representing the set of traces collected.
         """
         self.deterministic = kwargs.get("deterministic", self.loader.deterministic)
-        NB_CORES = min(
-            multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 2 else 1, n
-        )
+        
         memWatchers = [
             MemWatcher.remote(
                 self.binPath_id,
@@ -215,17 +206,13 @@ class SCDetector:
                 locations=pcList,
                 deterministic=self.deterministic,
             )
-            for _ in range(NB_CORES)
+            for _ in range(n)
         ]
         resList = []
-        for _ in track(
-            range(0, n, NB_CORES),
-            description=f"Collecting {n} traces with random secrets",
-        ):
-            [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchers]
-            futures = [m.getResults.remote() for m in memWatchers]
-            res = ray.get(futures)
-            resList += [r[0] for r in res]
+        [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchers]
+        futures = [m.getResults.remote() for m in memWatchers]
+        res = ray.get(futures)
+        resList += [r[0] for r in res]
         mt = MemTraceCollectionRandom([r for r in resList])
         mt.prune()
         return mt
