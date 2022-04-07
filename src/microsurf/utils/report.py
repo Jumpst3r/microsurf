@@ -30,13 +30,12 @@ class ReportGenerator:
         self.mdString += f"__Elapsed time (single run emulation)__: {self.loader.emulationruntime} \n\n"
         self.mdString += f"__Total leaks (data)__: {len(self.results)} \n\n"
         self.mdString += f"__Leaks with MI score > 0.1 __: {len(self.results[self.results['MI score'] > 0.1])} \n\n"
-        self.mdString += f"__-- mean/stdev MI score accross leaks with > 0.1 MI __: {self.results[self.results['MI score'] > 0.1]['MI score'].mean():.2f} ± {self.results[self.results['MI score'] > 0.1]['MI score'].std() if self.results[self.results['MI score'] > 0.1]['MI score'].std() != np.nan else 0:.2f}\n\n"
+        self.mdString += f"_ mean/stdev MI score accross leaks with > 0.1 MI __: {self.results[self.results['MI score'] > 0.1]['MI score'].mean():.2f} ± {self.results[self.results['MI score'] > 0.1]['MI score'].std() if self.results[self.results['MI score'] > 0.1]['MI score'].std() != np.nan else 0:.2f}\n\n"
         self.mdString += (
             f"__Binary__: `{self.loader.binPath}`\n >{self.loader.filemagic} \n\n"
         )
-        self.mdString += f"__Args__:`{self.loader.args}` \n\n"
-        self.mdString += f"__Deterministic__:`{self.loader.deterministic}` \n\n"
-        self.mdString += f"__Emulation root__:`{ self.loader.rootfs}` \n\n"
+        self.mdString += f"__Args__: `{self.loader.args}` \n\n"
+        self.mdString += f"__Emulation root__: `{ self.loader.rootfs}` \n\n"
 
     def generateResults(self):
         self.mdString += "## Results\n\n"
@@ -47,7 +46,7 @@ class ReportGenerator:
             if len(row) == 0:
                 continue
             self.mdString += row.loc[
-                :, ["offset", "MI score", "Leakage model", "Function", "Path"]
+                :, ["offset", "MI score", "Leakage model", "Symbol Name", "Path"]
             ].to_markdown(index=False)
             self.mdString += "\n\nSource code snippet\n\n"
             src = row[["src"]].values[0][0]
@@ -59,7 +58,7 @@ class ReportGenerator:
                     self.mdString += l
                 self.mdString += "\n```\n"
             self.mdString += "\nKey bit dependencies (estimated):"
-            if Path(f"saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png").is_file():
+            if Path(f"{self.loader.reportDir}/assets/saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png").is_file():
                 self.mdString += f"\n\n![saliency map](assets/saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png)\n\n"
             else:
                 self.mdString += (
@@ -67,7 +66,7 @@ class ReportGenerator:
                 )
         self.mdString += "\n ### Grouped by function name\n\n"
         self.mdString += (
-            self.results.groupby("Function")
+            self.results.groupby("Symbol Name")
             .size()
             .reset_index(name="Leak Count")
             .sort_values(by=["Leak Count"], ascending=False)
@@ -76,7 +75,7 @@ class ReportGenerator:
 
         self.mdString += "\n ### All Leaks, sorted by MI\n\n"
         self.mdString += (
-            self.results.loc[:, ["offset", "MI score", "Leakage model", "Function"]]
+            self.results.loc[:, ["offset", "MI score", "Leakage model", "Symbol Name"]]
             .sort_values(by=["MI score"], ascending=False)
             .to_markdown(index=False)
         )

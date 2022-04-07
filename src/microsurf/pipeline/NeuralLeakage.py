@@ -91,7 +91,7 @@ class NeuralLeakageModel(nn.Module):
             mest_train = MIEstimator(x_train)
             old_val_mean = 0
             new_val_mean = 0
-            for e in range(1, 150):
+            for e in range(1, 250):
                 lpred = lm(y_train)
                 mest_train.trainEstimator(lpred)
                 loss = -mest_train.forward(lpred)
@@ -149,6 +149,8 @@ class NeuralLeakageModel(nn.Module):
             ax = sns.heatmap(
                 deps,
                 ax=ax,
+                vmin=0, 
+                vmax=1,
                 cbar_kws={
                     "orientation": "horizontal",
                     "label": "Estimated key bit dependency",
@@ -160,6 +162,8 @@ class NeuralLeakageModel(nn.Module):
                 mi,
                 cmap="Reds",
                 ax=ax,
+                vmin=0, 
+                vmax=1,
                 cbar_kws={
                     "label": "Estimated MI score per call",
                     "location": "top",

@@ -27,7 +27,6 @@ class PipeLineExecutor:
         self.multiprocessing = True
 
     def run(self, detector):
-        log.info(f"CUDA ? -> {torch.cuda.is_available()}")
         if not ray.is_initialized():
             ray.init(num_cpu=multiprocessing.cpu_count() - 1)
         import time
@@ -137,7 +136,7 @@ class PipeLineExecutor:
                                 "offset": f"{offset:#08x}",
                                 "MI score": mival,
                                 "Leakage model": "neural-learnt",
-                                "Function": f'{symbname if symbname else "??":}',
+                                "Symbol Name": f'{symbname if symbname else "??":}',
                                 "src": source,
                                 "Path": path
                             }
@@ -155,7 +154,7 @@ class PipeLineExecutor:
                                 "offset": f"{k:#08x}",
                                 "MI score": mival,
                                 "Leakage model": "neural-learnt",
-                                "Function": f'{symbname if symbname else "??":}',
+                                "Symbol Name": f'{symbname if symbname else "??":}',
                                 "Object": f'{path.split("/")[-1]}',
                                 "src": source,
                                 "Path": path
