@@ -647,8 +647,7 @@ class LeakageClassification(Stage):
         results = ray.get(futures)
         for r in results:
             (MIScore, leakAddr) = r
-            if MIScore > 0.1:
-                self.results[hex(leakAddr)] = MIScore
+            self.results[hex(leakAddr)] = MIScore
 
 
     def exec(self, *args, **kwargs):

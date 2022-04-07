@@ -1,10 +1,11 @@
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
+
+import numpy as np
 import pandas
 from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.utils.logger import getLogger
-from datetime import datetime
-
 
 log = getLogger()
 
@@ -28,6 +29,8 @@ class ReportGenerator:
         self.mdString += f"__Elapsed time (analysis)__: {self.loader.runtime} \n\n"
         self.mdString += f"__Elapsed time (single run emulation)__: {self.loader.emulationruntime} \n\n"
         self.mdString += f"__Total leaks (data)__: {len(self.results)} \n\n"
+        self.mdString += f"__Leaks with MI score > 0.1 __: {len(self.results[self.results['MI score'] > 0.1])} \n\n"
+        self.mdString += f"__-- mean/stdev MI score accross leaks with > 0.1 MI __: {self.results[self.results['MI score'] > 0.1]['MI score'].mean():.2f} ± {self.results[self.results['MI score'] > 0.1]['MI score'].std() if self.results[self.results['MI score'] > 0.1]['MI score'].std() != np.nan else 0:.2f}\n\n"
         self.mdString += (
             f"__Binary__: `{self.loader.binPath}`\n >{self.loader.filemagic} \n\n"
         )
