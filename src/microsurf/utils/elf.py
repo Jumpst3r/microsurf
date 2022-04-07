@@ -96,10 +96,11 @@ def getCodeSnippet(file: str, loc: int) -> List[str]:
     with open(file, "rb") as f:
         elf = ELFFile(f)
         path, ln = _decode_file_line(elf.get_dwarf_info(), loc)
+        log.info(f"src path: {path}")
         try:
             with open(path, "r") as f2:
                 lines = f2.readlines()
-            return lines[ln - 3 : ln + 3]
+            return lines[ln - 5 : ln + 5], path
         except Exception as e:
             log.debug(f"source lines not available for PC {hex(loc)}")
-            return []
+            return [], None

@@ -91,7 +91,8 @@ class NeuralLeakageModel(nn.Module):
             mest_train = MIEstimator(x_train)
             old_val_mean = 0
             new_val_mean = 0
-            for e in range(1, 200):
+            for e in range(1, 150):
+                log.debug(f"E-{e}, IDX-{idx}, leak-{hex(self.leakAddr)}")
                 lpred = lm(y_train)
                 mest_train.trainEstimator(lpred)
                 loss = -mest_train.forward(lpred)
@@ -119,6 +120,7 @@ class NeuralLeakageModel(nn.Module):
             mest_total = MIEstimator(x)
             mest_total.trainEstimator(lpred)
             score = mest_total.forward(lpred).detach().numpy()
+            log.info(f"score={score}")
             # TODO add sklearn call for comp.
             self.MIScores[idx] = score
             if score < 0.1:
@@ -136,7 +138,10 @@ class NeuralLeakageModel(nn.Module):
             sns.set(font_scale=0.3)
             plt.tight_layout()
             f, ax = plt.subplots()
-            dependencies = np.stack(heatmaps, axis=0).reshape(-1, heatmaps[0].shape[1])
+            try:
+                dependencies = np.stack(heatmaps, axis=0).reshape(-1, heatmaps[0].shape[1])
+            except Exception as e:
+                return
             # add a column to the far right to include the MI score in the heatmap
             dependencies = np.c_[dependencies, self.MIScores[: dependencies.shape[0]]]
             deps = dependencies.copy()

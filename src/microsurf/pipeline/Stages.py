@@ -492,11 +492,11 @@ class DistributionAnalyzer(Stage):
         return self.results
 
 
-@ray.remote
+@ray.remote(num_cpus=1)
 def train(X, Y, leakAddr, keylen, reportDir, pba):
     nleakage = NeuralLeakageModel(X, Y, leakAddr, keylen, reportDir + "/assets")
     nleakage.train()
-    pba.update.remote(1)
+    # pba.update.remote(1)
     return (nleakage.MIScore, leakAddr)
 
 
@@ -635,7 +635,7 @@ class LeakageClassification(Stage):
 
         X, Y, addrs = self.get_per_leakage_mats()
         futures = []
-        num_ticks = len(X)
+        num_ticks = len(addrs)
         pb = ProgressBar(num_ticks)
         actor = pb.actor
         for x, y, addr in zip(X, Y, addrs):
@@ -643,7 +643,7 @@ class LeakageClassification(Stage):
                 train.remote(x, y, addr, self.KEYLEN, self.loader.reportDir, actor)
             )
 
-        pb.print_until_done()
+        # pb.print_until_done()
         results = ray.get(futures)
         for r in results:
             (MIScore, leakAddr) = r

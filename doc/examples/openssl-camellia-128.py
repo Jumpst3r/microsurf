@@ -54,7 +54,8 @@ if __name__ == "__main__":
         deterministic=False,
         asFile=False,
         jail=jailroot,
-        sharedObjects=sharedObjects
+        sharedObjects=sharedObjects,
+        randomTraces='camellia-enc-500-x64.pickle'
     )
    
     scd.exec(report=True)

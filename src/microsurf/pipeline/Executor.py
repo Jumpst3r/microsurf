@@ -3,9 +3,11 @@ import multiprocessing
 
 import pickle
 from typing import List
+from uuid import uuid4
 
 import ray
 import torch
+import pandas as pd
 
 from microsurf.utils.report import ReportGenerator
 
@@ -21,7 +23,7 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results: List[int] = []
-        self.ITER_COUNT = 500
+        self.ITER_COUNT = 100
         self.multiprocessing = True
 
     def run(self, detector):
@@ -54,16 +56,29 @@ class PipeLineExecutor:
 
         log.info(f"Running stage Leak Confirm ({len(possibleLeaks)} possible leaks)")
 
-        # t_rand = detector.recordTracesRandom(self.ITER_COUNT, pcList=possibleLeaks)
-        # t_rand.toDisk('camellia-enc-500-x64.pickle')
-
-        with open("camellia-enc-500-x64.pickle", "rb") as f:
-            t_rand = pickle.load(f)
+        if detector.randomTraces:
+            with open(detector.randomTraces, "rb") as f:
+                t_rand = pickle.load(f)
+            log.info(f"loaded traces from {detector.randomTraces}")
+        else:
+            t_rand = detector.recordTracesRandom(self.ITER_COUNT, pcList=possibleLeaks)
+            if detector.saveTraces:
+                path = f"{self.loader.reportDir}/assets/trace_rand_{uuid4()}.pickle"
+                log.info(f"saved random traces to {path}")
+                t_rand.toDisk(path)
 
         if not deterministic:
-            t_fixed = detector.recordTracesFixed(self.ITER_COUNT, pcList=possibleLeaks)
-        else:
-            t_fixed = None
+            if detector.fixedTraces:
+                with open(detector.fixedTraces, "rb") as f:
+                    t_fixed = pickle.load(f)
+                log.info(f"loaded traces from {detector.fixedTraces}")
+
+            else:
+                t_fixed = detector.recordTracesFixed(self.ITER_COUNT, pcList=possibleLeaks)
+                if detector.saveTraces:
+                    path = f"{self.loader.reportDir}/assets/trace_fixed_{uuid4()}.pickle"
+                    log.info(f"saved fixed traces to {path}")
+                    t_fixed.toDisk(path)
 
         if not deterministic:
             log.info("Filtering stochastic events")
@@ -106,42 +121,44 @@ class PipeLineExecutor:
                             if ".so" in label or self.loader.dynamic
                             else getfnname(path, k)
                         )
-                        source = (
+                        source, path = (
                             getCodeSnippet(path, offset)
                             if ".so" in label or self.loader.dynamic
                             else getCodeSnippet(path, k)
                         )
 
-                        mivals = self.mivals[hex(k)]
+                        mival = self.mivals[hex(k)]
                         console.print(
-                            f'{offset:#08x} - [MI = {mivals[1]:.2f}] \t at {symbname if symbname else "??":<30} {label}'
+                            f'{offset:#08x} - [MI = {mival:.2f}] \t at {symbname if symbname else "??":<30} {label}'
                         )
                         self.MDresults.append(
                             {
                                 "runtime Addr": k,
                                 "offset": f"{offset:#08x}",
-                                "MI score": mivals[1],
+                                "MI score": mival,
                                 "Leakage model": "neural-learnt",
                                 "Function": f'{symbname if symbname else "??":}',
                                 "src": source,
+                                "Path": path
                             }
                         )
                     else:
                         symbname = getfnname(path, k)
-                        source = getCodeSnippet(path, k)
-                        mivals = self.mivals[hex(k)]
+                        source, path = getCodeSnippet(path, k)
+                        mival = self.mivals[hex(k)]
                         console.print(
-                            f'{k:#08x} -[MI = {mivals[1]:.2f}]  \t at {symbname if symbname else "??":<30} {label}'
+                            f'{k:#08x} -[MI = {mival:.2f}]  \t at {symbname if symbname else "??":<30} {label}'
                         )
                         self.MDresults.append(
                             {
                                 "runtime Addr": k,
                                 "offset": f"{k:#08x}",
-                                "MI score": mivals[1],
+                                "MI score": mival,
                                 "Leakage model": "neural-learnt",
                                 "Function": f'{symbname if symbname else "??":}',
                                 "Object": f'{path.split("/")[-1]}',
                                 "src": source,
+                                "Path": path
                             }
                         )
 
@@ -149,6 +166,8 @@ class PipeLineExecutor:
         if not self.MDresults:
             log.info("no results - no file.")
             return
+        else:
+            self.resultsDFTotal = pd.DataFrame.from_dict(self.MDresults)
         rg = ReportGenerator(
             results=self.resultsDFTotal,
             loader=self.loader,

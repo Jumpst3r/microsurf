@@ -24,7 +24,6 @@ class ReportGenerator:
 
     def generateHeaders(self):
         self.mdString += f"# Microsurf Analysis Results \n\n"
-        self.mdString += f"## Metadata \n\n"
         self.mdString += f"__Run at__: {self.datetime} \n\n"
         self.mdString += f"__Elapsed time (analysis)__: {self.loader.runtime} \n\n"
         self.mdString += f"__Elapsed time (single run emulation)__: {self.loader.emulationruntime} \n\n"
@@ -45,9 +44,9 @@ class ReportGenerator:
             if len(row) == 0:
                 continue
             self.mdString += row.loc[
-                :, ["offset", "MI score", "Leakage model", "Function"]
+                :, ["offset", "MI score", "Leakage model", "Function", "Path"]
             ].to_markdown(index=False)
-            self.mdString += "\n\nSource code snippet:\n\n"
+            self.mdString += "\n\nSource code snippet\n\n"
             src = row[["src"]].values[0][0]
             if len(src) == 0:
                 self.mdString += "\n```\nn/a\n```"
@@ -57,9 +56,7 @@ class ReportGenerator:
                     self.mdString += l
                 self.mdString += "\n```\n"
             self.mdString += "\nKey bit dependencies (estimated):"
-            if Path.is_file(
-                f"saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png"
-            ):
+            if Path(f"saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png").is_file():
                 self.mdString += f"\n\n![saliency map](assets/saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png)\n\n"
             else:
                 self.mdString += (

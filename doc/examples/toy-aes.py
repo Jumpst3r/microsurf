@@ -36,7 +36,9 @@ if __name__ == "__main__":
         deterministic=False,
         asFile=False,
         jail=jailroot,
-        sharedObjects=sharedObjects
+        sharedObjects=sharedObjects,
+        saveTraces=True,
+        randomTraces='results/assets/trace_rand_12004141-ac3b-483f-91cd-9ab6312a1955.pickle'
     )
    
     scd.exec(report=True)
