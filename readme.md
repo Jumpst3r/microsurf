@@ -6,8 +6,13 @@
 
 Microsurf is a framework for finding side channel vulnerabilities in compiled binaries. It features:
 
+
 - Cross-architecture support (`i386`, `x86_64`, `arm32`, `arm64`)
-- Leverages machine learning to 
+- Leverages machine learning to learn optimal leakage model
+- Estimates dependency of every secret bit on the leakage
+- Provides a convenient visualization of said dependencies
+- Generates flexible markdown reports, summerizing all results
+
 
 ### Usage examples 
 

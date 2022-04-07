@@ -65,7 +65,7 @@ class NeuralLeakageModel(nn.Module):
         self.leakAddr = leakAddr
 
     def train(self):
-        self.MIScores = np.zeros((self.X.shape[1]))
+        self.MIScores = []
         heatmaps = []
 
         for idx, x in enumerate(self.X.T):
@@ -120,9 +120,9 @@ class NeuralLeakageModel(nn.Module):
             mest_total.trainEstimator(lpred)
             score = mest_total.forward(lpred).detach().numpy()
             # TODO add sklearn call for comp.
-            self.MIScores[idx] = score
+            self.MIScores.append(score)
             if score < 0.1:
-                self.MIScore = np.max(self.MIScores)
+                self.MIScore = max(self.MIScores)
                 break
             input = torch.ones((1, self.keylen)) - 0.5
             lm.eval()
@@ -131,8 +131,8 @@ class NeuralLeakageModel(nn.Module):
             grad = torch.autograd.grad(pred, input)[0]
             keys = minmax_scale(torch.abs(grad)[0].detach().numpy(), (0, 1))
             heatmaps.append(keys[::-1, None].T)
-            self.MIScore = np.max(self.MIScores)
-        if self.MIScore > 0.1:
+        self.MIScore = max(self.MIScores)
+        if self.MIScore >= 0.1:
             sns.set(font_scale=0.3)
             plt.tight_layout()
             f, ax = plt.subplots()
@@ -140,7 +140,7 @@ class NeuralLeakageModel(nn.Module):
                 dependencies = np.stack(heatmaps, axis=0).reshape(-1, heatmaps[0].shape[1])
             except Exception as e:
                 return
-            self.MIScores = self.MIScores[:len(heatmaps)]
+            self.MIScores = np.array(self.MIScores[:len(heatmaps)])
             # add a column to the far right to include the MI score in the heatmap
             dependencies = np.c_[dependencies, self.MIScores]
             deps = dependencies.copy()
