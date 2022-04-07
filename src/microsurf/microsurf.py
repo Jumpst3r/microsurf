@@ -90,8 +90,11 @@ class SCDetector:
         self._validate()
         Path(self.resultsDir + "/assets").mkdir(parents=True, exist_ok=True)
         Path(self.resultsDir + "/traces").mkdir(parents=True, exist_ok=True)
+        self.NB_CORES = (
+            multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 2 else 1
+        )
         if not ray.is_initialized():
-            ray.init()
+            ray.init(num_cpus=self.NB_CORES)
         self.binPath_id = ray.put(self.loader.binPath)
         self.args_id = ray.put(self.loader.args)
         self.rootfs_id = ray.put(self.loader.rootfs)
@@ -164,9 +167,7 @@ class SCDetector:
             A MemTraceCollectionFixed object representing the set of traces collected.
         """
         self.deterministic = kwargs.get("deterministic", self.loader.deterministic)
-        NB_CORES = (
-            multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 2 else 1
-        )
+        NB_CORES = min(self.NB_CORES, n)
         memWatchers = [
             MemWatcher.remote(
                 self.binPath_id,
@@ -227,9 +228,7 @@ class SCDetector:
             A MemTraceCollectionRandom object representing the set of traces collected.
         """
         self.deterministic = kwargs.get("deterministic", self.loader.deterministic)
-        NB_CORES = (
-            multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 2 else 1
-        )
+        NB_CORES = min(self.NB_CORES, n)
         memWatchers = [
             MemWatcher.remote(
                 self.binPath_id,

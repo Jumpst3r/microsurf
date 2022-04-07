@@ -496,7 +496,7 @@ class DistributionAnalyzer(Stage):
 def train(X, Y, leakAddr, keylen, reportDir, pba):
     nleakage = NeuralLeakageModel(X, Y, leakAddr, keylen, reportDir + "/assets")
     nleakage.train()
-    # pba.update.remote(1)
+    pba.update.remote(1)
     return (nleakage.MIScore, leakAddr)
 
 
@@ -643,7 +643,7 @@ class LeakageClassification(Stage):
                 train.remote(x, y, addr, self.KEYLEN, self.loader.reportDir, actor)
             )
 
-        # pb.print_until_done()
+        pb.print_until_done()
         results = ray.get(futures)
         for r in results:
             (MIScore, leakAddr) = r
