@@ -1,6 +1,7 @@
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 import numpy as np
 import pandas
@@ -36,6 +37,7 @@ class ReportGenerator:
         )
         self.mdString += f"__Args__: `{self.loader.args}` \n\n"
         self.mdString += f"__Emulation root__: `{ self.loader.rootfs}` \n\n"
+        self.mdString += f"__Comment__: `{ self.loader.comment}` \n\n"
 
     def generateResults(self):
         self.mdString += "## Results\n\n"
@@ -85,6 +87,6 @@ class ReportGenerator:
     def saveMD(self):
         self.generateHeaders()
         self.generateResults()
-        with open(f"{self.loader.reportDir}/results.md", "w") as f:
+        with open(f"{self.loader.reportDir}/results-{uuid4()}.md", "w") as f:
             f.writelines(self.mdString)
         log.info(f"Saved results to {f.name}")

@@ -53,6 +53,7 @@ class SCDetector:
         randomTraces: Path to pre-recorded random traces, optional.
         fixedTraces: Path to pre-recorded fixed traces, optional.
         saveTraces: Save the recorded traces to results/assets.
+        comment: Optional description to include in the report
     """
 
     def __init__(
@@ -67,7 +68,8 @@ class SCDetector:
         resultsDir: str = "results",
         randomTraces: str = None,
         fixedTraces: str = None,
-        saveTraces: bool = True
+        saveTraces: bool = True,
+        comment: str = ""
     ) -> None:
         self.binPath = binPath
         self.args = args
@@ -78,6 +80,7 @@ class SCDetector:
         self.sharedObjects = sharedObjects
         self.resultsDir = resultsDir
         self.saveTraces = saveTraces
+        self.comment = comment
         if randomTraces:
             if not Path(randomTraces).exists():
                 log.error(f"random traces path ({randomTraces}) does not exit")
@@ -139,6 +142,7 @@ class SCDetector:
             jail=self.rootfs,
             sharedObjects=self.sharedObjects,
             reportDir=self.resultsDir,
+            comment=self.comment
         )
 
     def exec(self, report=False):

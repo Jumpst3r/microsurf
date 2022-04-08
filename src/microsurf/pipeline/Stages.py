@@ -72,6 +72,7 @@ class BinaryLoader(Stage):
         self.ignoredObjects = []
         self.newArgs = self.args.copy()
         self.reportDir = kwargs.get("reportDir", "results")
+        self.comment = kwargs.get("comment", "none")
         try:
             self.secretArgIndex = args.index("@")
         except IndexError as e:
