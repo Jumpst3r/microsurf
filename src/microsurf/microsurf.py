@@ -13,18 +13,19 @@ __version__ = "0.0.0a"
 
 
 import multiprocessing
+import sys
+from pathlib import Path
 from typing import Any, Callable, List
 
-from microsurf.pipeline.tracetools.Trace import (
-    MemTraceCollectionFixed,
-    MemTraceCollectionRandom,
-)
+import ray
+from rich.progress import track
+
+from microsurf.pipeline.tracetools.Trace import (MemTraceCollectionFixed,
+                                                 MemTraceCollectionRandom)
+
 from .pipeline.Executor import PipeLineExecutor
 from .pipeline.Stages import BinaryLoader, MemWatcher
 from .utils.logger import getConsole, getLogger
-from pathlib import Path
-import ray
-from rich.progress import track
 
 console = getConsole()
 log = getLogger()
@@ -106,7 +107,7 @@ class SCDetector:
             multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 2 else 1
         )
         if not ray.is_initialized():
-            ray.init(num_cpus=self.NB_CORES)
+            ray.init(num_cpus=self.NB_CORES, local_mode=True)
         self.binPath_id = ray.put(self.loader.binPath)
         self.args_id = ray.put(self.loader.args)
         self.rootfs_id = ray.put(self.loader.rootfs)
@@ -190,6 +191,7 @@ class SCDetector:
                 self.mappings_id,
                 locations=pcList,
                 deterministic=self.deterministic,
+                multithread=self.loader.multithread
             )
             for _ in range(NB_CORES)
         ]
@@ -251,6 +253,7 @@ class SCDetector:
                 self.mappings_id,
                 locations=pcList,
                 deterministic=self.deterministic,
+                multithread=self.loader.multithread
             )
             for _ in range(NB_CORES)
         ]

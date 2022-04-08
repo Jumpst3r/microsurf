@@ -20,7 +20,7 @@ import numpy as np
 import ray
 import scipy.stats as stats
 import seaborn as sns
-from capstone import CS_ARCH_ARM, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_MODE_ARM, Cs
+from capstone import CS_ARCH_ARM, CS_ARCH_MIPS, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_MODE_ARM, CS_MODE_MIPS32, Cs
 from microsurf.pipeline.LeakageModels import getCryptoModels, identity
 from qiling import Qiling
 from qiling.const import QL_VERBOSE
@@ -35,6 +35,7 @@ from ..utils.hijack import (
     const_time,
     device_random,
     ql_fixed_syscall_faccessat,
+    ql_fixed_syscall_newfstatat,
     syscall_exit_group,
 )
 from ..utils.logger import LOGGING_LEVEL, getConsole, getLogger, getQilingLogger
@@ -90,6 +91,10 @@ class BinaryLoader(Stage):
             self.md = Cs(CS_ARCH_X86, CS_MODE_64)
         elif "ARM" in fileinfo:
             self.md = Cs(CS_ARCH_ARM, CS_MODE_ARM)
+        elif "MIPS32" in fileinfo:
+            self.md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS32)
+        elif "RISC-V" in fileinfo:
+            pass
         else:
             log.info(fileinfo)
             log.error("Target architecture not implemented")
@@ -118,8 +123,9 @@ class BinaryLoader(Stage):
                 log_override=getQilingLogger(),
                 verbose=1,
                 console=True,
-                multithread=True,
+                multithread=False,
             )
+            self.multithread = False
             if path:
                 self.QLEngine.add_fs_mapper(path.split("/")[-1], path.split("/")[-1])
             self.fixRandomness(self.deterministic)
@@ -140,10 +146,36 @@ class BinaryLoader(Stage):
             )
         except Exception as e:
             log.error(f"Emulation dry run failed: {str(e)}")
-            log.error(traceback.format_exc())
-            exit(1)
-        self.md.detail = True
-
+            tback = traceback.format_exc()
+            log.error(tback)
+            if 'cur_thread' in tback and 'spawn' not in str(e):
+                log.info("re-running with threading support enabled")
+                try:
+                    self.QLEngine = Qiling(
+                        [str(self.binPath), *self.newArgs],
+                        str(self.rootfs),
+                        log_override=getQilingLogger(),
+                        verbose=1,
+                        console=True,
+                        multithread=True,
+                    )
+                    self.fixRandomness(self.deterministic)
+                    self.multithread = True
+                    starttime = datetime.now()
+                    self.exec()
+                    endtime = datetime.now()
+                    self.emulationruntime = str((endtime - starttime))
+                    console.rule(
+                        f"Looks like binary is supported (emulated in {self.emulationruntime})"
+                    )
+                except Exception as e:
+                    log.error(f"Emulation dry run failed: {str(e)}")
+                    tback = traceback.format_exc()
+                    log.error(tback)
+                    exit(1)
+            else:
+                exit(1)
+        log.info(f"multithreaded: {self.multithread}")
     def _rand(self):
         path = None
         if self.rndGen:
@@ -282,6 +314,7 @@ class BinaryLoader(Stage):
 
         # replace broken qiling hooks with working ones:
         self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
+        self.QLEngine.os.set_syscall("newfstatat", ql_fixed_syscall_newfstatat)
         self.QLEngine.os.set_syscall("exit_group", syscall_exit_group)
 
 
@@ -300,6 +333,7 @@ class MemWatcher(Stage):
         mappings,
         locations=None,
         deterministic=False,
+        multithread=True
     ) -> None:
         self.traces: List[MemTrace] = []
         self.binPath = binpath
@@ -311,6 +345,7 @@ class MemWatcher(Stage):
         self.ignoredObjects = ignoredObjects
         self.mappings = mappings
         self.deterministic = deterministic
+        self.multithread = multithread
 
     def _trace_mem_read(self, ql: Qiling, access, addr, size, value):
         pc = ql.arch.regs.arch_pc
@@ -329,12 +364,15 @@ class MemWatcher(Stage):
         start_time = time.time()
         args = self.args.copy()
         args[args.index("@")] = secret
+        import sys
+        sys.stdout.fileno = lambda: False
+        sys.stderr.fileno = lambda: False
         self.QLEngine = Qiling(
             [str(self.binPath), *[str(a) for a in args]],
             str(self.rootfs),
             console=False,
             verbose=QL_VERBOSE.DISABLED,
-            multithread=True,
+            multithread=self.multithread,
             libcache=True,
         )
         self.currenttrace = MemTrace(secret)
@@ -619,6 +657,7 @@ class LeakageClassification(Stage):
             tlen = min([len(l) for l in list(addList.values())])
             for k, v in addList.items():
                 if len(v) != tlen:
+                    log.debug(f"cutoff, len(v)={len(v)}, tlen={tlen}")
                     addList[k] = v[:tlen]
             mat = np.zeros(
                 (len(addList), len(list(addList.values())[0])), dtype=np.int32

@@ -55,7 +55,7 @@ class NeuralLeakageModel(nn.Module):
     def __init__(self, X, Y, leakAddr, keylen, assetDir) -> None:
         super().__init__()
         self.X = X
-        self.X = (X - X.mean()) / (X.std() + 1e-5)
+        self.X = (X - X.mean(axis=1)) / (X.std(axis=1) + 1e-5)
         self.keylen = keylen
         self.Y = self.binary(Y).reshape(Y.shape[0], self.keylen)
         self.OriginalY = Y
@@ -106,7 +106,7 @@ class NeuralLeakageModel(nn.Module):
                     loss_val = -mest_val.forward(lpred)
                     Y_val.append(loss_val.detach().numpy())
                     X_val.append(e)
-                    # log.debug(f"idx-{idx}, e-{e}, score-{loss_val}")
+                    log.debug(f"pc-{self.leakAddr} idx-{idx}, e-{e}, score-{loss_val}")
                     if len(Y_val) > 10:
                         new_val_mean = np.mean(Y_val[-5:])
                         old_val_mean = np.mean(Y_val[-10:-5])
