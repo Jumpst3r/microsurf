@@ -1,7 +1,16 @@
 """
-Microsurf: An architecture independent dynamic side channel detection framework
-@author nicolas
+Microsurf: An architecture independent dynamic side channel detection framework.
+The microsurd module is intended to be import and cannot be executed.
+It exposes the SCDetector class.
+Usage: from microsurf import SCDetector
+
+refer to the class SCDetector documentation for further information.
 """
+
+__all__ = ['SCDetector']
+__author__ = "Nicolas Dutly"
+__version__ = "0.0.0a"
+
 
 import multiprocessing
 from typing import Any, Callable, List

@@ -29,8 +29,8 @@ class ReportGenerator:
         self.mdString += f"__Elapsed time (analysis)__: {self.loader.runtime} \n\n"
         self.mdString += f"__Elapsed time (single run emulation)__: {self.loader.emulationruntime} \n\n"
         self.mdString += f"__Total leaks (data)__: {len(self.results)} \n\n"
-        self.mdString += f"__Leaks with MI score > 0.1 __: {len(self.results[self.results['MI score'] > 0.1])} \n\n"
-        self.mdString += f"_ mean/stdev MI score accross leaks with > 0.1 MI __: {self.results[self.results['MI score'] > 0.1]['MI score'].mean():.2f} ± {self.results[self.results['MI score'] > 0.1]['MI score'].std() if self.results[self.results['MI score'] > 0.1]['MI score'].std() != np.nan else 0:.2f}\n\n"
+        self.mdString += f"__Leaks with MI score > 0.2 __: {len(self.results[self.results['MI score'] > 0.2])} \n\n"
+        self.mdString += f"__mean/stdev MI score accross leaks with > 0.2 MI __: {self.results[self.results['MI score'] > 0.2]['MI score'].mean():.2f} ± {self.results[self.results['MI score'] > 0.2]['MI score'].std() if self.results[self.results['MI score'] > 0.2]['MI score'].std() != np.nan else 0:.2f}\n\n"
         self.mdString += (
             f"__Binary__: `{self.loader.binPath}`\n >{self.loader.filemagic} \n\n"
         )
@@ -40,9 +40,9 @@ class ReportGenerator:
     def generateResults(self):
         self.mdString += "## Results\n\n"
 
-        significant = self.results[self.results['MI score'] > 0.1].sort_values(by=["MI score"], ascending=False, inplace=False)
+        significant = self.results[self.results['MI score'] > 0.2].sort_values(by=["MI score"], ascending=False, inplace=False)
         if len(significant) > 0:
-            self.mdString += "### Leaks with MI > 0.1\n\n"
+            self.mdString += "### Leaks with MI > 0.2\n\n"
             for i in range(len(significant)):
                 row = significant[i:i+1]
                 if len(row) == 0:

@@ -106,6 +106,7 @@ class NeuralLeakageModel(nn.Module):
                     loss_val = -mest_val.forward(lpred)
                     Y_val.append(loss_val.detach().numpy())
                     X_val.append(e)
+                    # log.debug(f"idx-{idx}, e-{e}, score-{loss_val}")
                     if len(Y_val) > 10:
                         new_val_mean = np.mean(Y_val[-5:])
                         old_val_mean = np.mean(Y_val[-10:-5])
@@ -132,7 +133,7 @@ class NeuralLeakageModel(nn.Module):
             keys = minmax_scale(torch.abs(grad)[0].detach().numpy(), (0, 1))
             heatmaps.append(keys[::-1, None].T)
         self.MIScore = max(self.MIScores)
-        if self.MIScore >= 0.1:
+        if self.MIScore >= 0.2:
             sns.set(font_scale=0.3)
             plt.tight_layout()
             f, ax = plt.subplots()

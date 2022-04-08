@@ -55,7 +55,7 @@ if __name__ == "__main__":
         asFile=False,
         jail=jailroot,
         sharedObjects=sharedObjects,
-        randomTraces='camellia-enc-500-x64.pickle'
+        #randomTraces='results/traces/trace_rand_ia32-camellia.pickle'
     )
    
     scd.exec(report=True)
