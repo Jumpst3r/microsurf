@@ -1,7 +1,9 @@
 import pickle
 from typing import Dict, List, Set
 from collections import defaultdict
+
 from microsurf.utils.logger import getConsole, getLogger
+import pandas as pd
 
 log = getLogger()
 console = getConsole()
@@ -119,40 +121,31 @@ class MemTraceCollectionRandom(MemTraceCollection):
     def __init__(self, traces: list[MemTrace]):
         super().__init__(traces)
         self.possibleLeaks: Set[int] = set()
+        self.buildDataFrames()
 
-    def prune(self) -> None:
-        """Automatically prunes the trace collection:
-        Iterates pairwise over all traces, if they have differing secrets but
-        the same list of memory accesses for a given PC, remove the PC from both traces.
 
-        Calling .prune() populates the field .possibleLeaks which contains:
-        Every PC for which different secrets resulted in different memory accesses.
-        Note that these may not automatically be directly secret dependent and may
-        be due to inherent non-determinism.
-
+    def buildDataFrames(self):
+        """Build a dictionary of dataframes, indexed by leak adress.
+        T[leakAddr] = df with rows indexing the executions and columns the addresses accessed.
+        The first column contains the secret.
         """
-        commonItems = set()
-        for t in self.traces:
-            for k1, v1 in t.trace.items():
-                common = 1
-                occurs = 1
-                for t2 in self.traces:
-                    if t.secret == t2.secret:
-                        continue
-                    if k1 in t2.trace and t2.trace[k1] == v1:
-                        common += 1
-                    if k1 not in t2.trace:
-                        occurs += 1
-                if common == len(self.traces):
-                    commonItems.add(k1)
-
-        log.info(f"pruned {len(commonItems)} entries")
-        for t in self.traces:
-            if len(commonItems) > 0:
-                t.remove(commonItems)
-            for k in t.trace.keys():
-                self.possibleLeaks.add(k)
-        for idx, t in enumerate(self.traces):
-            for leak in self.possibleLeaks:
-                if len(t.trace[leak]) == 0:
-                    t.trace.pop(leak)
+        perLeakDict = {}
+        leakAddrs = [list(a.trace.keys()) for a in self.traces]
+        leakAddrs = [i for l in leakAddrs for i in l] # flatten
+        from rich.progress import track
+        for l in track(leakAddrs, description="analyzing traces"):
+            row = []
+            for trace in self.traces:
+                if l not in trace.trace: continue
+                entry = []
+                entry.append(trace.secret)
+                entry += trace.trace[l]
+                row.append(entry)
+            f = pd.DataFrame(row)
+            f = f.set_index(0)
+            f.drop(f.std()[f.std() == 0].index, axis=1, inplace=True)
+            if len(f.columns) and len(set(list(f.index.values))) > 1:
+                perLeakDict[l] = f
+        self.traces = perLeakDict
+        self.possibleLeaks = list(self.perLeakTrace.keys())
+        log.info(f"Identified {len(self.possibleLeaks)} leaks")

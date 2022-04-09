@@ -50,11 +50,13 @@ class MIEstimator(nn.Module):
         y = y.repeat(1, self.X.shape[1])
         return self.mine.mi(self.X, y)
 
+import ray
 
 class NeuralLeakageModel(nn.Module):
     def __init__(self, X, Y, leakAddr, keylen, assetDir) -> None:
         super().__init__()
         self.X = X
+        ray.util.pdb.set_trace()
         self.X = (X - X.mean(axis=1)) / (X.std(axis=1) + 1e-5)
         self.keylen = keylen
         self.Y = self.binary(Y).reshape(Y.shape[0], self.keylen)

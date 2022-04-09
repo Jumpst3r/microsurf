@@ -59,7 +59,7 @@ if __name__ == "__main__":
         asFile=False,
         jail=jailroot,
         sharedObjects=sharedObjects,
-        randomTraces='results/traces/trace_rand_riscv64-camellia.pickle',
+        #randomTraces='results/traces/trace_rand_riscv64-camellia.pickle',
         #randomTraces='results/traces/trace_rand_x86_64-camellia.pickle',
         #randomTraces='results/traces/trace_rand_arm64-camellia.pickle',
         #comment="MIPSel no optimizations"

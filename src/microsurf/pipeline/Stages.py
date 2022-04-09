@@ -405,6 +405,8 @@ class MemWatcher(Stage):
 
         # replace broken qiling hooks with working ones:
         self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
+        self.QLEngine.os.set_syscall("newfstatat", ql_fixed_syscall_newfstatat)
+        self.QLEngine.os.set_syscall("exit_group", syscall_exit_group)
         self.QLEngine.run()
         self.QLEngine.stop()
         dropset = []

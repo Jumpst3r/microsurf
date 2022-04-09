@@ -107,7 +107,7 @@ class SCDetector:
             multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 2 else 1
         )
         if not ray.is_initialized():
-            ray.init(num_cpus=self.NB_CORES, local_mode=True)
+            ray.init(num_cpus=self.NB_CORES)
         self.binPath_id = ray.put(self.loader.binPath)
         self.args_id = ray.put(self.loader.args)
         self.rootfs_id = ray.put(self.loader.rootfs)
@@ -267,7 +267,6 @@ class SCDetector:
             res = ray.get(futures)
             resList += [r[0] for r in res]
         mt = MemTraceCollectionRandom([r for r in resList])
-        mt.prune()
         return mt
 
 
