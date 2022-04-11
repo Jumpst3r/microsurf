@@ -638,65 +638,22 @@ class LeakageClassification(Stage):
         self.results: Dict[str, float] = {}
         self.KEYLEN = int(len(self.loader.rndGen()) * 4)
 
-    def _key(self, t):
-        return t[0]
-
-    def get_per_leakage_mats(self):
-        X = []
-        Y = []
-        leakages = []
-        for leakAddr in self.possibleLeaks:
-            addList = {}
-            # Store the secret according to the given leakage model
-            for t in self.rndTraceCollection.traces:
-                if t.trace[leakAddr]:
-                    addList[int(t.secret, 16)] = t.trace[leakAddr]
-                else:
-                    continue
-            # check that we have the same number of targets
-            if not addList.values():
-                continue
-            tlen = min([len(l) for l in list(addList.values())])
-            for k, v in addList.items():
-                if len(v) != tlen:
-                    log.debug(f"cutoff, len(v)={len(v)}, tlen={tlen}")
-                    addList[k] = v[:tlen]
-            mat = np.zeros(
-                (len(addList), len(list(addList.values())[0])), dtype=np.int32
-            )
-            secretMat = np.zeros((len(addList.keys()), 1), dtype=object)
-            addList = OrderedDict(sorted(addList.items(), key=self._key))
-            for idx, k in enumerate(addList):
-                addr = addList[k]
-                mat[idx] = [
-                    a - self.loader.getlibbase(self.loader.getlibname(a)) for a in addr
-                ]
-                secretMat[idx] = [identity()(k)]
-
-            X.append(mat)
-            Y.append(secretMat)
-            leakages.append(leakAddr)
-
-        return X, Y, leakages
-
     def analyze(self):
         import numpy as np
-
-        X, Y, addrs = self.get_per_leakage_mats()
         futures = []
-        num_ticks = len(addrs)
+        num_ticks = len(self.rndTraceCollection.possibleLeaks)
         pb = ProgressBar(num_ticks)
         actor = pb.actor
-        for x, y, addr in zip(X, Y, addrs):
+        for k,v in self.rndTraceCollection.traces.items():
             futures.append(
-                train.remote(x, y, addr, self.KEYLEN, self.loader.reportDir, actor)
+                train.remote(v.loc[:, v.columns != 'hits'].values, v.index.to_numpy(), k, self.KEYLEN, self.loader.reportDir, actor)
             )
 
         pb.print_until_done()
         results = ray.get(futures)
         for r in results:
             (MIScore, leakAddr) = r
-            self.results[hex(leakAddr)] = MIScore
+            self.results[hex(leakAddr)] = (MIScore, self.rndTraceCollection.traces[leakAddr]['hits'].max(), len(self.rndTraceCollection.traces[leakAddr]))
 
 
     def exec(self, *args, **kwargs):

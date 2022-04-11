@@ -130,22 +130,41 @@ class MemTraceCollectionRandom(MemTraceCollection):
         The first column contains the secret.
         """
         perLeakDict = {}
-        leakAddrs = [list(a.trace.keys()) for a in self.traces]
-        leakAddrs = [i for l in leakAddrs for i in l] # flatten
+        addrs = [list(a.trace.keys()) for a in self.traces]
+        addrs = set([i for l in addrs for i in l]) # flatten
+        self.secretDepCF = []
         from rich.progress import track
-        for l in track(leakAddrs, description="analyzing traces"):
+        for l in track(addrs, description="analyzing traces"):
             row = []
+            hits = []
+            numhits = 0
             for trace in self.traces:
                 if l not in trace.trace: continue
                 entry = []
-                entry.append(trace.secret)
+                entry.append(int(trace.secret, 16))
                 entry += trace.trace[l]
+                numhits = max(numhits, len(trace.trace[l]))
+                hits.append(len(trace.trace[l]))
                 row.append(entry)
-            f = pd.DataFrame(row)
-            f = f.set_index(0)
+            colnames = ['secret'] + [str(i) for i in range(numhits)]
+            f = pd.DataFrame(row, columns=colnames)
+            f = f.set_index('secret')
             f.drop(f.std()[f.std() == 0].index, axis=1, inplace=True)
-            if len(f.columns) and len(set(list(f.index.values))) > 1:
+            if len(f.columns):
+                f.insert(loc=0, column='hits', value=hits)
                 perLeakDict[l] = f
+                if f.isnull().any().any():
+                    # inconsistent number of times that leakAddr was hit => prob secret. dep. CF 
+                    self.secretDepCF.append(l)
+                perLeakDict[l].dropna(axis=0, inplace=True)
+        if self.secretDepCF:
+            log.warning(f"probable secret dep CF detected, number of leaks may vary between executions !")
         self.traces = perLeakDict
-        self.possibleLeaks = list(self.perLeakTrace.keys())
+        self.possibleLeaks = list(self.traces.keys())
+        log.debug(f"{len(self.secretDepCF)} locations contain missing values")
+        for leak,v in self.traces.items():
+            log.debug(f"stats for {hex(leak)}")
+            log.debug(f"-num traces: {len(v.values)}")
+            log.debug(f"-num columns: {len(v.values[0])}")
+            # log.debug(f"-proportion of missing row values: \n{v.isnull().mean(axis=1)}")
         log.info(f"Identified {len(self.possibleLeaks)} leaks")

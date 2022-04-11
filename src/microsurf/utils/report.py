@@ -17,12 +17,14 @@ class ReportGenerator:
         results: pandas.DataFrame,
         loader: BinaryLoader,
         keylen: int,
+        itercount: int
     ) -> None:
         self.results = results
         self.mdString = ""
         self.loader = loader
         self.datetime = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
         self.keylen = keylen
+        self.itercount = itercount
 
     def generateHeaders(self):
         self.mdString += f"# Microsurf Analysis Results \n\n"
@@ -30,6 +32,7 @@ class ReportGenerator:
         self.mdString += f"__Elapsed time (analysis)__: {self.loader.runtime} \n\n"
         self.mdString += f"__Elapsed time (single run emulation)__: {self.loader.emulationruntime} \n\n"
         self.mdString += f"__Total leaks (data)__: {len(self.results)} \n\n"
+        self.mdString += f"__Number of collected traces__: {self.itercount} \n\n"
         self.mdString += f"__Leaks with MI score > 0.2 __: {len(self.results[self.results['MI score'] > 0.2])} \n\n"
         self.mdString += f"__mean/stdev MI score accross leaks with > 0.2 MI __: {self.results[self.results['MI score'] > 0.2]['MI score'].mean():.2f} ± {self.results[self.results['MI score'] > 0.2]['MI score'].std() if self.results[self.results['MI score'] > 0.2]['MI score'].std() != np.nan else 0:.2f}\n\n"
         self.mdString += (
@@ -50,7 +53,7 @@ class ReportGenerator:
                 if len(row) == 0:
                     break
                 self.mdString += row.loc[
-                    :, ["offset", "MI score", "Leakage model", "Symbol Name", "Path"]
+                    :, ["offset", "MI score", "Leakage model","Num of hits per trace", "Number of traces in which leak was observed" ,"Symbol Name", "Path"]
                 ].to_markdown(index=False)
                 self.mdString += "\n\nSource code snippet\n\n"
                 src = row[["src"]].values[0][0]
@@ -79,7 +82,7 @@ class ReportGenerator:
 
         self.mdString += "\n ### All Leaks, sorted by MI\n\n"
         self.mdString += (
-            self.results.loc[:, ["offset", "MI score", "Leakage model", "Symbol Name"]]
+            self.results.loc[:, ["offset", "MI score", "Leakage model","Num of hits per trace", "Number of traces in which leak was observed" ,"Symbol Name", "Path"]]
             .sort_values(by=["MI score"], ascending=False)
             .to_markdown(index=False)
         )

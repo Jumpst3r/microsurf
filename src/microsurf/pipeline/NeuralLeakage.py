@@ -56,8 +56,13 @@ class NeuralLeakageModel(nn.Module):
     def __init__(self, X, Y, leakAddr, keylen, assetDir) -> None:
         super().__init__()
         self.X = X
-        ray.util.pdb.set_trace()
-        self.X = (X - X.mean(axis=1)) / (X.std(axis=1) + 1e-5)
+        if len(self.X) <= 1:
+            log.debug(f"sample count too low for {hex(leakAddr)}, returning MI = 0.0")
+            self.abort = True
+            self.MIScore = 0
+        else:
+            self.abort = False
+            self.X = (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-5)
         self.keylen = keylen
         self.Y = self.binary(Y).reshape(Y.shape[0], self.keylen)
         self.OriginalY = Y
@@ -67,6 +72,7 @@ class NeuralLeakageModel(nn.Module):
         self.leakAddr = leakAddr
 
     def train(self):
+        if self.abort: return
         self.MIScores = []
         heatmaps = []
 
@@ -88,7 +94,6 @@ class NeuralLeakageModel(nn.Module):
             Y = []
             X_val = []
             Y_val = []
-            icount = 0
             mest_val = MIEstimator(x_val)
             mest_train = MIEstimator(x_train)
             old_val_mean = 0
@@ -178,7 +183,7 @@ class NeuralLeakageModel(nn.Module):
                 ]
                 + ["MI"],
                 yticklabels=[
-                    f"inv-{i}" if i % 2 else " " for i in range(self.X.shape[1])
+                    f"inv-{i}" if i % 2 else " " for i in range(self.dependencies.shape[1])
                 ],  # MSB to LSB
                 linewidths=0.5,
             )
@@ -192,7 +197,7 @@ class NeuralLeakageModel(nn.Module):
     def binary(self, Y):
         YL = np.zeros((Y.shape[0], self.keylen))
         for i, x in enumerate(Y):  # row
-            binR = bin(x[0].item())[2:].zfill(self.keylen)[::-1]
+            binR = bin(x)[2:].zfill(self.keylen)[::-1]
             for j, bit in enumerate(binR):  # col
                 YL[i][j] = int(bit)
         return torch.tensor(YL, dtype=torch.float32) - 0.5

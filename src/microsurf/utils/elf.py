@@ -101,7 +101,7 @@ def getCodeSnippet(file: str, loc: int) -> List[str]:
             with open(path, "r") as f2:
                 lines = f2.readlines()
             lines[ln - 1] = "!!! " + lines[ln - 1].strip('\n') + " !!!\n"
-            return lines[ln - 5 : ln + 5], path
+            return lines[ln - 5 : ln + 5], path, ln
         except Exception as e:
             log.debug(f"source lines not available for PC {hex(loc)}")
-            return [], None
+            return [], None, None

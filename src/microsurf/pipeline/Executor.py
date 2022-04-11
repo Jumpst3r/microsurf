@@ -23,7 +23,7 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results: List[int] = []
-        self.ITER_COUNT = 500
+        self.ITER_COUNT = 10
         self.multiprocessing = True
 
     def run(self, detector):
@@ -120,13 +120,13 @@ class PipeLineExecutor:
                             if ".so" in label or self.loader.dynamic
                             else getfnname(path, k)
                         )
-                        source, path = (
+                        source, path, ln = (
                             getCodeSnippet(path, offset)
                             if ".so" in label or self.loader.dynamic
                             else getCodeSnippet(path, k)
                         )
 
-                        mival = self.mivals[hex(k)]
+                        mival, nhits, samples = self.mivals[hex(k)]
                         console.print(
                             f'{offset:#08x} - [MI = {mival:.2f}] \t at {symbname if symbname else "??":<30} {label}'
                         )
@@ -137,13 +137,15 @@ class PipeLineExecutor:
                                 "MI score": mival,
                                 "Leakage model": "neural-learnt",
                                 "Symbol Name": f'{symbname if symbname else "??":}',
+                                "Num of hits per trace": nhits,
+                                "Number of traces in which leak was observed": samples,
                                 "src": source,
-                                "Path": path
+                                "Path": f"{path}:{ln}"
                             }
                         )
                     else:
                         symbname = getfnname(path, k)
-                        source, path = getCodeSnippet(path, k)
+                        source, path, ln = getCodeSnippet(path, k)
                         mival = self.mivals[hex(k)]
                         console.print(
                             f'{k:#08x} -[MI = {mival:.2f}]  \t at {symbname if symbname else "??":<30} {label}'
@@ -156,8 +158,10 @@ class PipeLineExecutor:
                                 "Leakage model": "neural-learnt",
                                 "Symbol Name": f'{symbname if symbname else "??":}',
                                 "Object": f'{path.split("/")[-1]}',
+                                "Num of hits per trace": nhits,
+                                "Number of traces in which leak was observed": samples,
                                 "src": source,
-                                "Path": path
+                                "Path": f"{path}:{ln}"
                             }
                         )
         endtime = time.time()
@@ -176,6 +180,7 @@ class PipeLineExecutor:
             results=self.resultsDFTotal,
             loader=self.loader,
             keylen=self.KEYLEN,
+            itercount=self.ITER_COUNT
         )
         rg.saveMD()
 
