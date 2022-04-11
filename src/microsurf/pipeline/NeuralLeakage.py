@@ -183,7 +183,7 @@ class NeuralLeakageModel(nn.Module):
                 ]
                 + ["MI"],
                 yticklabels=[
-                    f"inv-{i}" if i % 2 else " " for i in range(dependencies.shape[1])
+                    f"inv-{i}" if i % 2 else " " for i in range(self.MIScores.shape[1])
                 ],  # MSB to LSB
                 linewidths=0.5,
             )

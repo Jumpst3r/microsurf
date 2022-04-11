@@ -23,7 +23,7 @@ class PipeLineExecutor:
     def __init__(self, loader: BinaryLoader) -> None:
         self.loader = loader
         self.results: List[int] = []
-        self.ITER_COUNT = 10
+        self.ITER_COUNT = 1000
         self.multiprocessing = True
 
     def run(self, detector):
