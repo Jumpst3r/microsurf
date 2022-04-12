@@ -59,10 +59,10 @@ if __name__ == "__main__":
         asFile=False,
         jail=jailroot,
         sharedObjects=sharedObjects,
-        #randomTraces='results/traces/trace_rand_riscv64-camellia.pickle',
+        #randomTraces='results/traces/trace_rand_riscv64-camellia-1k.pickle',
         #randomTraces='results/traces/trace_rand_x86_64-camellia.pickle',
         #randomTraces='results/traces/trace_rand_arm64-camellia.pickle',
-        #comment="MIPSel no optimizations"
+        comment="ARM 64 1K traces, MI threshold 0.2"
     )
    
     scd.exec(report=True)

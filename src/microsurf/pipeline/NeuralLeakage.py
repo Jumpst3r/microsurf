@@ -129,7 +129,7 @@ class NeuralLeakageModel(nn.Module):
             score = mest_total.forward(lpred).detach().numpy()
             # TODO add sklearn call for comp.
             self.MIScores.append(score)
-            if score < 0.1:
+            if score < 0.2:
                 self.MIScore = max(self.MIScores)
                 break
             input = torch.ones((1, self.keylen)) - 0.5
@@ -183,7 +183,7 @@ class NeuralLeakageModel(nn.Module):
                 ]
                 + ["MI"],
                 yticklabels=[
-                    f"inv-{i}" if i % 2 else " " for i in range(self.MIScores.shape[1])
+                    f"inv-{i}" if i % 2 else " " for i in range(self.MIScores.shape[0])
                 ],  # MSB to LSB
                 linewidths=0.5,
             )
