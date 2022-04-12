@@ -1,4 +1,5 @@
 import logging
+import multiprocessing
 import os
 import random
 import tempfile
@@ -11,6 +12,7 @@ from pathlib import Path, PurePath
 from typing import Dict, List, Tuple
 import matplotlib.ticker as ticker
 from rich.progress import track
+from asyncio import Event
 
 import magic
 import matplotlib.pyplot as plt
@@ -18,10 +20,13 @@ import numpy as np
 import ray
 import scipy.stats as stats
 import seaborn as sns
-from capstone import CS_ARCH_ARM, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_MODE_ARM, Cs
+from capstone import CS_ARCH_ARM, CS_ARCH_MIPS, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_MODE_ARM, CS_MODE_MIPS32, Cs
 from microsurf.pipeline.LeakageModels import getCryptoModels, identity
 from qiling import Qiling
+from qiling.const import QL_VERBOSE
 import microsurf
+from .NeuralLeakage import NeuralLeakageModel
+
 
 from ..utils.hijack import (
     const_clock_gettime,
@@ -30,6 +35,7 @@ from ..utils.hijack import (
     const_time,
     device_random,
     ql_fixed_syscall_faccessat,
+    ql_fixed_syscall_newfstatat,
     syscall_exit_group,
 )
 from ..utils.logger import LOGGING_LEVEL, getConsole, getLogger, getQilingLogger
@@ -67,6 +73,7 @@ class BinaryLoader(Stage):
         self.ignoredObjects = []
         self.newArgs = self.args.copy()
         self.reportDir = kwargs.get("reportDir", "results")
+        self.comment = kwargs.get("comment", "none")
         try:
             self.secretArgIndex = args.index("@")
         except IndexError as e:
@@ -84,6 +91,10 @@ class BinaryLoader(Stage):
             self.md = Cs(CS_ARCH_X86, CS_MODE_64)
         elif "ARM" in fileinfo:
             self.md = Cs(CS_ARCH_ARM, CS_MODE_ARM)
+        elif "MIPS32" in fileinfo:
+            self.md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS32)
+        elif "RISC-V" in fileinfo:
+            pass
         else:
             log.info(fileinfo)
             log.error("Target architecture not implemented")
@@ -112,8 +123,9 @@ class BinaryLoader(Stage):
                 log_override=getQilingLogger(),
                 verbose=1,
                 console=True,
-                multithread=True,
+                multithread=False,
             )
+            self.multithread = False
             if path:
                 self.QLEngine.add_fs_mapper(path.split("/")[-1], path.split("/")[-1])
             self.fixRandomness(self.deterministic)
@@ -134,10 +146,36 @@ class BinaryLoader(Stage):
             )
         except Exception as e:
             log.error(f"Emulation dry run failed: {str(e)}")
-            log.error(traceback.format_exc())
-            exit(1)
-        self.md.detail = True
-
+            tback = traceback.format_exc()
+            log.error(tback)
+            if 'cur_thread' in tback and 'spawn' not in str(e):
+                log.info("re-running with threading support enabled")
+                try:
+                    self.QLEngine = Qiling(
+                        [str(self.binPath), *self.newArgs],
+                        str(self.rootfs),
+                        log_override=getQilingLogger(),
+                        verbose=1,
+                        console=True,
+                        multithread=True,
+                    )
+                    self.fixRandomness(self.deterministic)
+                    self.multithread = True
+                    starttime = datetime.now()
+                    self.exec()
+                    endtime = datetime.now()
+                    self.emulationruntime = str((endtime - starttime))
+                    console.rule(
+                        f"Looks like binary is supported (emulated in {self.emulationruntime})"
+                    )
+                except Exception as e:
+                    log.error(f"Emulation dry run failed: {str(e)}")
+                    tback = traceback.format_exc()
+                    log.error(tback)
+                    exit(1)
+            else:
+                exit(1)
+        log.info(f"multithreaded: {self.multithread}")
     def _rand(self):
         path = None
         if self.rndGen:
@@ -276,6 +314,7 @@ class BinaryLoader(Stage):
 
         # replace broken qiling hooks with working ones:
         self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
+        self.QLEngine.os.set_syscall("newfstatat", ql_fixed_syscall_newfstatat)
         self.QLEngine.os.set_syscall("exit_group", syscall_exit_group)
 
 
@@ -294,6 +333,7 @@ class MemWatcher(Stage):
         mappings,
         locations=None,
         deterministic=False,
+        multithread=True
     ) -> None:
         self.traces: List[MemTrace] = []
         self.binPath = binpath
@@ -305,6 +345,7 @@ class MemWatcher(Stage):
         self.ignoredObjects = ignoredObjects
         self.mappings = mappings
         self.deterministic = deterministic
+        self.multithread = multithread
 
     def _trace_mem_read(self, ql: Qiling, access, addr, size, value):
         pc = ql.arch.regs.arch_pc
@@ -323,11 +364,15 @@ class MemWatcher(Stage):
         start_time = time.time()
         args = self.args.copy()
         args[args.index("@")] = secret
+        import sys
+        sys.stdout.fileno = lambda: False
+        sys.stderr.fileno = lambda: False
         self.QLEngine = Qiling(
             [str(self.binPath), *[str(a) for a in args]],
             str(self.rootfs),
             console=False,
-            multithread=True,
+            verbose=QL_VERBOSE.DISABLED,
+            multithread=self.multithread,
             libcache=True,
         )
         self.currenttrace = MemTrace(secret)
@@ -360,6 +405,8 @@ class MemWatcher(Stage):
 
         # replace broken qiling hooks with working ones:
         self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
+        self.QLEngine.os.set_syscall("newfstatat", ql_fixed_syscall_newfstatat)
+        self.QLEngine.os.set_syscall("exit_group", syscall_exit_group)
         self.QLEngine.run()
         self.QLEngine.stop()
         dropset = []
@@ -486,6 +533,97 @@ class DistributionAnalyzer(Stage):
         return self.results
 
 
+@ray.remote(num_cpus=1)
+def train(X, Y, leakAddr, keylen, reportDir, pba):
+    nleakage = NeuralLeakageModel(X, Y, leakAddr, keylen, reportDir + "/assets")
+    try:
+        nleakage.train()
+    except Exception as e:
+        log.error("worked encountered exception:")
+        log.error(str(e))
+        log.error(traceback.format_exc())
+        pba.update.remote(1)
+        return (-1, leakAddr)
+    pba.update.remote(1)
+    return (nleakage.MIScore, leakAddr)
+
+
+## BEGIN RAY UTILS PROGRESS BAR (taken from https://docs.ray.io/en/latest/ray-core/examples/progress_bar.html)
+from ray.actor import ActorHandle
+from tqdm.rich import tqdm
+
+
+@ray.remote
+class ProgressBarActor:
+    def __init__(self) -> None:
+        self.counter = 0
+        self.delta = 0
+        self.event = Event()
+
+    def update(self, num_items_completed: int) -> None:
+        """Updates the ProgressBar with the incremental
+        number of items that were just completed.
+        """
+        self.counter += num_items_completed
+        self.delta += num_items_completed
+        self.event.set()
+
+    async def wait_for_update(self) -> Tuple[int, int]:
+        """Blocking call.
+
+        Waits until somebody calls `update`, then returns a tuple of
+        the number of updates since the last call to
+        `wait_for_update`, and the total number of completed items.
+        """
+        await self.event.wait()
+        self.event.clear()
+        saved_delta = self.delta
+        self.delta = 0
+        return saved_delta, self.counter
+
+    def get_counter(self) -> int:
+        """
+        Returns the total number of complete items.
+        """
+        return self.counter
+
+
+class ProgressBar:
+    def __init__(self, total: int, description: str = ""):
+        # Ray actors don't seem to play nice with mypy, generating
+        # a spurious warning for the following line,
+        # which we need to suppress. The code is fine.
+        self.progress_actor = ProgressBarActor.remote()  # type: ignore
+        self.total = total
+        self.description = description
+
+    @property
+    def actor(self) -> ActorHandle:
+        """Returns a reference to the remote `ProgressBarActor`.
+
+        When you complete tasks, call `update` on the actor.
+        """
+        return self.progress_actor
+
+    def print_until_done(self) -> None:
+        """Blocking call.
+
+        Do this after starting a series of remote Ray tasks, to which you've
+        passed the actor handle. Each of them calls `update` on the actor.
+        When the progress meter reaches 100%, this method returns.
+        """
+        pbar = tqdm(desc=self.description, total=self.total)
+        while True:
+            delta, counter = ray.get(self.actor.wait_for_update.remote())
+            pbar.update(delta)
+            if counter >= self.total:
+                pbar.close()
+                return
+
+
+### END RAY PROGRESSBAR SNIPPET
+
+
 class LeakageClassification(Stage):
     def __init__(
         self,
@@ -498,212 +636,28 @@ class LeakageClassification(Stage):
         # The leakage function can return one dimensional data (ex. hamm. dist.) or multidimensional data (bit/byte slices)
         self.loader = binaryLoader
         self.results: Dict[str, float] = {}
-        self.KEYLEN = None
-
-    def _key(self, t):
-        return t[0]
+        self.KEYLEN = int(len(self.loader.rndGen()) * 4)
 
     def analyze(self):
         import numpy as np
-        from sklearn.feature_selection import mutual_info_regression
-
-        secrets = [t.secret for t in self.rndTraceCollection.traces]
-        slen = -1
-        fixedLenSecrets = True
-        for s in secrets:
-            secret = int(s, 16)
-            if slen == -1:
-                slen = len(s) * 4
-            elif slen != len(s) * 4:
-                log.error(slen)
-                log.error(s)
-                fixedLenSecrets = False
-        if fixedLenSecrets:
-            CRYPTO_MODELS = getCryptoModels(slen)
-            log.info(f"using fixed key leakage models (KEYLEN: {slen})")
-            self.KEYLEN = slen
-        else:
-            log.info("using variable key leakage models.")
-            CRYPTO_MODELS = getCryptoModels(0)
-        # Convert traces to trace per IP/PC
-        for leakAddr in track(
-            self.possibleLeaks, description="training leakage models"
-        ):
-            addList = {}
-            # Store the secret according to the given leakage model
-            for t in self.rndTraceCollection.traces:
-                if t.trace[leakAddr]:
-                    addList[int(t.secret, 16)] = t.trace[leakAddr]
-            # check that we have the same number of targets
-            tlen = min([len(l) for l in list(addList.values())])
-            for k, v in addList.items():
-                if len(v) != tlen:
-                    addList[k] = v[:tlen]
-            mat = np.zeros(
-                (len(addList), len(list(addList.values())[0])), dtype=np.int32
+        futures = []
+        num_ticks = len(self.rndTraceCollection.possibleLeaks)
+        pb = ProgressBar(num_ticks)
+        actor = pb.actor
+        for k,v in self.rndTraceCollection.traces.items():
+            futures.append(
+                train.remote(v.loc[:, v.columns != 'hits'].values, v.index.to_numpy(), k, self.KEYLEN, self.loader.reportDir, actor)
             )
-            secretMat = np.zeros((len(addList.keys()), 1))
-            addList = OrderedDict(sorted(addList.items(), key=self._key))
-            for idx, k in enumerate(addList):
-                addr = addList[k]
-                mat[idx] = [
-                    a - self.loader.getlibbase(self.loader.getlibname(a)) for a in addr
-                ]
-                secretMat[idx] = [identity()(k)]
 
-            from .NeuralLeakage import NeuralLeakageModel
+        pb.print_until_done()
+        results = ray.get(futures)
+        for r in results:
+            (MIScore, leakAddr) = r
+            self.results[hex(leakAddr)] = (MIScore, self.rndTraceCollection.traces[leakAddr]['hits'].max(), len(self.rndTraceCollection.traces[leakAddr]))
 
-            log.info(f"learning optimal leakage model for PC {hex(leakAddr)}")
-            nleakage = NeuralLeakageModel(
-                mat, secretMat, self.KEYLEN, leakAddr, self.loader.reportDir + "/assets"
-            )
-            nleakage.train()
-
-            log.info(f"MI score for {hex(leakAddr)}: {nleakage.MIScore}")
-            # TODO: let the user specify the MI threshold.
-            if nleakage.MIScore >= 0.001:
-                self.results[hex(leakAddr)] = (nleakage, nleakage.MIScore)
 
     def exec(self, *args, **kwargs):
         self.analyze()
-
-    def finalize(self, *args, **kwargs):
-        return self.results
-
-
-class LeakageRegression(Stage):
-    def __init__(
-        self,
-        rndTraceCollectionTrain: MemTraceCollection,
-        rndTraceCollectionTest: MemTraceCollection,
-        binaryLoader: BinaryLoader,
-        possibleLeaks,
-        mivals,
-    ):
-        self.rndTraceCollectionTrain = rndTraceCollectionTrain
-        self.rndTraceCollectionTest = rndTraceCollectionTest
-        self.possibleLeaks = possibleLeaks
-        self.loader = binaryLoader
-        self.results: Dict[int, float] = {}
-        self.mivals = mivals
-
-    def _key(self, t):
-        return t[0]
-
-    def convertTraces(self, rndTraceCollection, leakAddr):
-        addList = {}
-        # Store the secret according to the given leakage model
-        for t in rndTraceCollection.traces:
-            if t.trace[leakAddr]:
-                addList[int(t.secret, 16)] = t.trace[leakAddr]
-        # check that we have the same number of targets
-        tlen = min([len(l) for l in list(addList.values())])
-        for k, v in addList.items():
-            if len(v) != tlen:
-                addList[k] = v[:tlen]
-        mat = np.zeros((len(addList), len(list(addList.values())[0])), dtype=np.uint64)
-        secretMat = np.zeros((len(addList.keys()), 1))
-        addList = OrderedDict(sorted(addList.items(), key=self._key))
-        for idx, k in enumerate(addList):
-            addr = addList[k]
-            mat[idx] = [
-                a - self.loader.getlibbase(self.loader.getlibname(a)) for a in addr
-            ]
-            secretMat[idx] = self.leakageModelFunction(k)
-        return mat, secretMat, tlen
-
-    def regress(self):
-        import numpy as np
-        from sklearn.linear_model import LinearRegression
-        from sklearn import tree
-        import seaborn as sns
-
-        # Convert traces to trace per IP/PC
-        log.debug(f"leak locations in LeakRegression: {self.possibleLeaks}")
-        for leakAddr in self.possibleLeaks:
-            self.leakageModelFunction = list(self.mivals[hex(leakAddr)].keys())[0]
-
-            X_train, Y_train, tlen = self.convertTraces(
-                self.rndTraceCollectionTrain, leakAddr
-            )
-            X_test, Y_test, tlen = self.convertTraces(
-                self.rndTraceCollectionTest, leakAddr
-            )
-
-            if "bit" in str(self.leakageModelFunction):  # two class classification
-                # should be named classifier but this makes the code shorter
-                regressor = tree.DecisionTreeClassifier(max_depth=2).fit(
-                    X_train, Y_train.ravel()
-                )
-                classcore = regressor.score(X_test, Y_test.ravel())
-                regscore = 0
-            else:
-                regressor = LinearRegression().fit(X_train, Y_train.ravel())
-                regscore = regressor.score(X_test, Y_test.ravel())
-                classcore = 0
-            if regscore > classcore:
-                log.info(
-                    f"Linear regression score for {hex(leakAddr - self.loader.getlibbase(self.loader.getlibname(leakAddr)))}: {regscore:.2f}"
-                )
-            else:
-                log.info(
-                    f"Prediction score for {hex(leakAddr - self.loader.getlibbase(self.loader.getlibname(leakAddr)))}: {classcore:.2f}"
-                )
-            if LOGGING_LEVEL == logging.DEBUG:
-                if tlen >= 2:
-                    PLOTSECRETS = 5 if Y_test.shape[0] >= 5 else Y_test.shape[0]
-                    heatmat = np.zeros(
-                        (
-                            PLOTSECRETS,
-                            int(X_test[:PLOTSECRETS].max())
-                            - int(X_test[:PLOTSECRETS].min())
-                            + 1,
-                        )
-                    )
-                    absvals = X_test - X_test[:PLOTSECRETS].min()
-                    for rowid, _ in enumerate(X_test[:PLOTSECRETS]):
-                        for colid, _ in enumerate(X_test.T):
-                            heatmat[rowid][absvals[rowid, colid]] = rowid + 1
-                    sns.set(font_scale=0.4)
-                    plt.figure(figsize=(7, 3))
-                    hfig = sns.heatmap(
-                        heatmat,
-                        cbar=False,
-                        xticklabels=[
-                            hex(int(s)) if int(s) % 128 == 0 else ""
-                            for s in range(
-                                X_test[:PLOTSECRETS].min(), X_test[:PLOTSECRETS].max()
-                            )
-                        ],
-                        cmap="cubehelix_r",
-                        yticklabels=[hex(int(s[0])) for s in Y_test[:PLOTSECRETS]],
-                    )
-                    hfig.set(
-                        xlabel="Memory offset",
-                        ylabel=f"{str(self.leakageModelFunction)}(secret)",
-                    )
-
-                    fig = hfig.get_figure()
-                    fig.savefig(f"debug/heatmap-{leakAddr}.png", dpi=300)
-                if tlen == 1:
-                    plt.style.use("seaborn")
-                    fig, ax = plt.subplots(1, 1)
-                    figtitle = f"Trace regression for PC={hex(leakAddr)} (lib = {self.loader.getlibname(leakAddr)})\n score={regscore:.2f}"
-                    fig.suptitle(figtitle)
-                    if "bit" in str(self.leakageModelFunction):
-                        ax.scatter(X_test, Y_test)
-                        # ax.scatter(X_test, regressor.predict(X_test), c='g')
-                    else:
-                        ax.scatter(X_test, Y_test)
-                        ax.plot(X_test, regressor.predict(X_test))
-                    ax.set_xlabel(f"{str(self.leakageModelFunction)}(secret)")
-                    ax.set_ylabel("offset")
-                    plt.savefig(f"debug/reg-{hex(leakAddr)}.png")
-                    plt.close()
-            self.results[leakAddr] = (regscore, classcore)
-
-    def exec(self, *args, **kwargs):
-        self.regress()
 
     def finalize(self, *args, **kwargs):
         return self.results

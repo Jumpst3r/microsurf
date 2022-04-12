@@ -1,0 +1,39 @@
+Using implicit seed configuration
+Configuring OpenSSL version 1.1.1-dev (0x10101000L)
+for linux-mips32
+    no-aria         [default]  OPENSSL_NO_ARIA (skip dir)
+    no-asan         [default]  OPENSSL_NO_ASAN
+    no-crypto-mdebug [default]  OPENSSL_NO_CRYPTO_MDEBUG
+    no-crypto-mdebug-backtrace [default]  OPENSSL_NO_CRYPTO_MDEBUG_BACKTRACE
+    no-devcryptoeng [default]  OPENSSL_NO_DEVCRYPTOENG
+    no-ec_nistp_64_gcc_128 [default]  OPENSSL_NO_EC_NISTP_64_GCC_128
+    no-egd          [default]  OPENSSL_NO_EGD
+    no-external-tests [default]  OPENSSL_NO_EXTERNAL_TESTS
+    no-fuzz-afl     [default]  OPENSSL_NO_FUZZ_AFL
+    no-fuzz-libfuzzer [default]  OPENSSL_NO_FUZZ_LIBFUZZER
+    no-heartbeats   [default]  OPENSSL_NO_HEARTBEATS
+    no-md2          [default]  OPENSSL_NO_MD2 (skip dir)
+    no-msan         [default]  OPENSSL_NO_MSAN
+    no-rc5          [default]  OPENSSL_NO_RC5 (skip dir)
+    no-sctp         [default]  OPENSSL_NO_SCTP
+    no-ssl-trace    [default]  OPENSSL_NO_SSL_TRACE
+    no-ssl3         [default]  OPENSSL_NO_SSL3
+    no-ssl3-method  [default]  OPENSSL_NO_SSL3_METHOD
+    no-threads      [option]
+    no-tls13downgrade [default]  OPENSSL_NO_TLS13DOWNGRADE
+    no-tls1_3       [default]  OPENSSL_NO_TLS1_3
+    no-ubsan        [default]  OPENSSL_NO_UBSAN
+    no-unit-test    [default]  OPENSSL_NO_UNIT_TEST
+    no-weak-ssl-ciphers [default]  OPENSSL_NO_WEAK_SSL_CIPHERS
+    no-zlib         [default]
+    no-zlib-dynamic [default]
+
+PERL          =/usr/bin/perl
+PERLVERSION   =5.32.1 for x86_64-linux-gnu-thread-multi
+HASHBANGPERL  =/usr/bin/env perl
+CC            =/home/nicolas/Downloads/mips32el--glibc--stable-2018.11-1/bin/mipsel-buildroot-linux-gnu-gcc
+CFLAG         =-Wall -O0 -g -mabi=32 -DBN_DIV3W -mips2  -gdwarf-4
+CXX           =/home/nicolas/Downloads/mips32el--glibc--stable-2018.11-1/bin/mipsel-buildroot-linux-gnu-g++
+CXXFLAG       =-Wall -O0 -g -mabi=32 -DBN_DIV3W  -gdwarf-4
+DEFINES       =DSO_DLFCN HAVE_DLFCN_H OPENSSL_NO_STATIC_ENGINE OPENSSL_PIC OPENSSL_BN_ASM_MONT SHA1_ASM SHA256_ASM AES_ASM
+EX_LIBS       =-ldl

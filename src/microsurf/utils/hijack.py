@@ -18,6 +18,8 @@ from qiling.os.mapper import QlFsMappedObject
 from .logger import getLogger
 from qiling.const import QL_ARCH
 from qiling.os.posix.stat import Stat
+from qiling.os.posix.syscall import pack_stat_struct, AT_FDCWD, NR_OPEN
+
 import ctypes
 
 log = getLogger()
@@ -161,6 +163,50 @@ def ql_fixed_syscall_faccessat(ql, dfd: int, filename: int, mode: int):
         ql.log.debug(f"File found: {access_path}")
 
     return regreturn
+
+"""
+When testing the emulation of certain RISCV 64 bit binaries, some shared objects would fail to load.
+This is because in the Qiling emulator, the transform_path return an empty path string if a file 
+descriptor is already present, which causes the if condition to fail.
+
+TODO: File a PR on the Qiling GH
+
+The following two functions are fixed versions of the ones found in
+
+qiling/os/posix/syscall/stat.py
+"""
+
+def transform_path(ql, dirfd: int, path: int):
+    """
+    Fixed version of the Qiling implementation.
+    """
+
+    dirfd = ql.unpacks(ql.pack(dirfd))
+    path = ql.os.utils.read_cstring(path)
+
+    if path.startswith('/'):
+        return None, os.path.join(ql.rootfs, path)
+
+    if dirfd == AT_FDCWD:
+        return None, ql.os.path.transform_to_real_path(path)
+
+    if 0 < dirfd < NR_OPEN:
+        return ql.os.fd[dirfd].fileno(), ql.os.fd[dirfd].name # FIXED, return the path if fd is present
+
+# copy of the fixed_syscall_newfstatat Qiling code, forces the usage of our fixed transform_path function
+def ql_fixed_syscall_newfstatat(ql, dirfd: int, path: int, buf_ptr: int, flag: int):
+    dirfd, real_path = transform_path(ql, dirfd, path)
+    
+    if os.path.exists(real_path):
+        buf = pack_stat_struct(ql, Stat(real_path, dirfd))
+        ql.mem.write(buf_ptr, buf)
+
+        regreturn = 0
+    else:
+        regreturn = -1
+
+    return regreturn
+
 
 
 """

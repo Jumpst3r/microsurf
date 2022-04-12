@@ -1,20 +1,41 @@
+import os
 import logging
 from matplotlib.pyplot import yticks
 from mine.models.mine import Mine
+from sklearn.model_selection import train_test_split
 import torch.nn as nn
 import numpy as np
 from sklearn.preprocessing import minmax_scale
 import torch
+from tqdm import tqdm
 from microsurf.utils.logger import LOGGING_LEVEL, getLogger
 import seaborn as sns
+import torch.nn.functional as F
+from rich.progress import track
+import matplotlib.pyplot as plt
 
 log = getLogger()
+
+
+class shiftedRELU(nn.Module):
+    __constants__ = ["inplace"]
+    inplace: bool
+
+    def __init__(self, weights=1, inplace: bool = False):
+        super().__init__()
+        self.inplace = inplace
+        self.weights = weights
+
+    def forward(self, input):
+        return F.relu(input - 0.5, inplace=self.inplace)
 
 
 class MIEstimator(nn.Module):
     def __init__(self, X) -> None:
         super().__init__()
-        self.X = torch.tensor(minmax_scale(np.array(X, dtype=np.float32), (-1, 1)))
+        self.X = X
+
+    def trainEstimator(self, y):
         self.T = nn.Sequential(
             nn.Linear(self.X.shape[1] * 2, 100),
             nn.ReLU(),
@@ -23,105 +44,160 @@ class MIEstimator(nn.Module):
             nn.Linear(100, 1),
         )
         self.mine = Mine(T=self.T, loss="mine", method="concat")
-
-    def trainEstimator(self, y):
-        y = torch.tensor(y).expand(y.shape[0], self.X.shape[1])
         self.mine.optimize(self.X, y, iters=100, batch_size=self.X.shape[0])
 
     def forward(self, y):
         y = y.repeat(1, self.X.shape[1])
         return self.mine.mi(self.X, y)
 
+import ray
 
 class NeuralLeakageModel(nn.Module):
-    def __init__(self, X, Y, keylen, leakAddr, assetDir) -> None:
+    def __init__(self, X, Y, leakAddr, keylen, assetDir) -> None:
         super().__init__()
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.X = minmax_scale(np.array(X, dtype=np.float64), (-1, 1))
+        self.X = X
+        if len(self.X) <= 1:
+            log.debug(f"sample count too low for {hex(leakAddr)}, returning MI = 0.0")
+            self.abort = True
+            self.MIScore = 0
+        else:
+            self.abort = False
+            self.X = (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-5)
         self.keylen = keylen
-        self.Y = self.binary(Y).reshape(Y.shape[0], keylen)
+        self.Y = self.binary(Y).reshape(Y.shape[0], self.keylen)
         self.OriginalY = Y
         self.assetDir = assetDir
-        self.HUnits = 300
-        self.LeakageModel = nn.Sequential(
-            nn.Linear(keylen, self.HUnits),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(self.HUnits, self.HUnits),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(self.HUnits, 1),
-        ).to(self.device)
+        self.HUnits = 50
+        self.LeakageModels = []
         self.leakAddr = leakAddr
 
     def train(self):
-        optim = torch.optim.Adam(self.LeakageModel.parameters(), lr=1e-3)
-        mest = MIEstimator(self.X)
-        X = []
-        Y = []
-        icount = 0
-        for e in range(500):
-            lpred = self.LeakageModel(self.Y)
-            mest.trainEstimator(lpred)
-            loss = -mest.forward(lpred)
-            optim.zero_grad()
-            loss.backward()
-            # stop learning if MI doesn't increase => FP
-            if e >= 40 and -loss < 0.001:
-                break
-            optim.step()
-            # good enough, stop
-            if -loss > 1.0:
-                icount += 1
-                if icount > 10:
-                    break
-            if e % 10 == 0:
-                log.debug(f"loss at epoch {e} is {loss:.8f}")
-            X.append(e)
-            Y.append(loss.cpu().detach().numpy())
-        self.LeakageModel.eval()
-        lpred = self.LeakageModel(self.Y)
-        mest.trainEstimator(lpred)
-        self.MIScore = mest.forward(lpred)
+        if self.abort: return
+        self.MIScores = []
+        heatmaps = []
 
-        if self.MIScore > 0.001:
-            import matplotlib.pyplot as plt
-
-            input = torch.ones((1, self.keylen)).to(self.device)
-            self.LeakageModel.eval()
-            input.requires_grad = True
-            pred = self.LeakageModel(input)
-            pred.backward()
-            keys = minmax_scale(torch.abs(input.grad)[0].detach().cpu().numpy(), (0, 1))
-            grid_kws = {"height_ratios": (0.9, 0.05), "hspace": 0.0001}
-            sns.set(font_scale=0.4)
-            plt.tight_layout()
-            f, (ax, cbar_ax) = plt.subplots(2, gridspec_kw=grid_kws, figsize=(7, 2))
-            ax = sns.heatmap(
-                keys[:, None].T,
-                ax=ax,
-                cbar_ax=cbar_ax,
-                cbar_kws={"orientation": "horizontal"},
-                square=True,
-                cmap="Blues",
-                yticklabels=False,
+        for idx, x in enumerate(self.X.T):
+            x = x[:, None]
+            x_train, x_val, y_train, y_val = train_test_split(
+                x, self.Y, test_size=0.5, random_state=42
             )
+            lm = nn.Sequential(
+                nn.Linear(self.keylen, self.HUnits),
+                nn.Dropout(0.5),
+                nn.ReLU(),
+                nn.Linear(self.HUnits, self.HUnits),
+                nn.Dropout(0.5),
+                nn.ReLU(),
+                nn.Linear(self.HUnits, 1),
+            )
+            optim = torch.optim.Adam(lm.parameters(), lr=1e-3)
+            Y = []
+            X_val = []
+            Y_val = []
+            mest_val = MIEstimator(x_val)
+            mest_train = MIEstimator(x_train)
+            old_val_mean = 0
+            new_val_mean = 0
+            for e in range(1, 250):
+                lpred = lm(y_train)
+                mest_train.trainEstimator(lpred)
+                loss = -mest_train.forward(lpred)
+                optim.zero_grad()
+                loss.backward()
+                optim.step()
+                if e % 10 == 0:
+                    lm.eval()
+                    with torch.no_grad():
+                        lpred = lm(y_val)
+                    mest_val.trainEstimator(lpred)
+                    loss_val = -mest_val.forward(lpred)
+                    Y_val.append(loss_val.detach().numpy())
+                    X_val.append(e)
+                    log.debug(f"pc-{self.leakAddr} idx-{idx}, e-{e}, score-{loss_val}")
+                    if len(Y_val) > 10:
+                        new_val_mean = np.mean(Y_val[-5:])
+                        old_val_mean = np.mean(Y_val[-10:-5])
+                        eps = new_val_mean - old_val_mean
+                        if abs(eps) < 0.001 or eps > 0:
+                            break
+                    lm.train()
+                Y.append(loss.detach().numpy())
+            lm.eval()
+            lpred = lm(self.Y)
+            mest_total = MIEstimator(x)
+            mest_total.trainEstimator(lpred)
+            score = mest_total.forward(lpred).detach().numpy()
+            # TODO add sklearn call for comp.
+            self.MIScores.append(score)
+            if score < 0.2:
+                self.MIScore = max(self.MIScores)
+                break
+            input = torch.ones((1, self.keylen)) - 0.5
+            lm.eval()
+            input.requires_grad = True
+            pred = lm.forward(input)
+            grad = torch.autograd.grad(pred, input)[0]
+            keys = minmax_scale(torch.abs(grad)[0].detach().numpy(), (0, 1))
+            heatmaps.append(keys[::-1, None].T)
+        self.MIScore = max(self.MIScores)
+        if self.MIScore >= 0.2:
+            sns.set(font_scale=0.3)
+            plt.tight_layout()
+            f, ax = plt.subplots()
+            try:
+                dependencies = np.stack(heatmaps, axis=0).reshape(-1, heatmaps[0].shape[1])
+            except Exception as e:
+                return
+            self.MIScores = np.array(self.MIScores[:len(heatmaps)])
+            # add a column to the far right to include the MI score in the heatmap
+            dependencies = np.c_[dependencies, self.MIScores]
+            deps = dependencies.copy()
+            mi = dependencies.copy()
+            deps.T[-1] = np.nan
+            mi.T[:-1] = np.nan
+            ax = sns.heatmap(
+                deps,
+                ax=ax,
+                vmin=0, 
+                vmax=1,
+                cbar_kws={
+                    "orientation": "horizontal",
+                    "label": "Estimated key bit dependency",
+                    "shrink": 0.5,
+                },
+                cmap="Blues",
+            )
+            sns.heatmap(
+                mi,
+                cmap="Reds",
+                ax=ax,
+                vmin=0, 
+                vmax=1,
+                cbar_kws={
+                    "label": "Estimated MI score per call",
+                    "location": "top",
+                    "shrink": 0.5,
+                },
+                xticklabels=[
+                    (self.keylen - i) if i % 2 == 0 else " " for i in range(self.keylen)
+                ]
+                + ["MI"],
+                yticklabels=[
+                    f"inv-{i}" if i % 2 else " " for i in range(self.MIScores.shape[0])
+                ],  # MSB to LSB
+                linewidths=0.5,
+            )
+            ax.xaxis.set_label_position("top")
             f.savefig(
                 f"{self.assetDir}/saliency-map-{hex(self.leakAddr)}.png",
-                dpi=200,
+                dpi=300,
                 bbox_inches="tight",
             )
 
-    def __call__(self, Y):
-        return self.LeakageModel(self.binary(Y).to(self.device))
-
     def binary(self, Y):
-        Y = torch.tensor(Y, dtype=torch.int64)
-        mask = 2 ** torch.arange(self.keylen)
-        return (
-            Y.unsqueeze(-1)
-            .bitwise_and(mask)
-            .ne(0)
-            .byte()
-            .to(self.device, dtype=torch.float32)
-        )
+        YL = np.zeros((Y.shape[0], self.keylen))
+        for i, x in enumerate(Y):  # row
+            binR = bin(x)[2:].zfill(self.keylen)[::-1]
+            for j, bit in enumerate(binR):  # col
+                YL[i][j] = int(bit)
+        return torch.tensor(YL, dtype=torch.float32) - 0.5

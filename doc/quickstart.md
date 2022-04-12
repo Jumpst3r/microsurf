@@ -14,8 +14,7 @@ As a user of the `microsurf` library, you have to specify these items. Fortunate
 
 ```{eval-rst}
 .. autoclass:: microsurf.SCDetector
-  :members:
-  :undoc-members:
+
 ```
 
 ## Example: OpenSSL Camellia-128

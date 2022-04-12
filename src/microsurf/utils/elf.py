@@ -1,18 +1,34 @@
 import bisect
 import collections
+from typing import List
+
 import magic
 from elftools.elf.elffile import ELFFile, SymbolTableSection
 
+from ..utils.logger import getLogger
+
 ELFSYBOLS = {}
 
-# get function name of loc
-def getfnname(file, loc):
+log = getLogger()
+
+
+def getfnname(file: str, loc: int):
+    """Returns the symbol of the function for a given PC
+
+    Args:
+        file: Path to elf file (relative or absolute)
+        loc: PC value
+
+    Returns:
+       the symbol name of the function for a given PC
+       if the symbols are not stripped, None otherwise.
+
+    Raises:
+        FileNotFoundError: If the given file does not exist.
+    """
     global ELFSYBOLS
     if file not in ELFSYBOLS:
-        try:
-            fileinfo = magic.from_file(file)
-        except FileNotFoundError:
-            return None
+        fileinfo = magic.from_file(file)
         if "ELF" not in fileinfo:
             return None
         if "not stripped" not in fileinfo:
@@ -32,8 +48,8 @@ def getfnname(file, loc):
     return ELFSYBOLS[file][key]
 
 
-# taken from the pyelf examples page
-def decode_file_line(dwarfinfo, address):
+# PRIVATE
+def _decode_file_line(dwarfinfo, address):
     # Go over all the line programs in the DWARF information, looking for
     # one that describes the given address.
     for CU in dwarfinfo.iter_CUs():
@@ -62,13 +78,30 @@ def decode_file_line(dwarfinfo, address):
     return None, None
 
 
-def getCodeSnippet(file, loc):
+def getCodeSnippet(file: str, loc: int) -> List[str]:
+    """Returns a list of source code lines, 3 before
+    and 3 after the given offset for a given ELF file.
+
+    Note that only DWARF <= v4 is supported.
+
+    Args:
+        file: Path to the ELF file
+        loc: Offset value
+
+    Returns:
+        source code lines, 3 before and three after
+    Raises:
+        FileNotFoundError: If the given ELF file does not exist
+    """
     with open(file, "rb") as f:
         elf = ELFFile(f)
-        path, ln = decode_file_line(elf.get_dwarf_info(), loc)
+        path, ln = _decode_file_line(elf.get_dwarf_info(), loc)
+        log.info(f"src path: {path}")
         try:
             with open(path, "r") as f2:
                 lines = f2.readlines()
-            return lines[ln - 3 : ln + 3]
-        except Exception:
-            return []
+            # lines[ln - 1] = "!!! " + lines[ln - 1].strip('\n') + " !!!\n"
+            return lines[ln - 5 : ln + 5], path, ln
+        except Exception as e:
+            log.debug(f"source lines not available for PC {hex(loc)}")
+            return [], None, None
