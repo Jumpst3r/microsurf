@@ -75,10 +75,11 @@ class BinaryLoader(Stage):
         self.reportDir = kwargs.get("reportDir", "results")
         self.comment = kwargs.get("comment", "none")
         try:
-            self.secretArgIndex = args.index("@")
-        except IndexError as e:
-            log.error(f"No argument marked as secret dependent (@): {e}")
-            raise ValueError()
+            self.secretArgIndex = (args.index("@"),)
+        except ValueError as e:
+            for arg in self.args:
+                if '@' in arg:
+                    self.secretArgIndex = (args.index(arg), arg.find('@'))
         if self.deterministic:
             log.info("hooking sources of randomness")
         if not os.path.exists(self.binPath):
@@ -187,17 +188,10 @@ class BinaryLoader(Stage):
                 os.close(tmpfile)
                 self.newArgs[self.secretArgIndex] = path.split("/")[-1]
             else:
-                self.newArgs[self.secretArgIndex] = val
-        else:
-            if self.asFile:
-                val = random.randint(0x00, 0xFF)
-                tmpfile, path = tempfile.mkstemp()
-                os.write(tmpfile, val)
-                os.close(tmpfile)
-                self.newArgs[self.secretArgIndex] = path
-            else:
-                val = random.randint(0x00, 0xFF)
-                self.newArgs[self.secretArgIndex] = str(val)
+                if len(self.secretArgIndex) == 1:
+                    self.newArgs[self.secretArgIndex[0]] = val
+                else:
+                    self.newArgs[self.secretArgIndex[0]] = self.newArgs[self.secretArgIndex[0]].replace('@', val)
         return val, path
 
     def _fixed(self):
@@ -363,7 +357,12 @@ class MemWatcher(Stage):
     def exec(self, secret):
         start_time = time.time()
         args = self.args.copy()
-        args[args.index("@")] = secret
+        try: 
+            args[args.index("@")] = secret
+        except ValueError as e:
+            for i in range(len(args)):
+                if '@' in args[i]:
+                    args[i] = args[i].replace('@', secret)
         import sys
         sys.stdout.fileno = lambda: False
         sys.stderr.fileno = lambda: False
