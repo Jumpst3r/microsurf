@@ -176,7 +176,6 @@ class BinaryLoader(Stage):
                     exit(1)
             else:
                 exit(1)
-        log.info(f"multithreaded: {self.multithread}")
     def _rand(self):
         path = None
         if self.rndGen:
@@ -533,8 +532,8 @@ class DistributionAnalyzer(Stage):
 
 
 @ray.remote(num_cpus=1)
-def train(X, Y, leakAddr, keylen, reportDir, pba):
-    nleakage = NeuralLeakageModel(X, Y, leakAddr, keylen, reportDir + "/assets")
+def train(X, Y, leakAddr, keylen, reportDir, threshold, pba):
+    nleakage = NeuralLeakageModel(X, Y, leakAddr, keylen, reportDir + "/assets", threshold)
     try:
         nleakage.train()
     except Exception as e:
@@ -629,6 +628,7 @@ class LeakageClassification(Stage):
         rndTraceCollection: MemTraceCollection,
         binaryLoader: BinaryLoader,
         possibleLeaks,
+        threshold
     ):
         self.rndTraceCollection = rndTraceCollection
         self.possibleLeaks = possibleLeaks
@@ -636,6 +636,7 @@ class LeakageClassification(Stage):
         self.loader = binaryLoader
         self.results: Dict[str, float] = {}
         self.KEYLEN = int(len(self.loader.rndGen()) * 4)
+        self.threshold = threshold
 
     def analyze(self):
         import numpy as np
@@ -645,7 +646,7 @@ class LeakageClassification(Stage):
         actor = pb.actor
         for k,v in self.rndTraceCollection.traces.items():
             futures.append(
-                train.remote(v.loc[:, v.columns != 'hits'].values, v.index.to_numpy(), k, self.KEYLEN, self.loader.reportDir, actor)
+                train.remote(v.loc[:, v.columns != 'hits'].values, v.index.to_numpy(), k, self.KEYLEN, self.loader.reportDir, self.threshold, actor)
             )
 
         pb.print_until_done()

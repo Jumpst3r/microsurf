@@ -53,9 +53,10 @@ class MIEstimator(nn.Module):
 import ray
 
 class NeuralLeakageModel(nn.Module):
-    def __init__(self, X, Y, leakAddr, keylen, assetDir) -> None:
+    def __init__(self, X, Y, leakAddr, keylen, assetDir, threshold) -> None:
         super().__init__()
         self.X = X
+        self.threshold = threshold
         if len(self.X) <= 1:
             log.debug(f"sample count too low for {hex(leakAddr)}, returning MI = 0.0")
             self.abort = True
@@ -98,7 +99,7 @@ class NeuralLeakageModel(nn.Module):
             mest_train = MIEstimator(x_train)
             old_val_mean = 0
             new_val_mean = 0
-            for e in range(1, 250):
+            for e in range(1, 350):
                 lpred = lm(y_train)
                 mest_train.trainEstimator(lpred)
                 loss = -mest_train.forward(lpred)
@@ -118,7 +119,7 @@ class NeuralLeakageModel(nn.Module):
                         new_val_mean = np.mean(Y_val[-5:])
                         old_val_mean = np.mean(Y_val[-10:-5])
                         eps = new_val_mean - old_val_mean
-                        if abs(eps) < 0.001 or eps > 0:
+                        if eps > 0:
                             break
                     lm.train()
                 Y.append(loss.detach().numpy())
@@ -129,7 +130,7 @@ class NeuralLeakageModel(nn.Module):
             score = mest_total.forward(lpred).detach().numpy()
             # TODO add sklearn call for comp.
             self.MIScores.append(score)
-            if score < 0.2:
+            if score < self.threshold:
                 self.MIScore = max(self.MIScores)
                 break
             input = torch.ones((1, self.keylen)) - 0.5
@@ -140,7 +141,7 @@ class NeuralLeakageModel(nn.Module):
             keys = minmax_scale(torch.abs(grad)[0].detach().numpy(), (0, 1))
             heatmaps.append(keys[::-1, None].T)
         self.MIScore = max(self.MIScores)
-        if self.MIScore >= 0.2:
+        if self.MIScore >= self.threshold:
             sns.set(font_scale=0.3)
             plt.tight_layout()
             f, ax = plt.subplots()

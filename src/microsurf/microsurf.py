@@ -54,7 +54,8 @@ class SCDetector:
         randomTraces: Path to pre-recorded random traces, optional.
         fixedTraces: Path to pre-recorded fixed traces, optional.
         saveTraces: Save the recorded traces to results/assets.
-        comment: Optional description to include in the report
+        comment: Optional description to include in the report.
+        threshold: MI threshold for which to include detailed report (key dependency, source code etc).
     """
 
     def __init__(
@@ -70,7 +71,8 @@ class SCDetector:
         randomTraces: str = None,
         fixedTraces: str = None,
         saveTraces: bool = True,
-        comment: str = ""
+        comment: str = "",
+        threshold: int = 0.2
     ) -> None:
         self.binPath = binPath
         self.args = args
@@ -82,6 +84,7 @@ class SCDetector:
         self.resultsDir = resultsDir
         self.saveTraces = saveTraces
         self.comment = comment
+        self.threshold = threshold
         if randomTraces:
             if not Path(randomTraces).exists():
                 log.error(f"random traces path ({randomTraces}) does not exit")
@@ -106,6 +109,7 @@ class SCDetector:
         self.NB_CORES = (
             multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 2 else 1
         )
+        log.info(f"Using {self.NB_CORES} cores")
         if not ray.is_initialized():
             ray.init(num_cpus=self.NB_CORES)
         self.binPath_id = ray.put(self.loader.binPath)

@@ -6,7 +6,6 @@ from typing import List
 from uuid import uuid4
 
 import ray
-import torch
 import pandas as pd
 
 from microsurf.utils.report import ReportGenerator
@@ -27,6 +26,7 @@ class PipeLineExecutor:
         self.multiprocessing = True
 
     def run(self, detector):
+        self.threshold = detector.threshold
         if not ray.is_initialized():
             ray.init(num_cpu=multiprocessing.cpu_count() - 1)
         import time
@@ -37,6 +37,9 @@ class PipeLineExecutor:
         tracesRnd = detector.recordTracesRandom(5)
 
         possibleLeaks = tracesRnd.possibleLeaks
+        if not possibleLeaks:
+            log.info("no leaks found, all good.")
+            exit(0)
 
         log.info("Checking for non determinism")
         tracesFixed = detector.recordTracesFixed(5)
@@ -88,7 +91,7 @@ class PipeLineExecutor:
             possibleLeaks = distAnalyzer.finalize()
 
         log.info("Rating leaks")
-        lc = LeakageClassification(t_rand, self.loader, possibleLeaks)
+        lc = LeakageClassification(t_rand, self.loader, possibleLeaks, self.threshold)
         self.KEYLEN = lc.KEYLEN
         lc.exec()
         res = lc.finalize()
@@ -180,7 +183,8 @@ class PipeLineExecutor:
             results=self.resultsDFTotal,
             loader=self.loader,
             keylen=self.KEYLEN,
-            itercount=self.ITER_COUNT
+            itercount=self.ITER_COUNT,
+            threshold = self.threshold
         )
         rg.saveMD()
 

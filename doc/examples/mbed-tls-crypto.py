@@ -21,7 +21,7 @@ if __name__ == "__main__":
     elif len(sys.argv) > 1 and sys.argv[1] == 'x8632':
         jailroot = "doc/examples/rootfs/jail-openssl-x8632/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'x8664':
-        jailroot = "doc/examples/rootfs/jail-openssl-x8664/"
+        jailroot = "doc/examples/rootfs/jail-mbedtls-x8664/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'mipsel32':
         jailroot = "doc/examples/rootfs/jail-openssl-mipsel32/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'riscv64':
@@ -36,7 +36,7 @@ if __name__ == "__main__":
         "0",
         "input.bin",
         "output.bin",
-        "AES-128-CBC",
+        "ARIA-128-ECB",
         "SHA1",
         "hex:@",
     ]
@@ -49,10 +49,9 @@ if __name__ == "__main__":
         asFile=False,
         jail=jailroot,
         sharedObjects=sharedObjects,
-        #randomTraces='results/traces/trace_rand_riscv64-camellia-1k.pickle',
-        #randomTraces='results/traces/trace_rand_x86_64-camellia.pickle',
-        #randomTraces='results/traces/trace_rand_arm64-camellia.pickle',
-        comment="ARM 64 1K traces, MI threshold 0.2"
+        randomTraces='results/assets/trace_rand_90d53267-0571-4cc3-831a-752fa5a7879a.pickle',
+        comment="ARM 64 1K traces, MI threshold 0.2",
+        threshold=0.1
     )
    
     scd.exec(report=True)

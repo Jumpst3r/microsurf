@@ -17,7 +17,8 @@ class ReportGenerator:
         results: pandas.DataFrame,
         loader: BinaryLoader,
         keylen: int,
-        itercount: int
+        itercount: int,
+        threshold: int
     ) -> None:
         self.results = results
         self.mdString = ""
@@ -25,6 +26,7 @@ class ReportGenerator:
         self.datetime = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
         self.keylen = keylen
         self.itercount = itercount
+        self.threshold = threshold
 
     def generateHeaders(self):
         self.mdString += f"# Microsurf Analysis Results \n\n"
@@ -33,8 +35,9 @@ class ReportGenerator:
         self.mdString += f"__Elapsed time (single run emulation)__: {self.loader.emulationruntime} \n\n"
         self.mdString += f"__Total leaks (data)__: {len(self.results)} \n\n"
         self.mdString += f"__Number of collected traces__: {self.itercount} \n\n"
-        self.mdString += f"__Leaks with MI score > 0.2 __: {len(self.results[self.results['MI score'] > 0.2])} \n\n"
-        self.mdString += f"__mean/stdev MI score accross leaks with > 0.2 MI __: {self.results[self.results['MI score'] > 0.2]['MI score'].mean():.2f} ± {self.results[self.results['MI score'] > 0.2]['MI score'].std() if self.results[self.results['MI score'] > 0.2]['MI score'].std() != np.nan else 0:.2f}\n\n"
+        self.mdString += f"__MI threshold__: {self.threshold} \n\n"
+        self.mdString += f"__Leaks with MI score > {self.threshold} __: {len(self.results[self.results['MI score'] > self.threshold])} \n\n"
+        self.mdString += f"__mean/stdev MI score accross leaks with > threshold MI __: {self.results[self.results['MI score'] > self.threshold]['MI score'].mean():.2f} ± {self.results[self.results['MI score'] > self.threshold]['MI score'].std() if self.results[self.results['MI score'] > self.threshold]['MI score'].std() != np.nan else 0:.2f}\n\n"
         self.mdString += (
             f"__Binary__: `{self.loader.binPath}`\n >{self.loader.filemagic} \n\n"
         )
@@ -45,9 +48,9 @@ class ReportGenerator:
     def generateResults(self):
         self.mdString += "## Results\n\n"
 
-        significant = self.results[self.results['MI score'] > 0.2].sort_values(by=["MI score"], ascending=False, inplace=False)
+        significant = self.results[self.results['MI score'] > self.threshold].sort_values(by=["MI score"], ascending=False, inplace=False)
         if len(significant) > 0:
-            self.mdString += "### Leaks with MI > 0.2\n\n"
+            self.mdString += "### Leaks with MI > threshold\n\n"
             for i in range(len(significant)):
                 row = significant[i:i+1]
                 if len(row) == 0:
