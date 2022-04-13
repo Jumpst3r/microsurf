@@ -21,10 +21,12 @@ import ray
 from rich.progress import track
 
 from microsurf.pipeline.tracetools.Trace import (MemTraceCollectionFixed,
-                                                 MemTraceCollectionRandom)
+                                                 MemTraceCollectionRandom,
+                                                 PCTraceCollectionFixed,
+                                                 PCTraceCollectionRandom)
 
 from .pipeline.Executor import PipeLineExecutor
-from .pipeline.Stages import BinaryLoader, MemWatcher
+from .pipeline.Stages import BinaryLoader, CFWatcher, MemWatcher
 from .utils.logger import getConsole, getLogger
 
 console = getConsole()
@@ -140,6 +142,7 @@ class SCDetector:
         self.loader = BinaryLoader(
             path=self.binPath,
             args=self.args,
+            detector=self,
             dryRunOnly=True,
             deterministic=self.deterministic,
             rndGen=self.randGen,
@@ -166,7 +169,7 @@ class SCDetector:
             pipeline.generateReport()
         return pipeline.finalize()
 
-    def recordTracesFixed(
+    def recordMemTracesFixed(
         self, n: int, pcList: List = None, **kwargs
     ) -> MemTraceCollectionFixed:
         """Record memory accesses resulting from repeated execution with the same secret.
@@ -211,24 +214,93 @@ class SCDetector:
         mt = MemTraceCollectionFixed([r for r in resList])
         return mt
 
-    def isDeterministic(self, traceCollection: MemTraceCollectionFixed) -> bool:
-        """Determines whether the memory reads are deterministic given a MemTraceCollectionFixed object
+    def recordPCTracesRandom(
+        self, n: int, **kwargs
+    ) -> PCTraceCollectionRandom:
+        """Record PC traces resulting from repeated execution with random secrets.
+
+        By default, it will target:
+            - For dynamic binaries only the shared objects which were passed to the SCDetector constructor
+            - For static binaries, the entire binary.
+            - Determinism will be fixed if the appropriate parameter was passed to the SCDetector constructor.
+        The last point can be modified by passing deterministic=True or deterministic=False
 
         Args:
-            traceCollection: A MemTraceCollectionFixed object with at least two traces.
+            n: Number of traces to collect
 
         Returns:
-            True or False, depending on whether the execution is deterministic.
+            A PCTraceCollectionRandom object representing the set of traces collected.
         """
-        deterministic = True
-        for t in traceCollection.traces:
-            for t2 in traceCollection.traces:
-                for (k1, v1), (k2, v2) in zip(t.trace.items(), t2.trace.items()):
-                    if k1 != k2 or v1 != v2:
-                        deterministic = False
-        return deterministic
+        self.deterministic = kwargs.get("deterministic", self.loader.deterministic)
+        NB_CORES = min(self.NB_CORES, n)
+        cfWatchers = [
+            CFWatcher.remote(
+                self.binPath_id,
+                self.args_id,
+                self.rootfs_id,
+                self.ignoredObjects_id,
+                self.mappings_id,
+                deterministic=self.deterministic,
+                multithread=self.loader.multithread
+            )
+            for _ in range(NB_CORES)
+        ]
+        resList = []
+        for _ in track(
+            range(0, n, NB_CORES),
+            description=f"Collecting {n} traces with random secrets",
+        ):
+            [m.exec.remote(secret=self.loader.rndArg()[0]) for m in cfWatchers]
+            futures = [m.getResults.remote() for m in cfWatchers]
+            res = ray.get(futures)
+            resList += [r[0] for r in res]
+        mt = PCTraceCollectionRandom([r for r in resList])
+        return mt
 
-    def recordTracesRandom(
+    def recordPCTracesFixed(
+        self, n: int, **kwargs
+    ) -> PCTraceCollectionFixed:
+        """Record PC traces resulting from repeated execution with the same secret.
+
+        By default, it will target:
+            - For dynamic binaries only the shared objects which were passed to the SCDetector constructor
+            - For static binaries, the entire binary.
+            - Determinism will be fixed if the appropriate parameter was passed to the SCDetector constructor.
+        The last point can be modified by passing deterministic=True or deterministic=False
+
+        Args:
+            n: Number of traces to collect
+
+        Returns:
+            A PCTraceCollectionFixed object representing the set of traces collected.
+        """
+        self.deterministic = kwargs.get("deterministic", self.loader.deterministic)
+        NB_CORES = min(self.NB_CORES, n)
+        cfWatchers = [
+            CFWatcher.remote(
+                self.binPath_id,
+                self.args_id,
+                self.rootfs_id,
+                self.ignoredObjects_id,
+                self.mappings_id,
+                deterministic=self.deterministic,
+                multithread=self.loader.multithread
+            )
+            for _ in range(NB_CORES)
+        ]
+        resList = []
+        for _ in track(
+            range(0, n, NB_CORES),
+            description=f"Collecting {n} traces with fixed secrets",
+        ):
+            [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in cfWatchers]
+            futures = [m.getResults.remote() for m in cfWatchers]
+            res = ray.get(futures)
+            resList += [r[0] for r in res]
+        mt = PCTraceCollectionFixed([r for r in resList])
+        return mt
+
+    def recordMemTracesRandom(
         self, n: int, pcList: List = None, **kwargs
     ) -> MemTraceCollectionRandom:
         """Record memory accesses resulting from repeated execution with random secrets.
@@ -270,7 +342,24 @@ class SCDetector:
             futures = [m.getResults.remote() for m in memWatchers]
             res = ray.get(futures)
             resList += [r[0] for r in res]
-        mt = MemTraceCollectionRandom([r for r in resList])
+        mt = PCTraceCollectionRandom([r for r in resList])
         return mt
+
+    def isDeterministic(self, traceCollection: MemTraceCollectionFixed) -> bool:
+        """Determines whether the memory reads are deterministic given a MemTraceCollectionFixed object
+
+        Args:
+            traceCollection: A MemTraceCollectionFixed object with at least two traces.
+
+        Returns:
+            True or False, depending on whether the execution is deterministic.
+        """
+        deterministic = True
+        for t in traceCollection.traces:
+            for t2 in traceCollection.traces:
+                for (k1, v1), (k2, v2) in zip(t.trace.items(), t2.trace.items()):
+                    if k1 != k2 or v1 != v2:
+                        deterministic = False
+        return deterministic
 
 

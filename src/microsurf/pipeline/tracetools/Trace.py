@@ -1,9 +1,10 @@
 import pickle
-from typing import Dict, List, Set
 from collections import defaultdict
+from typing import Dict, List, OrderedDict, Set
 
-from microsurf.utils.logger import getConsole, getLogger
+import numpy as np
 import pandas as pd
+from microsurf.utils.logger import getConsole, getLogger
 
 log = getLogger()
 console = getConsole()
@@ -45,6 +46,9 @@ class MemTrace:
         """
         for k in keys:
             self.trace.pop(k)
+
+    def __len__(self):
+        return len(self.trace)
 
 
 class MemTraceCollection:
@@ -168,3 +172,106 @@ class MemTraceCollectionRandom(MemTraceCollection):
             log.debug(f"-num columns: {len(v.values[0])}")
             # log.debug(f"-proportion of missing row values: \n{v.isnull().mean(axis=1)}")
         log.info(f"Identified {len(self.possibleLeaks)} leaks")
+
+
+class PCTrace:
+    """Represents a single Program Counter (PC) Trace object.
+
+    Initialized with a secret, trace items are then
+    added by calling the .add(ip) method.
+
+    Args:
+        secret: The secret that was used when the trace
+        was recorded.
+    """
+
+    def __init__(self, secret) -> None:
+        self.secret = secret
+        self.trace: OrderedDict[int,int] = OrderedDict()
+
+    def add(self, ip):
+        """Adds an element to the current trace.
+        Note that several target memory addresses
+        can be added to the same PC by calling the
+        function repeatedly.
+
+        Args:
+            ip: The instruction pointer / PC which caused
+            the memory read
+        """
+        self.trace[ip] = 1
+    
+    def remove(self, keys: List[int]):
+        """Removes a set of PCs from the given trace
+
+        Args:
+            keys: The set of PCs to remove
+        """
+        for k in keys:
+            self.trace.pop(k)
+
+    def __len__(self):
+        return len(self.trace)
+
+
+class PCTraceCollection:
+    """A generic PCTraceCollection object.
+
+    Args:
+        traces: The traces that make up the collection.
+    """
+
+    def __init__(self, traces: list[PCTrace]):
+        self.traces = traces
+        self.possibleLeaks: Set[int] = set()
+
+    def toDisk(self, path: str):
+        with open(path, "wb") as f:
+            pickle.dump(self, f)
+
+    def __len__(self):
+        return len(self.traces)
+
+
+class PCTraceCollectionFixed(PCTraceCollection):
+    """Creates a PC trace collection object.
+    The secrets of the individual traces must be fixed.
+
+    Args:
+        traces: List of memory traces
+    """
+
+    def __init__(self, traces: list[PCTrace]):
+        super().__init__(traces)
+        secrets = set()
+        for t in self.traces:
+            secrets.add(t.secret)
+        assert len(secrets) == 1
+
+    def deterministic(self):
+        """Determines whether the traces in the collection
+        have identical control flow
+
+        Returns:
+            True if all traces have the same CF, False otherwise
+        """
+        mat = np.array([list(t.trace.keys()) for t in self.traces], dtype=np.uint64)
+        return len(np.unique(mat, axis=0)) == 1
+
+
+class PCTraceCollectionRandom(PCTraceCollection):
+    """Creates a PC trace collection object.
+    The secrets of the individual traces must be random.
+
+    Args:
+        traces: List of memory traces
+    """
+
+    def __init__(self, traces: list[PCTrace]):
+        super().__init__(traces)
+        self.possibleLeaks: Set[int] = set()
+        self.buildDataFrames()
+
+
+    def buildDataFrames(self):
+        log.info("not yet imlemented")

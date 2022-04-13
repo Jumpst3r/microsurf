@@ -34,7 +34,7 @@ class PipeLineExecutor:
         starttime = time.time()
 
         log.info("Identifying possible leak locations")
-        tracesRnd = detector.recordTracesRandom(5)
+        tracesRnd = detector.recordMemTracesRandom(5)
 
         possibleLeaks = tracesRnd.possibleLeaks
         if not possibleLeaks:
@@ -42,7 +42,7 @@ class PipeLineExecutor:
             exit(0)
 
         log.info("Checking for non determinism")
-        tracesFixed = detector.recordTracesFixed(5)
+        tracesFixed = detector.recordMemTracesFixed(5)
         deterministic = detector.isDeterministic(tracesFixed)
 
         if not deterministic and self.loader.deterministic:
@@ -63,7 +63,7 @@ class PipeLineExecutor:
                 t_rand = pickle.load(f)
             log.info(f"loaded traces from {detector.randomTraces}")
         else:
-            t_rand = detector.recordTracesRandom(self.ITER_COUNT, pcList=possibleLeaks)
+            t_rand = detector.recordMemTracesRandom(self.ITER_COUNT, pcList=possibleLeaks)
             if detector.saveTraces:
                 path = f"{self.loader.reportDir}/assets/trace_rand_{uuid4()}.pickle"
                 log.info(f"saved random traces to {path}")
@@ -76,7 +76,7 @@ class PipeLineExecutor:
                 log.info(f"loaded traces from {detector.fixedTraces}")
 
             else:
-                t_fixed = detector.recordTracesFixed(self.ITER_COUNT, pcList=possibleLeaks)
+                t_fixed = detector.recordMemTracesFixed(self.ITER_COUNT, pcList=possibleLeaks)
                 if detector.saveTraces:
                     path = f"{self.loader.reportDir}/assets/trace_fixed_{uuid4()}.pickle"
                     log.info(f"saved fixed traces to {path}")

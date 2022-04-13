@@ -39,7 +39,7 @@ from ..utils.hijack import (
     syscall_exit_group,
 )
 from ..utils.logger import LOGGING_LEVEL, getConsole, getLogger, getQilingLogger
-from .tracetools.Trace import MemTrace, MemTraceCollection
+from .tracetools.Trace import MemTrace, MemTraceCollection, PCTrace, PCTraceCollection
 
 console = getConsole()
 log = getLogger()
@@ -54,7 +54,7 @@ class Stage:
 
 
 class BinaryLoader(Stage):
-    def __init__(self, path: str, args: List[str], **kwargs) -> None:
+    def __init__(self, path: str, args: List[str], detector, **kwargs) -> None:
         self.binPath = Path(path)
         self.asm: Dict[str, str] = {}
         self.dryRunOnly = kwargs["dryRunOnly"]
@@ -74,6 +74,7 @@ class BinaryLoader(Stage):
         self.newArgs = self.args.copy()
         self.reportDir = kwargs.get("reportDir", "results")
         self.comment = kwargs.get("comment", "none")
+        self.detector = detector
         try:
             self.secretArgIndex = (args.index("@"),)
         except ValueError as e:
@@ -95,7 +96,7 @@ class BinaryLoader(Stage):
         elif "MIPS32" in fileinfo:
             self.md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS32)
         elif "RISC-V" in fileinfo:
-            pass
+            pass # no capstone support :(
         else:
             log.info(fileinfo)
             log.error("Target architecture not implemented")
@@ -418,6 +419,112 @@ class MemWatcher(Stage):
     def getResults(self):
         return self.currenttrace, self.tracetime
 
+@ray.remote
+class CFWatcher(Stage):
+    """
+    records the sequence of IPs to determine CF leaks
+    """
+
+    def __init__(
+        self,
+        binpath,
+        args,
+        rootfs,
+        ignoredObjects,
+        mappings,
+        locations=None,
+        deterministic=False,
+        multithread=True
+    ) -> None:
+        self.traces: List[PCTrace] = []
+        self.binPath = binpath
+        self.args = args
+        self.rootfs = rootfs
+        self.locations = (
+            {l: 1 for l in locations} if locations is not None else locations
+        )
+        self.ignoredObjects = ignoredObjects
+        self.mappings = mappings
+        self.deterministic = deterministic
+        self.multithread = multithread
+
+    def _trace_op(self, ql: Qiling, *args, **kwargs):
+        pc = ql.arch.regs.arch_pc
+        if self.locations is None:
+            self.currenttrace.add(pc)
+        elif pc in self.locations:
+            self.currenttrace.add(pc)
+
+    def getlibname(self, addr):
+        return next(
+            (label for s, e, _, label, _ in self.mappings if s < addr < e),
+            -1,
+        )
+
+    def exec(self, secret):
+        start_time = time.time()
+        args = self.args.copy()
+        try: 
+            args[args.index("@")] = secret
+        except ValueError as e:
+            for i in range(len(args)):
+                if '@' in args[i]:
+                    args[i] = args[i].replace('@', secret)
+        import sys
+        sys.stdout.fileno = lambda: False
+        sys.stderr.fileno = lambda: False
+        self.QLEngine = Qiling(
+            [str(self.binPath), *[str(a) for a in args]],
+            str(self.rootfs),
+            console=False,
+            verbose=QL_VERBOSE.DISABLED,
+            multithread=self.multithread,
+            libcache=True,
+        )
+        self.currenttrace = PCTrace(secret)
+        self.QLEngine.hook_code(self._trace_op)
+        # duplicate code. Ugly - fixme.
+        if self.deterministic:
+            self.QLEngine.add_fs_mapper("/dev/urandom", device_random)
+            self.QLEngine.add_fs_mapper("/dev/random", device_random)
+            self.QLEngine.add_fs_mapper("/dev/arandom", device_random)
+            # ref https://marcin.juszkiewicz.com.pl/download/tables/syscalls.html
+            if self.md.arch == CS_ARCH_ARM:
+                self.QLEngine.os.set_syscall(403, const_time)
+                self.QLEngine.os.set_syscall(384, const_getrandom)
+                self.QLEngine.os.set_syscall(78, const_clock_gettimeofday)
+                self.QLEngine.os.set_syscall(263, const_clock_gettime)
+            if self.md.arch == CS_ARCH_X86 and self.md.mode == CS_MODE_64:
+                self.QLEngine.os.set_syscall(318, const_getrandom)
+                self.QLEngine.os.set_syscall(96, const_clock_gettimeofday)
+                self.QLEngine.os.set_syscall(228, const_clock_gettime)
+            if self.md.arch == CS_ARCH_X86 and self.md.mode == CS_MODE_32:
+                self.QLEngine.os.set_syscall(403, const_time)
+                self.QLEngine.os.set_syscall(13, const_time)
+                self.QLEngine.os.set_syscall(355, const_getrandom)
+                self.QLEngine.os.set_syscall(78, const_clock_gettimeofday)
+                self.QLEngine.os.set_syscall(265, const_clock_gettime)
+        else:
+            self.QLEngine.add_fs_mapper("/dev/urandom", "/dev/urandom")
+            self.QLEngine.add_fs_mapper("/dev/random", "/dev/random")
+            self.QLEngine.add_fs_mapper("/dev/arandom", "/dev/arandom")
+
+        # replace broken qiling hooks with working ones:
+        self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
+        self.QLEngine.os.set_syscall("newfstatat", ql_fixed_syscall_newfstatat)
+        self.QLEngine.os.set_syscall("exit_group", syscall_exit_group)
+        self.QLEngine.run()
+        self.QLEngine.stop()
+        dropset = []
+        for t in self.currenttrace.trace:
+            if self.getlibname(t) in self.ignoredObjects:
+                dropset.append(t)
+        self.currenttrace.remove(dropset)
+        endtime = time.time()
+        self.tracetime = endtime - start_time
+
+    def getResults(self):
+        return self.currenttrace, self.tracetime
 
 class DistributionAnalyzer(Stage):
     def __init__(
