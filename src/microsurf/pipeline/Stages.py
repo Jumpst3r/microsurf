@@ -369,7 +369,7 @@ class MemWatcher(Stage):
         self.QLEngine = Qiling(
             [str(self.binPath), *[str(a) for a in args]],
             str(self.rootfs),
-            console=False,
+            console=True,
             verbose=QL_VERBOSE.DISABLED,
             multithread=self.multithread,
             libcache=True,

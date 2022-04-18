@@ -1,7 +1,10 @@
+from email.policy import default
+import itertools
 import pickle
-from collections import defaultdict
+from collections import Counter, defaultdict
 from typing import Dict, List, OrderedDict, Set
-
+import cdifflib as dfl
+from rich.progress import track
 import numpy as np
 import pandas as pd
 from microsurf.utils.logger import getConsole, getLogger
@@ -137,7 +140,6 @@ class MemTraceCollectionRandom(MemTraceCollection):
         addrs = [list(a.trace.keys()) for a in self.traces]
         addrs = set([i for l in addrs for i in l]) # flatten
         self.secretDepCF = []
-        from rich.progress import track
         for l in track(addrs, description="analyzing traces"):
             row = []
             hits = []
@@ -187,7 +189,8 @@ class PCTrace:
 
     def __init__(self, secret) -> None:
         self.secret = secret
-        self.trace: OrderedDict[int,int] = OrderedDict()
+        self.trace: List[int] = []
+        self.posDict = defaultdict(list)
 
     def add(self, ip):
         """Adds an element to the current trace.
@@ -199,19 +202,17 @@ class PCTrace:
             ip: The instruction pointer / PC which caused
             the memory read
         """
-        self.trace[ip] = 1
+        self.trace.append(ip)
+        self.posDict[ip].append(len(self.trace) - 1)
     
     def remove(self, keys: List[int]):
-        """Removes a set of PCs from the given trace
-
-        Args:
-            keys: The set of PCs to remove
-        """
-        for k in keys:
-            self.trace.pop(k)
+        pass
 
     def __len__(self):
         return len(self.trace)
+
+    def __getitem__(self, item):
+         return self.trace[item]
 
 
 class PCTraceCollection:
@@ -229,8 +230,32 @@ class PCTraceCollection:
         with open(path, "wb") as f:
             pickle.dump(self, f)
 
+    def deterministic(self):
+        """Determines whether the traces in the collection
+        have identical control flow
+
+        Returns:
+            True if all traces have the same CF, False otherwise
+        """
+        lengths = set([len(t) for t in self.traces])
+        if len(lengths) > 1:
+            return False
+        mat = np.array([list(t.trace.keys()) for t in self.traces], dtype=np.uint64)
+        return len(np.unique(mat, axis=0)) == 1
+
+    def getmaxlen(self):
+        """Returns the maximal trace length.
+
+        Returns:
+            the maximal trace length.
+        """
+        return max([len(t) for t in self.traces])  
+    
     def __len__(self):
         return len(self.traces)
+
+    def __getitem__(self, item):
+         return list(self.traces[item].trace.keys())
 
 
 class PCTraceCollectionFixed(PCTraceCollection):
@@ -248,16 +273,6 @@ class PCTraceCollectionFixed(PCTraceCollection):
             secrets.add(t.secret)
         assert len(secrets) == 1
 
-    def deterministic(self):
-        """Determines whether the traces in the collection
-        have identical control flow
-
-        Returns:
-            True if all traces have the same CF, False otherwise
-        """
-        mat = np.array([list(t.trace.keys()) for t in self.traces], dtype=np.uint64)
-        return len(np.unique(mat, axis=0)) == 1
-
 
 class PCTraceCollectionRandom(PCTraceCollection):
     """Creates a PC trace collection object.
@@ -274,4 +289,57 @@ class PCTraceCollectionRandom(PCTraceCollection):
 
 
     def buildDataFrames(self):
-        log.info("not yet imlemented")
+        perLeakDict = {}
+        maxlen = self.getmaxlen()
+        mat = np.zeros((1,maxlen))
+
+        for t1,t2 in itertools.combinations(self.traces, r=2):
+            seq = dfl.CSequenceMatcher(None, t1.trace, t2.trace)
+            blocks = list(seq.get_matching_blocks())
+            for s1,s2,length in blocks:
+                mat[0,s1:s1+length] += 1
+                mat[0,s2:s2+length] += 1
+        mat[mat == 0] = np.max(mat)
+        candidates = np.flatnonzero(mat != np.amax(mat))
+
+        D = defaultdict(int)
+        for c, cn in zip(candidates, candidates[1:]):
+            print(f"candidate {c}, mat[c]={mat[0,c]}")
+            if mat[0,c] != mat[0,cn]:
+                for t in self.traces:
+                    if c < len(t):
+                        D[t[c]] += 1
+        self.possibleLeaks = list(D.keys())
+
+        for l in track(self.possibleLeaks, description="analyzing traces"):
+            row = []
+            hits = []
+            maxhit = 0
+            for trace in self.traces:
+                if l not in trace.posDict: continue
+                entry = []
+                entry.append(int(trace.secret, 16))
+                elist = []
+                for a in trace.posDict[l]:
+                    try:
+                        elist.append(trace[a+1])
+                    except IndexError as e:
+                        # -1 as a marker for end of prog
+                        elist.append(-1)
+                entry += elist
+                numhits = len(trace.posDict[l])
+                hits.append(numhits)
+                maxhit = max(maxhit, numhits)
+                row.append(entry)
+            colnames = ['secret'] + [str(i) for i in range(maxhit)]
+            f = pd.DataFrame(row, columns=colnames)
+            f = f.set_index('secret')
+            f.drop(f.std()[f.std() == 0].index, axis=1, inplace=True)
+            if len(f.columns):
+                f.insert(loc=0, column='hits', value=hits)
+                perLeakDict[l] = f
+                perLeakDict[l].dropna(axis=0, inplace=True)
+        self.df = perLeakDict
+        self.possibleLeaks = list(self.df.keys())
+        log.info(f"Identified {len(self.df)} leaks")
+

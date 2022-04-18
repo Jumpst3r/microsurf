@@ -17,5 +17,8 @@ int main(int argc, char *argv[]) {
     for(int i = 0; i < 1; i++){
         int val = T[i + (bval5 ^ bval4 ^ bval6)];
     }
+    if (bval5){
+        printf("b5 set\n");
+    }
     return 0;
 }
