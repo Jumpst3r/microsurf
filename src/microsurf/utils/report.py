@@ -43,7 +43,6 @@ class ReportGenerator:
         )
         self.mdString += f"__Args__: `{self.loader.args}` \n\n"
         self.mdString += f"__Emulation root__: `{ self.loader.rootfs}` \n\n"
-        self.mdString += f"__Comment__: `{ self.loader.comment}` \n\n"
 
     def generateResults(self):
         self.mdString += "## Results\n\n"
@@ -68,7 +67,7 @@ class ReportGenerator:
                         self.mdString += l
                     self.mdString += "\n```\n"
                 self.mdString += "\nKey bit dependencies (estimated):"
-                if Path(f"{self.loader.reportDir}/assets/saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png").is_file():
+                if Path(f"{self.loader.resultDir}/assets/saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png").is_file():
                     self.mdString += f"\n\n![saliency map](assets/saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png)\n\n"
                 else:
                     self.mdString += (
@@ -93,6 +92,6 @@ class ReportGenerator:
     def saveMD(self):
         self.generateHeaders()
         self.generateResults()
-        with open(f"{self.loader.reportDir}/results-{uuid4()}.md", "w") as f:
+        with open(f"{self.loader.resultDir}/results-{uuid4()}.md", "w") as f:
             f.writelines(self.mdString)
         log.info(f"Saved results to {f.name}")

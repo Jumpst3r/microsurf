@@ -13,7 +13,31 @@ log = getLogger()
 console = getConsole()
 
 
-class MemTrace:
+class Trace:
+    def __init__(self, secret) -> None:
+        self.secret = secret
+
+    def add(self, *args):
+        pass
+
+
+class TraceCollection:
+    def __init__(self, traces: list[Trace]):
+        self.traces = traces
+        self.possibleLeaks: set[int] = set()
+
+    def toDisk(self, path: str):
+        with open(path, "wb") as f:
+            pickle.dump(self, f)
+
+    def __len__(self):
+        return len(self.traces)
+
+    def __getitem__(self, item):
+        return self.traces[item]
+
+
+class MemTrace(Trace):
     """Represents a single Memory Trace object.
 
     Initialized with a secret, trace items are then
@@ -25,7 +49,7 @@ class MemTrace:
     """
 
     def __init__(self, secret) -> None:
-        self.secret = secret
+        super().__init__(secret)
         self.trace: Dict[int, List[int]] = defaultdict(list)
 
     def add(self, ip, memaddr):
@@ -53,52 +77,19 @@ class MemTrace:
     def __len__(self):
         return len(self.trace)
 
+    def __getitem__(self, item):
+        return self.trace[item]
 
-class MemTraceCollection:
-    """A generic MemorTraceCollection object.
+
+class MemTraceCollection(TraceCollection):
+    """A generic MemoryTraceCollection object.
 
     Args:
         traces: The traces that make up the collection.
     """
 
     def __init__(self, traces: list[MemTrace]):
-        self.traces = traces
-        self.possibleLeaks: Set[int] = set()
-
-    def remove(self, indices: List[int]):
-        """Remove a set of PCs/IPs from all traces in
-        the collection.
-
-        Args:
-            indices: List of PCs to remove.
-        """
-        for index in sorted(indices, reverse=True):
-            del self.traces[index]
-
-    def get(self, indices: List[int]) -> List[MemTrace]:
-        """Returns all memory traces which contain the
-        specified PCs
-
-        Args:
-            indices: List of PCs
-
-        Returns:
-            List of memory traces which contain the
-        specified PCs
-        """
-        res = []
-        for index in indices:
-            for t in self.traces:
-                if index in t.trace:
-                    res.append(t)
-        return res
-
-    def toDisk(self, path: str):
-        with open(path, "wb") as f:
-            pickle.dump(self, f)
-
-    def __len__(self):
-        return len(self.traces)
+        super().__init__(traces)
 
 
 class MemTraceCollectionFixed(MemTraceCollection):
@@ -127,9 +118,10 @@ class MemTraceCollectionRandom(MemTraceCollection):
 
     def __init__(self, traces: list[MemTrace]):
         super().__init__(traces)
+        self.secretDepCF = None
         self.possibleLeaks: Set[int] = set()
+        self.DF = None
         self.buildDataFrames()
-
 
     def buildDataFrames(self):
         """Build a dictionary of dataframes, indexed by leak adress.
@@ -138,16 +130,15 @@ class MemTraceCollectionRandom(MemTraceCollection):
         """
         perLeakDict = {}
         addrs = [list(a.trace.keys()) for a in self.traces]
-        addrs = set([i for l in addrs for i in l]) # flatten
-        self.secretDepCF = []
+        addrs = set([i for l in addrs for i in l])  # flatten
         for l in track(addrs, description="analyzing traces"):
             row = []
             hits = []
             numhits = 0
             for trace in self.traces:
-                if l not in trace.trace: continue
-                entry = []
-                entry.append(int(trace.secret, 16))
+                if l not in trace.trace:
+                    continue
+                entry = [int(trace.secret, 16)]
                 entry += trace.trace[l]
                 numhits = max(numhits, len(trace.trace[l]))
                 hits.append(len(trace.trace[l]))
@@ -159,24 +150,12 @@ class MemTraceCollectionRandom(MemTraceCollection):
             if len(f.columns):
                 f.insert(loc=0, column='hits', value=hits)
                 perLeakDict[l] = f
-                if f.isnull().any().any():
-                    # inconsistent number of times that leakAddr was hit => prob secret. dep. CF 
-                    self.secretDepCF.append(l)
                 perLeakDict[l].dropna(axis=0, inplace=True)
-        if self.secretDepCF:
-            log.warning(f"probable secret dep CF detected, number of leaks may vary between executions !")
-        self.traces = perLeakDict
-        self.possibleLeaks = list(self.traces.keys())
-        log.debug(f"{len(self.secretDepCF)} locations contain missing values")
-        for leak,v in self.traces.items():
-            log.debug(f"stats for {hex(leak)}")
-            log.debug(f"-num traces: {len(v.values)}")
-            log.debug(f"-num columns: {len(v.values[0])}")
-            # log.debug(f"-proportion of missing row values: \n{v.isnull().mean(axis=1)}")
-        log.info(f"Identified {len(self.possibleLeaks)} leaks")
+        self.DF = perLeakDict
+        self.possibleLeaks = set(self.DF.keys())
 
 
-class PCTrace:
+class PCTrace(Trace):
     """Represents a single Program Counter (PC) Trace object.
 
     Initialized with a secret, trace items are then
@@ -188,7 +167,7 @@ class PCTrace:
     """
 
     def __init__(self, secret) -> None:
-        self.secret = secret
+        super().__init__(secret)
         self.trace: List[int] = []
         self.posDict = defaultdict(list)
 
@@ -204,18 +183,15 @@ class PCTrace:
         """
         self.trace.append(ip)
         self.posDict[ip].append(len(self.trace) - 1)
-    
-    def remove(self, keys: List[int]):
-        pass
 
     def __len__(self):
         return len(self.trace)
 
     def __getitem__(self, item):
-         return self.trace[item]
+        return self.trace[item]
 
 
-class PCTraceCollection:
+class PCTraceCollection(TraceCollection):
     """A generic PCTraceCollection object.
 
     Args:
@@ -223,8 +199,7 @@ class PCTraceCollection:
     """
 
     def __init__(self, traces: list[PCTrace]):
-        self.traces = traces
-        self.possibleLeaks: Set[int] = set()
+        super().__init__(traces)
 
     def toDisk(self, path: str):
         with open(path, "wb") as f:
@@ -249,13 +224,13 @@ class PCTraceCollection:
         Returns:
             the maximal trace length.
         """
-        return max([len(t) for t in self.traces])  
-    
+        return max([len(t) for t in self.traces])
+
     def __len__(self):
         return len(self.traces)
 
     def __getitem__(self, item):
-         return list(self.traces[item].trace.keys())
+        return list(self.traces[item].trace.keys())
 
 
 class PCTraceCollectionFixed(PCTraceCollection):
@@ -282,47 +257,51 @@ class PCTraceCollectionRandom(PCTraceCollection):
         traces: List of memory traces
     """
 
-    def __init__(self, traces: list[PCTrace]):
+    def __init__(self, traces: list[PCTrace], possibleLeaks=None):
         super().__init__(traces)
         self.possibleLeaks: Set[int] = set()
+        self.DF = None
+        self.possibleLeaks = possibleLeaks
         self.buildDataFrames()
-
 
     def buildDataFrames(self):
         perLeakDict = {}
         maxlen = self.getmaxlen()
-        mat = np.zeros((1,maxlen))
+        mat = np.zeros((1, maxlen))
+        # run this the first time but not the second !
+        if self.possibleLeaks is None:
+            for t1, t2 in itertools.combinations(self.traces, r=2):
+                seq = dfl.CSequenceMatcher(None, t1.trace, t2.trace)
+                blocks = list(seq.get_matching_blocks())
+                for s1, s2, length in blocks:
+                    mat[0, s1:s1 + length] += 1
+                    mat[0, s2:s2 + length] += 1
+            mat[mat == 0] = np.max(mat)
+            import matplotlib.pyplot as plt
+            import seaborn as sns
+            s = sns.heatmap(mat, cmap='Reds_r', yticklabels=[])
+            s.set(xlabel='Instruction number', ylabel='IP trace differences')
+            plt.show()
+            candidates = np.flatnonzero(mat != np.amax(mat))
 
-        for t1,t2 in itertools.combinations(self.traces, r=2):
-            seq = dfl.CSequenceMatcher(None, t1.trace, t2.trace)
-            blocks = list(seq.get_matching_blocks())
-            for s1,s2,length in blocks:
-                mat[0,s1:s1+length] += 1
-                mat[0,s2:s2+length] += 1
-        mat[mat == 0] = np.max(mat)
-        candidates = np.flatnonzero(mat != np.amax(mat))
-
-        D = defaultdict(int)
-        for c, cn in zip(candidates, candidates[1:]):
-            print(f"candidate {c}, mat[c]={mat[0,c]}")
-            if mat[0,c] != mat[0,cn]:
-                for t in self.traces:
-                    if c < len(t):
-                        D[t[c]] += 1
-        self.possibleLeaks = list(D.keys())
-
+            D = defaultdict(int)
+            for c, cn in zip(candidates, candidates[1:]):
+                if mat[0, c] != mat[0, cn]:
+                    for t in self.traces:
+                        if c < len(t):
+                            D[t[c]] += 1
+            self.possibleLeaks = list(D.keys())
         for l in track(self.possibleLeaks, description="analyzing traces"):
             row = []
             hits = []
             maxhit = 0
             for trace in self.traces:
                 if l not in trace.posDict: continue
-                entry = []
-                entry.append(int(trace.secret, 16))
+                entry = [int(trace.secret, 16)]
                 elist = []
                 for a in trace.posDict[l]:
                     try:
-                        elist.append(trace[a+1])
+                        elist.append(trace[a + 1])
                     except IndexError as e:
                         # -1 as a marker for end of prog
                         elist.append(-1)
@@ -339,7 +318,5 @@ class PCTraceCollectionRandom(PCTraceCollection):
                 f.insert(loc=0, column='hits', value=hits)
                 perLeakDict[l] = f
                 perLeakDict[l].dropna(axis=0, inplace=True)
-        self.df = perLeakDict
-        self.possibleLeaks = list(self.df.keys())
-        log.info(f"Identified {len(self.df)} leaks")
-
+        self.DF = perLeakDict
+        self.possibleLeaks = set(self.DF.keys())
