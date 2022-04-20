@@ -55,7 +55,7 @@ class ReportGenerator:
                 if len(row) == 0:
                     break
                 self.mdString += row.loc[
-                    :, ["offset", "MI score", "Leakage model","Num of hits per trace", "Number of traces in which leak was observed" ,"Symbol Name", "Path"]
+                    :, ["offset", "MI score", "Leakage model","Num of hits per trace", "Number of traces in which leak was observed" ,"Symbol Name", "Object Name", "Path"]
                 ].to_markdown(index=False)
                 self.mdString += "\n\nSource code snippet\n\n"
                 src = row[["src"]].values[0][0]
@@ -84,7 +84,7 @@ class ReportGenerator:
 
         self.mdString += "\n ### All Leaks, sorted by MI\n\n"
         self.mdString += (
-            self.results.loc[:, ["offset", "MI score", "Leakage model","Num of hits per trace", "Number of traces in which leak was observed" ,"Symbol Name", "Path"]]
+            self.results.loc[:, ["offset", "MI score", "Leakage model","Num of hits per trace", "Number of traces in which leak was observed" ,"Symbol Name", "Object Name", "Path"]]
             .sort_values(by=["MI score"], ascending=False)
             .to_markdown(index=False)
         )

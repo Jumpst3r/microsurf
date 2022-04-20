@@ -10,7 +10,9 @@ import os
 import random
 import sys
 from microsurf.microsurf import SCDetector
+from microsurf.pipeline.DetectionModules import DataLeakDetector
 from microsurf.pipeline.LeakageModels import hamming, identity
+from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.utils.generators import getRandomHexKeyFunction
 
 if __name__ == "__main__":
@@ -36,22 +38,15 @@ if __name__ == "__main__":
         "0",
         "input.bin",
         "output.bin",
-        "ARIA-128-ECB",
-        "SHA1",
+        "AES-128-ECB",
+        "SHA512",
         "hex:@",
     ]
     sharedObjects = ['libmbedx509', 'libmbedtls', 'libmbedcrypto']
-    scd = SCDetector(
-        binPath=binpath,
-        args=args,
-        randGen=getRandomHexKeyFunction(128),
-        deterministic=False,
-        asFile=False,
-        jail=jailroot,
-        sharedObjects=sharedObjects,
-        randomTraces='results/assets/trace_rand_90d53267-0571-4cc3-831a-752fa5a7879a.pickle',
-        comment="ARM 64 1K traces, MI threshold 0.2",
-        threshold=0.1
-    )
-   
-    scd.exec(report=True)
+    binLoader = BinaryLoader(path=binpath, args=args, rootfs=jailroot, rndGen=getRandomHexKeyFunction(128))
+
+    scd = SCDetector(modules=[
+        DataLeakDetector(binaryLoader=binLoader),
+    ])
+
+    scd.exec()

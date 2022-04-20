@@ -12,7 +12,7 @@ int someFunction(int value){
   for (int i = 0; i < 10; i++){
     value += 1;
   }
-  return value;
+  return 0;
 }
 
 int commonfct(int i){
@@ -21,11 +21,13 @@ int commonfct(int i){
 }
 
 int main(int argc, char *argv[]) {
-    uint64_t secret = strtoul(argv[1], NULL, 16);
+    uint64_t secret = (uint64_t) argv[1][0];
     int nbits = sizeof(secret) * 8;
-    if (CHECK_BIT(secret, 4)){
+    for (int i=0; i< 5; i++){
+    if (CHECK_BIT(secret, i)){
         int someVal = 20;
         someFunction(someVal);
       }
-    return commonfct(10);
+    }
+    return someFunction(10);
 }

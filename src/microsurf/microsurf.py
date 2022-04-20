@@ -43,8 +43,8 @@ class SCDetector:
         for module in self.modules:
             log.info(f"module {str(module)}")
             # Find possible leaks
-            collection = module.recordTraces(10)
-            # Gather more traces, restricted to the possible leak locations
+            collection = module.recordTraces(5)
+
             rndTraces = module.recordTraces(self.ITER_COUNT, pcList=collection.possibleLeaks)
             lc = LeakageClassification(rndTraces, module.loader, module.miThreshold)
             self.KEYLEN = lc.KEYLEN
@@ -81,7 +81,7 @@ class SCDetector:
                                 if ".so" in label or self.loader.dynamic
                                 else getfnname(path, k)
                             )
-                            source, path, ln = (
+                            source, srcpath, ln = (
                                 getCodeSnippet(path, offset)
                                 if ".so" in label or self.loader.dynamic
                                 else getCodeSnippet(path, k)
@@ -98,15 +98,16 @@ class SCDetector:
                                     "MI score": mival,
                                     "Leakage model": "neural-learnt",
                                     "Symbol Name": f'{symbname if symbname else "??":}',
+                                    "Object Name": f'{path}',
                                     "Num of hits per trace": nhits,
                                     "Number of traces in which leak was observed": samples,
                                     "src": source,
-                                    "Path": f"{path}:{ln}"
+                                    "Path": f"{srcpath}:{ln}"
                                 }
                             )
                         else:
                             symbname = getfnname(path, k)
-                            source, path, ln = getCodeSnippet(path, k)
+                            source, srcpath, ln = getCodeSnippet(path, k)
                             mival, nhits, samples = dic[hex(k)]
                             console.print(
                                 f'{k:#08x} -[MI = {mival:.2f}]  \t at {symbname if symbname else "??":<30} {label}'
@@ -118,10 +119,11 @@ class SCDetector:
                                     "MI score": mival,
                                     "Leakage model": "neural-learnt",
                                     "Symbol Name": f'{symbname if symbname else "??":}',
+                                    "Object Name": f'{path}',
                                     "Num of hits per trace": nhits,
                                     "Number of traces in which leak was observed": samples,
                                     "src": source,
-                                    "Path": f"{path}:{ln}"
+                                    "Path": f"{srcpath}:{ln}"
                                 }
                             )
         endtime = time.time()

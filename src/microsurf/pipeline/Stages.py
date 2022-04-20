@@ -7,6 +7,7 @@ from datetime import datetime
 from functools import lru_cache
 from pathlib import Path, PurePath
 from typing import Dict, List, Tuple, Callable
+from unicorn.unicorn_const import UC_MEM_READ
 
 import magic
 import ray
@@ -293,6 +294,7 @@ class MemWatcher:
         self.multithread = multithread
 
     def _trace_mem_read(self, ql: Qiling, access, addr, size, value):
+        assert access == UC_MEM_READ
         pc = ql.arch.regs.arch_pc
         if self.locations is None:
             self.currenttrace.add(pc, addr)
