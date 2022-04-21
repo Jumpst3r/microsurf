@@ -321,7 +321,7 @@ class MemWatcher:
             for insn in ql.arch.disassembler.disasm(buf, address):
                 self.asm[
                     hex(pc)
-                ] = f"|{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}"
+                ] = f"{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}"
 
     def getlibname(self, addr):
         return next(
