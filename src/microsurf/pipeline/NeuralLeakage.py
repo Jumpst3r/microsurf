@@ -115,7 +115,7 @@ class NeuralLeakageModel(nn.Module):
                         new_val_mean = np.mean(Y_val[-5:])
                         old_val_mean = np.mean(Y_val[-10:-5])
                         eps = new_val_mean - old_val_mean
-                        if eps > 0 or eps < 1e-4:
+                        if eps > 0:
                             break
                     lm.train()
                 Y.append(loss.detach().numpy())

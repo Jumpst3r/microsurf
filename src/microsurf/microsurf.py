@@ -94,7 +94,7 @@ class SCDetector:
                             console.print(
                                 f'{offset:#08x} - [MI = {mival:.2f}] \t at {symbname if symbname else "??":<30} {label}'
                             )
-                            asmsnippet = f'[{hex(offset)}]' + asm[leakAddr].split(']')[1]
+                            asmsnippet = f'[{hex(offset)}]' + asm[leakAddr].split('|')[1]
                             self.MDresults.append(
                                 {
                                     "runtime Addr": k,
@@ -118,7 +118,7 @@ class SCDetector:
                             console.print(
                                 f'{k:#08x} -[MI = {mival:.2f}]  \t at {symbname if symbname else "??":<30} {label}'
                             )
-                            asmsnippet = f'[{hex(k)}]' + asm[leakAddr].split(']')[1]
+                            asmsnippet = f'[{hex(k)}]' + asm[leakAddr].split('|')[1]
                             self.MDresults.append(
                                 {
                                     "runtime Addr": k,
