@@ -55,7 +55,7 @@ class ReportGenerator:
                 if len(row) == 0:
                     break
                 self.mdString += row.loc[
-                    :, ["offset", "MI score", "Leakage model","Num of hits per trace", "Number of traces in which leak was observed" ,"Symbol Name", "Object Name", "Path"]
+                    :, ["offset", "MI score", "Detection Module", "Leakage model","Num of hits per trace", "Number of traces in which leak was observed" ,"Symbol Name", "Object Name", "Source Path"]
                 ].to_markdown(index=False)
                 self.mdString += "\n\nSource code snippet\n\n"
                 src = row[["src"]].values[0][0]
@@ -66,6 +66,11 @@ class ReportGenerator:
                     for l in src:
                         self.mdString += l
                     self.mdString += "\n```\n"
+                self.mdString += "\n\nLeaking instruction\n\n"
+                src = row[["asm"]].values[0][0]
+                self.mdString += "```C\n"
+                self.mdString += src
+                self.mdString += "\n```\n"
                 self.mdString += "\nKey bit dependencies (estimated):"
                 if Path(f"{self.loader.resultDir}/assets/saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png").is_file():
                     self.mdString += f"\n\n![saliency map](assets/saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png)\n\n"
@@ -84,7 +89,7 @@ class ReportGenerator:
 
         self.mdString += "\n ### All Leaks, sorted by MI\n\n"
         self.mdString += (
-            self.results.loc[:, ["offset", "MI score", "Leakage model","Num of hits per trace", "Number of traces in which leak was observed" ,"Symbol Name", "Object Name", "Path"]]
+            self.results.loc[:, ["offset", "MI score", "Detection Module", "Leakage model","Num of hits per trace", "Number of traces in which leak was observed" ,"Symbol Name", "Object Name", "Source Path"]]
             .sort_values(by=["MI score"], ascending=False)
             .to_markdown(index=False)
         )

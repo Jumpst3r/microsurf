@@ -11,7 +11,9 @@ import os
 import random
 import sys
 from microsurf.microsurf import SCDetector
+from microsurf.pipeline.DetectionModules import DataLeakDetector
 from microsurf.pipeline.LeakageModels import hamming, identity
+from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.utils.generators import getRandomHexKeyFunction
 
 if __name__ == "__main__":
@@ -21,12 +23,10 @@ if __name__ == "__main__":
 
     args = ['@'] # single secret arg
 
-    scd = SCDetector(
-        binPath=binpath,
-        args=args,
-        randGen=getRandomHexKeyFunction(24),
-        deterministic=False,
-        asFile=False,
-    )
-   
-    scd.exec(report=True)
+    binLoader = BinaryLoader(path=binpath, args=args, rootfs='/home/nicolas/Documents/msc-thesis-work/tests/binaries/hexbitop/', rndGen=getRandomHexKeyFunction(8))
+
+    scd = SCDetector(modules=[
+        DataLeakDetector(binaryLoader=binLoader, miThreshold=0),
+    ])
+
+    scd.exec()

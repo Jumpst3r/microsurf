@@ -34,11 +34,10 @@ if __name__ == "__main__":
     elif len(sys.argv) > 1 and sys.argv[1] == 'riscv64':
         jailroot = "doc/examples/rootfs/jail-openssl-riscv64/"
     else:
-        print("usage: openssl-camillia-128.py [arm64, x8632, x8664, mipsel32, riscv64]")
+        print("usage: openssl.py [arm64, x8632, x8664, mipsel32, riscv64]")
         exit(0)
 
     binpath = jailroot + "openssl"
-    binpath = "/home/nicolas/Documents/msc-thesis-work/tests/binaries/hexbitop/secret-x86-64.bin"
 
     opensslArgs = [
         "camellia-128-ecb",
@@ -52,13 +51,12 @@ if __name__ == "__main__":
         "@",
 
     ]
-    args = ["@"]
-    # sharedObjects = ['libssl', 'libcrypto']
+    sharedObjects = ['libcrypto']
 
-    binLoader = BinaryLoader(path=binpath, args=args, rootfs=jailroot, rndGen=getRandomHexKeyFunction(8))
+    binLoader = BinaryLoader(path=binpath, args=opensslArgs, rootfs=jailroot, rndGen=getRandomHexKeyFunction(128),
+                             sharedObjects=sharedObjects)
 
     scd = SCDetector(modules=[
-        CFLeakDetector(binaryLoader=binLoader),
         DataLeakDetector(binaryLoader=binLoader),
     ])
 

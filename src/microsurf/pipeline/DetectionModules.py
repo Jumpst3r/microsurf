@@ -1,4 +1,5 @@
 import multiprocessing
+from collections import ChainMap
 from typing import List, Union
 
 import ray
@@ -61,16 +62,17 @@ class DataLeakDetector(Detector):
                 [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchers]
             futures = [m.getResults.remote() for m in memWatchers]
             res = ray.get(futures)
-            resList += [r[0] for r in res]
+            resList += [r for r in res]
+        asm = [r[1] for r in resList]
         if fixedSecret:
-            mt = MemTraceCollectionFixed([r for r in resList])
+            mt = MemTraceCollectionFixed([r[0] for r in resList])
         else:
-            mt = MemTraceCollectionRandom([r for r in resList])
+            mt = MemTraceCollectionRandom([r[0] for r in resList])
         if self.save:
             path = f'{self.loader.resultDir}/traces/traces-data-' \
                    f'{"fixed" if fixedSecret else "random"}-{n}-{self.loader.ARCH}.pickle '
             mt.toDisk(path)
-        return mt
+        return mt, dict(ChainMap(*asm))
 
     def __str__(self):
         return "Secret dep. mem. read detector"

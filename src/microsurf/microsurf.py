@@ -26,7 +26,7 @@ log = getLogger()
 
 
 class SCDetector:
-    def __init__(self, modules: List[Detector], itercount=50):
+    def __init__(self, modules: List[Detector], itercount=1000):
         self.modules = modules
         self.ITER_COUNT = itercount
         if not modules:
@@ -43,16 +43,16 @@ class SCDetector:
         for module in self.modules:
             log.info(f"module {str(module)}")
             # Find possible leaks
-            collection = module.recordTraces(5)
-
-            rndTraces = module.recordTraces(self.ITER_COUNT, pcList=collection.possibleLeaks)
+            collection, _ = module.recordTraces(5)
+            rndTraces, asm = module.recordTraces(self.ITER_COUNT, pcList=collection.possibleLeaks)
             lc = LeakageClassification(rndTraces, module.loader, module.miThreshold)
             self.KEYLEN = lc.KEYLEN
             lc.analyze()
-            print("DONE")
-            self.results[str(module)] = lc.results
-        self._formatResults()
-        self.generateReport()
+            self.results[str(module)] = (lc.results, asm)
+
+        if self.results:
+            self._formatResults()
+            self.generateReport()
 
 
     def _formatResults(self):
@@ -63,7 +63,8 @@ class SCDetector:
                 label,
                 container,
         ) in self.loader.mappings:
-            for module, dic in self.results.items():
+            for (module, v) in self.results.items():
+                (dic, asm) = v
                 for leakAddr in dic:
                     k = int(leakAddr, 16)
                     if lbound < k < ubound:
@@ -91,6 +92,7 @@ class SCDetector:
                             console.print(
                                 f'{offset:#08x} - [MI = {mival:.2f}] \t at {symbname if symbname else "??":<30} {label}'
                             )
+                            asmsnippet = f'[{offset}]' + asm[leakAddr].split[']'][1]
                             self.MDresults.append(
                                 {
                                     "runtime Addr": k,
@@ -98,11 +100,13 @@ class SCDetector:
                                     "MI score": mival,
                                     "Leakage model": "neural-learnt",
                                     "Symbol Name": f'{symbname if symbname else "??":}',
-                                    "Object Name": f'{path}',
+                                    "Object Name": f'{path.split("/")[-1]}',
                                     "Num of hits per trace": nhits,
                                     "Number of traces in which leak was observed": samples,
                                     "src": source,
-                                    "Path": f"{srcpath}:{ln}"
+                                    "asm": asmsnippet,
+                                    "Source Path": f"{srcpath}:{ln}",
+                                    "Detection Module": str(module)
                                 }
                             )
                         else:
@@ -112,6 +116,7 @@ class SCDetector:
                             console.print(
                                 f'{k:#08x} -[MI = {mival:.2f}]  \t at {symbname if symbname else "??":<30} {label}'
                             )
+                            asmsnippet = f'[{k}]' + asm[leakAddr].split[']'][1]
                             self.MDresults.append(
                                 {
                                     "runtime Addr": k,
@@ -119,11 +124,13 @@ class SCDetector:
                                     "MI score": mival,
                                     "Leakage model": "neural-learnt",
                                     "Symbol Name": f'{symbname if symbname else "??":}',
-                                    "Object Name": f'{path}',
+                                    "Object Name": f'{path.split("/")[-1]}',
                                     "Num of hits per trace": nhits,
                                     "Number of traces in which leak was observed": samples,
                                     "src": source,
-                                    "Path": f"{srcpath}:{ln}"
+                                    "asm": asmsnippet,
+                                    "Source Path": f"{srcpath}:{ln}",
+                                    "Detection Module": str(module),
                                 }
                             )
         endtime = time.time()
@@ -143,6 +150,6 @@ class SCDetector:
                 loader=self.loader,
                 keylen=self.KEYLEN,
                 itercount=self.ITER_COUNT,
-                threshold=0.2
+                threshold=min([m.miThreshold for m in self.modules])
             )
         rg.saveMD()

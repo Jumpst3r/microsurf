@@ -95,9 +95,7 @@ class NeuralLeakageModel(nn.Module):
             Y_val = []
             mest_val = MIEstimator(x_val)
             mest_train = MIEstimator(x_train)
-            old_val_mean = 0
-            new_val_mean = 0
-            for e in range(1, 350):
+            for e in range(1, 200):
                 lpred = lm(y_train)
                 mest_train.trainEstimator(lpred)
                 loss = -mest_train.forward(lpred)
@@ -117,7 +115,7 @@ class NeuralLeakageModel(nn.Module):
                         new_val_mean = np.mean(Y_val[-5:])
                         old_val_mean = np.mean(Y_val[-10:-5])
                         eps = new_val_mean - old_val_mean
-                        if eps > 0:
+                        if eps > 0 or eps < 1e-4:
                             break
                     lm.train()
                 Y.append(loss.detach().numpy())
@@ -138,7 +136,7 @@ class NeuralLeakageModel(nn.Module):
             grad = torch.autograd.grad(pred, input)[0]
             keys = minmax_scale(torch.abs(grad)[0].detach().numpy(), (0, 1))
             heatmaps.append(keys[::-1, None].T)
-        self.MIScore = max(self.MIScores)
+        self.MIScore = abs(max(self.MIScores))
         if self.MIScore >= self.threshold:
             sns.set(font_scale=0.3)
             plt.tight_layout()

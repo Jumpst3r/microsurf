@@ -7,27 +7,15 @@
 //https://stackoverflow.com/questions/523724/c-c-check-if-one-bit-is-set-in-i-e-int-variable
 #define CHECK_BIT(var,pos) !!((var) & (1<<(pos)))
 
-
-int someFunction(int value){
-  for (int i = 0; i < 10; i++){
-    value += 1;
-  }
-  return 0;
-}
-
-int commonfct(int i){
-  printf("some text\n");
-  return 0;
-}
-
 int main(int argc, char *argv[]) {
-    uint64_t secret = (uint64_t) argv[1][0];
+    uint64_t secret = strtoul(argv[1], NULL, 16);
+    int *T= malloc(100 * sizeof(int));
     int nbits = sizeof(secret) * 8;
-    for (int i=0; i< 5; i++){
-    if (CHECK_BIT(secret, i)){
-        int someVal = 20;
-        someFunction(someVal);
-      }
+    int bval4 = CHECK_BIT(secret, 4);
+    int bval5 = CHECK_BIT(secret, 5);
+    int bval6 = CHECK_BIT(secret, 6);
+    for(int i = 0; i < 1; i++){
+        int val = T[i + (bval5)];
     }
-    return someFunction(10);
+    return 0;
 }

@@ -70,21 +70,15 @@ class BinaryLoader:
         fileinfo = magic.from_file(path)
         self.filemagic = fileinfo
         if "80386" in fileinfo:
-            self.md = Cs(CS_ARCH_X86, CS_MODE_32)
             self.ARCH = 'X86_32'
         elif "x86" in fileinfo:
-            self.md = Cs(CS_ARCH_X86, CS_MODE_64)
             self.ARCH = 'X86_64'
         elif "ARM" in fileinfo:
-            self.md = Cs(CS_ARCH_ARM, CS_MODE_ARM)
             self.ARCH = 'ARM'
         elif "MIPS32" in fileinfo:
-            self.md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS32)
             self.ARCH = 'MIPS32'
         elif "RISC-V" in fileinfo:
             self.ARCH = 'RISCV'
-            # no capstone support :(
-            pass
         else:
             log.info(fileinfo)
             log.error("Target architecture not implemented")
@@ -117,6 +111,7 @@ class BinaryLoader:
                 console=True,
                 multithread=self.multithreaded,
             )
+            self.Cs = self.QLEngine.arch.disassembler
             self.fixSyscalls()
         except FileNotFoundError as e:
             if ".so" in str(e):
@@ -210,9 +205,9 @@ class BinaryLoader:
                 self.executableCode.append((s, e))
                 log.info(f"Tracing code: {hex(s)}-{hex(e)}-{perm}-{label}")
             for obname in self.sharedObjects:
-                if (obname in label or self.binPath.name in label):
+                if obname in label:
                     labelIgnored = False
-            if labelIgnored:
+            if labelIgnored and self.binPath.name not in label:
                 self.ignoredObjects.append(label)
             else:
                 self.executableCode.append((s, e))
@@ -291,6 +286,7 @@ class MemWatcher:
         self.mappings = mappings
         self.deterministic = deterministic
         self.multithread = multithread
+        self.asm = {}
 
     def _trace_mem_read(self, ql: Qiling, access, addr, size, value):
         assert access == UC_MEM_READ
@@ -299,6 +295,15 @@ class MemWatcher:
             self.currenttrace.add(pc, addr)
         elif pc in self.locations:
             self.currenttrace.add(pc, addr)
+
+    def _hook_code(self, ql: Qiling, address: int, size: int):
+        pc = ql.arch.regs.arch_pc
+        if self.locations is None:
+            return
+        if pc in self.locations:
+            buf = ql.mem.read(address, size)
+            for insn in ql.arch.disassembler.disasm(buf, address):
+                self.asm[hex(pc)] = f'[{insn.address:#x}] : {insn.mnemonic:10s} {insn.op_str}'
 
     def getlibname(self, addr):
         return next(
@@ -328,6 +333,7 @@ class MemWatcher:
         )
         self.currenttrace = MemTrace(secret)
         self.QLEngine.hook_mem_read(self._trace_mem_read)
+        self.QLEngine.hook_code(self._hook_code)
         # duplicate code. Ugly - fixme.
         if self.deterministic:
             self.QLEngine.add_fs_mapper("/dev/urandom", device_random)
@@ -369,7 +375,7 @@ class MemWatcher:
         self.tracetime = endtime - start_time
 
     def getResults(self):
-        return self.currenttrace, self.tracetime
+        return self.currenttrace, self.asm
 
 
 @ray.remote
@@ -544,6 +550,8 @@ class LeakageClassification:
     def analyze(self):
         futures = []
         num_ticks = len(self.rndTraceCollection.possibleLeaks)
+        if num_ticks == 0:
+            return self.results
         pb = ProgressBar(num_ticks)
         actor = pb.actor
         for k, v in self.rndTraceCollection.DF.items():
