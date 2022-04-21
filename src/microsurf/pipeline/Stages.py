@@ -200,24 +200,23 @@ class BinaryLoader:
                     "you provided a shared object name which was not found in memory."
                 )
                 exit(-1)
-        log.info("mappings:")
+        log.info("executable segments:")
         for s, e, perm, label, c in self.mappings:
-            #log.info(f"{hex(s)}-{hex(e)} {perm} {label}")
+            if 'x' not in perm:
+                continue
+            log.info(f"{hex(s)}-{hex(e)} {perm} {label}")
             labelIgnored = True
-            if not self.sharedObjects and self.binPath.name in label and 'x' in perm:
+            if not self.sharedObjects and self.binPath.name in label:
                 self.executableCode.append((s, e))
                 log.info(f"Tracing code: {hex(s)}-{hex(e)}-{perm}-{label}")
             for obname in self.sharedObjects:
-                if obname in label or self.binPath.name in label:
+                if (obname in label or self.binPath.name in label):
                     labelIgnored = False
-                if labelIgnored and ((" " in label) or c):
-                    if c and self.binPath.name not in c.split("/")[-1]:
-                        self.ignoredObjects.append(label)
-                    elif not c:
-                        self.ignoredObjects.append(label)
-                elif (not labelIgnored) and ('x' in perm):
-                    self.executableCode.append((s,e))
-                    log.info(f"Tracing code: {hex(s)}-{hex(e)}-{perm}-{label}")
+            if labelIgnored:
+                self.ignoredObjects.append(label)
+            else:
+                self.executableCode.append((s, e))
+                log.info(f"Tracing code: {hex(s)}-{hex(e)}-{perm}-{label}")
 
         self.ignoredObjects = list(set(self.ignoredObjects))
 
