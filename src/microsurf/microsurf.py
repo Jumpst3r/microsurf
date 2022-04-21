@@ -7,7 +7,7 @@ Usage: from microsurf import SCDetector
 refer to the class SCDetector documentation for further information.
 """
 
-__all__ = ['SCDetector']
+__all__ = ["SCDetector"]
 __author__ = "Nicolas Dutly"
 __version__ = "0.0.0a"
 
@@ -26,7 +26,7 @@ log = getLogger()
 
 
 class SCDetector:
-    def __init__(self, modules: List[Detector], itercount=500):
+    def __init__(self, modules: List[Detector], itercount=1000):
         self.modules = modules
         self.ITER_COUNT = itercount
         if not modules:
@@ -45,8 +45,12 @@ class SCDetector:
             # Find possible leaks
             collection, _ = module.recordTraces(5)
             # Collect one trace to get assembly code
-            _, asm = module.recordTraces(1, pcList=collection.possibleLeaks, getAssembly=True)
-            rndTraces, _ = module.recordTraces(self.ITER_COUNT, pcList=collection.possibleLeaks)
+            _, asm = module.recordTraces(
+                1, pcList=collection.possibleLeaks, getAssembly=True
+            )
+            rndTraces, _ = module.recordTraces(
+                self.ITER_COUNT, pcList=collection.possibleLeaks
+            )
             lc = LeakageClassification(rndTraces, module.loader, module.miThreshold)
             self.KEYLEN = lc.KEYLEN
             lc.analyze()
@@ -56,14 +60,13 @@ class SCDetector:
             self._formatResults()
             self.generateReport()
 
-
     def _formatResults(self):
         for (
-                lbound,
-                ubound,
-                _,
-                label,
-                container,
+            lbound,
+            ubound,
+            _,
+            label,
+            container,
         ) in self.loader.mappings:
             for (module, v) in self.results.items():
                 (dic, asm) = v
@@ -94,7 +97,9 @@ class SCDetector:
                             console.print(
                                 f'{offset:#08x} - [MI = {mival:.2f}] \t at {symbname if symbname else "??":<30} {label}'
                             )
-                            asmsnippet = f'[{hex(offset)}]' + asm[leakAddr].split('|')[1]
+                            asmsnippet = (
+                                f"[{hex(offset)}]" + asm[leakAddr].split("|")[1]
+                            )
                             self.MDresults.append(
                                 {
                                     "runtime Addr": k,
@@ -108,7 +113,7 @@ class SCDetector:
                                     "src": source,
                                     "asm": asmsnippet,
                                     "Source Path": f"{srcpath}:{ln}",
-                                    "Detection Module": str(module)
+                                    "Detection Module": str(module),
                                 }
                             )
                         else:
@@ -118,7 +123,7 @@ class SCDetector:
                             console.print(
                                 f'{k:#08x} -[MI = {mival:.2f}]  \t at {symbname if symbname else "??":<30} {label}'
                             )
-                            asmsnippet = f'[{hex(k)}]' + asm[leakAddr].split('|')[1]
+                            asmsnippet = f"[{hex(k)}]" + asm[leakAddr].split("|")[1]
                             self.MDresults.append(
                                 {
                                     "runtime Addr": k,
@@ -147,11 +152,12 @@ class SCDetector:
             return
         else:
             import pandas as pd
+
             rg = ReportGenerator(
                 results=pd.DataFrame.from_dict(self.MDresults),
                 loader=self.loader,
                 keylen=self.KEYLEN,
                 itercount=self.ITER_COUNT,
-                threshold=min([m.miThreshold for m in self.modules])
+                threshold=min([m.miThreshold for m in self.modules]),
             )
         rg.saveMD()

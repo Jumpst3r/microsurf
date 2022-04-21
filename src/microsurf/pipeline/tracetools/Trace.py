@@ -1,12 +1,13 @@
-from email.policy import default
 import itertools
 import pickle
-from collections import Counter, defaultdict
-from typing import Dict, List, OrderedDict, Set
+from collections import defaultdict
+from typing import Dict, List, Set
+
 import cdifflib as dfl
-from rich.progress import track
 import numpy as np
 import pandas as pd
+from rich.progress import track
+
 from microsurf.utils.logger import getConsole, getLogger
 
 log = getLogger()
@@ -143,12 +144,12 @@ class MemTraceCollectionRandom(MemTraceCollection):
                 numhits = max(numhits, len(trace.trace[l]))
                 hits.append(len(trace.trace[l]))
                 row.append(entry)
-            colnames = ['secret'] + [str(i) for i in range(numhits)]
+            colnames = ["secret"] + [str(i) for i in range(numhits)]
             f = pd.DataFrame(row, columns=colnames)
-            f = f.set_index('secret')
+            f = f.set_index("secret")
             f.drop(f.std()[f.std() == 0].index, axis=1, inplace=True)
             if len(f.columns):
-                f.insert(loc=0, column='hits', value=hits)
+                f.insert(loc=0, column="hits", value=hits)
                 perLeakDict[l] = f
                 perLeakDict[l].dropna(axis=0, inplace=True)
         self.DF = perLeakDict
@@ -274,13 +275,14 @@ class PCTraceCollectionRandom(PCTraceCollection):
                 seq = dfl.CSequenceMatcher(None, t1.trace, t2.trace)
                 blocks = list(seq.get_matching_blocks())
                 for s1, s2, length in blocks:
-                    mat[0, s1:s1 + length] += 1
-                    mat[0, s2:s2 + length] += 1
+                    mat[0, s1 : s1 + length] += 1
+                    mat[0, s2 : s2 + length] += 1
             mat[mat == 0] = np.max(mat)
             import matplotlib.pyplot as plt
             import seaborn as sns
-            s = sns.heatmap(mat, cmap='Reds_r', yticklabels=[])
-            s.set(xlabel='Instruction number', ylabel='IP trace differences')
+
+            s = sns.heatmap(mat, cmap="Reds_r", yticklabels=[])
+            s.set(xlabel="Instruction number", ylabel="IP trace differences")
             plt.show()
             candidates = np.flatnonzero(mat != np.amax(mat))
 
@@ -296,7 +298,8 @@ class PCTraceCollectionRandom(PCTraceCollection):
             hits = []
             maxhit = 0
             for trace in self.traces:
-                if l not in trace.posDict: continue
+                if l not in trace.posDict:
+                    continue
                 entry = [int(trace.secret, 16)]
                 elist = []
                 for a in trace.posDict[l]:
@@ -310,12 +313,12 @@ class PCTraceCollectionRandom(PCTraceCollection):
                 hits.append(numhits)
                 maxhit = max(maxhit, numhits)
                 row.append(entry)
-            colnames = ['secret'] + [str(i) for i in range(maxhit)]
+            colnames = ["secret"] + [str(i) for i in range(maxhit)]
             f = pd.DataFrame(row, columns=colnames)
-            f = f.set_index('secret')
+            f = f.set_index("secret")
             f.drop(f.std()[f.std() == 0].index, axis=1, inplace=True)
             if len(f.columns):
-                f.insert(loc=0, column='hits', value=hits)
+                f.insert(loc=0, column="hits", value=hits)
                 perLeakDict[l] = f
                 perLeakDict[l].dropna(axis=0, inplace=True)
         self.DF = perLeakDict

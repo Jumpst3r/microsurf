@@ -1,18 +1,14 @@
-import os
-import logging
-from matplotlib.pyplot import yticks
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from mine.models.mine import Mine
 from sklearn.model_selection import train_test_split
-import torch.nn as nn
-import numpy as np
 from sklearn.preprocessing import minmax_scale
-import torch
-from tqdm import tqdm
-from microsurf.utils.logger import LOGGING_LEVEL, getLogger
-import seaborn as sns
-import torch.nn.functional as F
-from rich.progress import track
-import matplotlib.pyplot as plt
+
+from microsurf.utils.logger import getLogger
 
 log = getLogger()
 
@@ -50,6 +46,7 @@ class MIEstimator(nn.Module):
         y = y.repeat(1, self.X.shape[1])
         return self.mine.mi(self.X, y)
 
+
 class NeuralLeakageModel(nn.Module):
     def __init__(self, X, Y, leakAddr, keylen, assetDir, threshold) -> None:
         super().__init__()
@@ -71,7 +68,8 @@ class NeuralLeakageModel(nn.Module):
         self.leakAddr = leakAddr
 
     def train(self):
-        if self.abort: return
+        if self.abort:
+            return
         self.MIScores = []
         heatmaps = []
 
@@ -142,10 +140,12 @@ class NeuralLeakageModel(nn.Module):
             plt.tight_layout()
             f, ax = plt.subplots()
             try:
-                dependencies = np.stack(heatmaps, axis=0).reshape(-1, heatmaps[0].shape[1])
+                dependencies = np.stack(heatmaps, axis=0).reshape(
+                    -1, heatmaps[0].shape[1]
+                )
             except Exception as e:
                 return
-            self.MIScores = np.array(self.MIScores[:len(heatmaps)])
+            self.MIScores = np.array(self.MIScores[: len(heatmaps)])
             # add a column to the far right to include the MI score in the heatmap
             dependencies = np.c_[dependencies, self.MIScores]
             deps = dependencies.copy()
@@ -155,7 +155,7 @@ class NeuralLeakageModel(nn.Module):
             ax = sns.heatmap(
                 deps,
                 ax=ax,
-                vmin=0, 
+                vmin=0,
                 vmax=1,
                 cbar_kws={
                     "orientation": "horizontal",
@@ -168,7 +168,7 @@ class NeuralLeakageModel(nn.Module):
                 mi,
                 cmap="Reds",
                 ax=ax,
-                vmin=0, 
+                vmin=0,
                 vmax=1,
                 cbar_kws={
                     "label": "Estimated MI score per call",

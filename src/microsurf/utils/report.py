@@ -1,10 +1,10 @@
-from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
 import numpy as np
 import pandas
+
 from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.utils.logger import getLogger
 
@@ -18,7 +18,7 @@ class ReportGenerator:
         loader: BinaryLoader,
         keylen: int,
         itercount: int,
-        threshold: int
+        threshold: int,
     ) -> None:
         self.results = results
         self.mdString = ""
@@ -47,15 +47,28 @@ class ReportGenerator:
     def generateResults(self):
         self.mdString += "## Results\n\n"
 
-        significant = self.results[self.results['MI score'] > self.threshold].sort_values(by=["MI score"], ascending=False, inplace=False)
+        significant = self.results[
+            self.results["MI score"] > self.threshold
+        ].sort_values(by=["MI score"], ascending=False, inplace=False)
         if len(significant) > 0:
             self.mdString += "### Leaks with MI > threshold\n\n"
             for i in range(len(significant)):
-                row = significant[i:i+1]
+                row = significant[i : i + 1]
                 if len(row) == 0:
                     break
                 self.mdString += row.loc[
-                    :, ["offset", "MI score", "Detection Module", "Leakage model","Num of hits per trace", "Number of traces in which leak was observed" ,"Symbol Name", "Object Name", "Source Path"]
+                    :,
+                    [
+                        "offset",
+                        "MI score",
+                        "Detection Module",
+                        "Leakage model",
+                        "Num of hits per trace",
+                        "Number of traces in which leak was observed",
+                        "Symbol Name",
+                        "Object Name",
+                        "Source Path",
+                    ],
                 ].to_markdown(index=False)
                 self.mdString += "\n\nSource code snippet\n\n"
                 src = row[["src"]].values[0][0]
@@ -72,7 +85,9 @@ class ReportGenerator:
                 self.mdString += src
                 self.mdString += "\n```\n"
                 self.mdString += "\nKey bit dependencies (estimated):"
-                if Path(f"{self.loader.resultDir}/assets/saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png").is_file():
+                if Path(
+                    f"{self.loader.resultDir}/assets/saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png"
+                ).is_file():
                     self.mdString += f"\n\n![saliency map](assets/saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png)\n\n"
                 else:
                     self.mdString += (
@@ -89,7 +104,20 @@ class ReportGenerator:
 
         self.mdString += "\n ### All Leaks, sorted by MI\n\n"
         self.mdString += (
-            self.results.loc[:, ["offset", "MI score", "Detection Module", "Leakage model","Num of hits per trace", "Number of traces in which leak was observed" ,"Symbol Name", "Object Name", "Source Path"]]
+            self.results.loc[
+                :,
+                [
+                    "offset",
+                    "MI score",
+                    "Detection Module",
+                    "Leakage model",
+                    "Num of hits per trace",
+                    "Number of traces in which leak was observed",
+                    "Symbol Name",
+                    "Object Name",
+                    "Source Path",
+                ],
+            ]
             .sort_values(by=["MI score"], ascending=False)
             .to_markdown(index=False)
         )

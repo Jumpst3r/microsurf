@@ -1,18 +1,25 @@
 import multiprocessing
 from collections import ChainMap
-from typing import List, Union
+from typing import List
 
 import ray
 from rich.progress import track
+
 from microsurf.pipeline.Stages import MemWatcher, BinaryLoader, CFWatcher
-from microsurf.pipeline.tracetools.Trace import MemTraceCollectionFixed, MemTraceCollectionRandom, \
-    PCTraceCollectionRandom, PCTraceCollectionFixed, TraceCollection, MemTraceCollection, PCTraceCollection
+from microsurf.pipeline.tracetools.Trace import (
+    MemTraceCollectionFixed,
+    MemTraceCollectionRandom,
+    PCTraceCollectionRandom,
+    PCTraceCollectionFixed,
+    TraceCollection,
+    MemTraceCollection,
+    PCTraceCollection,
+)
 
 
 class Detector:
-    def __init__(self, binaryLoader: BinaryLoader, save=True,
-                 miThreshold=0.2):
-        """ Generic Detector class.
+    def __init__(self, binaryLoader: BinaryLoader, save=True, miThreshold=0.2):
+        """Generic Detector class.
         Args:
             binaryLoader: A binary loader instance.
             sharedObjects: List of shared objects to trace. Names do not need to match exactly, for example, "libcypto"
@@ -26,7 +33,7 @@ class Detector:
         self.NB_CORES = multiprocessing.cpu_count() - 1
 
     def recordTraces(
-            self, n: int, pcList: List[int] = None, fixedSecret=False, getAssembly=False
+        self, n: int, pcList: List[int] = None, fixedSecret=False, getAssembly=False
     ) -> TraceCollection:
         pass
 
@@ -36,7 +43,7 @@ class DataLeakDetector(Detector):
         super().__init__(binaryLoader, save, miThreshold)
 
     def recordTraces(
-            self, n: int, pcList: List[int] = None, fixedSecret=False, getAssembly=False
+        self, n: int, pcList: List[int] = None, fixedSecret=False, getAssembly=False
     ) -> MemTraceCollection:
         codeRanges = self.loader.executableCode
         NB_CORES = min(self.NB_CORES, n)
@@ -51,14 +58,14 @@ class DataLeakDetector(Detector):
                 getAssembly=getAssembly,
                 deterministic=self.loader.deterministic,
                 multithread=self.loader.multithreaded,
-                codeRanges=codeRanges
+                codeRanges=codeRanges,
             )
             for _ in range(NB_CORES)
         ]
         resList = []
         for _ in track(
-                range(0, n, NB_CORES),
-                description=f"Collecting {n} traces with {'fixed' if fixedSecret else 'random'} secrets",
+            range(0, n, NB_CORES),
+            description=f"Collecting {n} traces with {'fixed' if fixedSecret else 'random'} secrets",
         ):
             if fixedSecret:
                 [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in memWatchers]
@@ -73,8 +80,10 @@ class DataLeakDetector(Detector):
         else:
             mt = MemTraceCollectionRandom([r[0] for r in resList])
         if self.save:
-            path = f'{self.loader.resultDir}/traces/traces-data-' \
-                   f'{"fixed" if fixedSecret else "random"}-{n}-{self.loader.ARCH}.pickle '
+            path = (
+                f"{self.loader.resultDir}/traces/traces-data-"
+                f'{"fixed" if fixedSecret else "random"}-{n}-{self.loader.ARCH}.pickle '
+            )
             mt.toDisk(path)
         return mt, dict(ChainMap(*asm))
 
@@ -87,7 +96,10 @@ class CFLeakDetector(Detector):
         super().__init__(binaryLoader, save, miThreshold)
 
     def recordTraces(
-            self, n: int, pcList: List[int] = None, fixedSecret=False,
+        self,
+        n: int,
+        pcList: List[int] = None,
+        fixedSecret=False,
     ) -> PCTraceCollection:
         NB_CORES = min(self.NB_CORES, n)
         cfWatchers = [
@@ -97,14 +109,14 @@ class CFLeakDetector(Detector):
                 rootfs=self.loader.rootfs,
                 tracedObjects=self.loader.executableCode,
                 deterministic=self.loader.deterministic,
-                multithread=self.loader.multithreaded
+                multithread=self.loader.multithreaded,
             )
             for _ in range(NB_CORES)
         ]
         resList = []
         for _ in track(
-                range(0, n, NB_CORES),
-                description=f"Collecting {n} traces with  {'fixed' if fixedSecret else 'random'} secrets",
+            range(0, n, NB_CORES),
+            description=f"Collecting {n} traces with  {'fixed' if fixedSecret else 'random'} secrets",
         ):
             if fixedSecret:
                 [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in cfWatchers]
@@ -118,8 +130,10 @@ class CFLeakDetector(Detector):
         else:
             mt = PCTraceCollectionRandom([r for r in resList], possibleLeaks=pcList)
         if self.save:
-            path = f'{self.loader.resultDir}/traces/traces-CF-' \
-                   f'{"fixed" if fixedSecret else "random"}-{n}-{self.loader.ARCH}.pickle'
+            path = (
+                f"{self.loader.resultDir}/traces/traces-CF-"
+                f'{"fixed" if fixedSecret else "random"}-{n}-{self.loader.ARCH}.pickle'
+            )
             mt.toDisk(path)
         return mt
 

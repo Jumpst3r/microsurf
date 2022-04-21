@@ -7,16 +7,16 @@ from datetime import datetime
 from functools import lru_cache
 from pathlib import Path, PurePath
 from typing import Dict, List, Tuple, Callable
-from unicorn.unicorn_const import UC_MEM_READ
 
 import magic
 import ray
-from capstone import CS_ARCH_ARM, CS_ARCH_MIPS, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_MODE_ARM, CS_MODE_MIPS32, Cs
+from capstone import CS_ARCH_ARM, CS_ARCH_X86, CS_MODE_32, CS_MODE_64
 from qiling import Qiling
 from qiling.const import QL_VERBOSE
+from unicorn.unicorn_const import UC_MEM_READ
 
 from .NeuralLeakage import NeuralLeakageModel
-from .tracetools.Trace import MemTrace, MemTraceCollection, PCTrace, TraceCollection
+from .tracetools.Trace import MemTrace, PCTrace, TraceCollection
 from ..utils.hijack import (
     const_clock_gettime,
     const_clock_gettimeofday,
@@ -34,8 +34,16 @@ log = getLogger()
 
 
 class BinaryLoader:
-    def __init__(self, path: str, args: List[str], rootfs: str, rndGen: Callable, sharedObjects=[],
-                 deterministic=False, resultDir='results') -> None:
+    def __init__(
+        self,
+        path: str,
+        args: List[str],
+        rootfs: str,
+        rndGen: Callable,
+        sharedObjects=[],
+        deterministic=False,
+        resultDir="results",
+    ) -> None:
         self.binPath = Path(path)
         self.args = args
         self.rootfs = rootfs
@@ -53,15 +61,18 @@ class BinaryLoader:
         self.QLEngine: Qiling = None
         self.executableCode = []
 
-        os.makedirs(self.resultDir + '/' + 'assets', exist_ok=True)
-        os.makedirs(self.resultDir + '/' + 'traces', exist_ok=True)
+        os.makedirs(self.resultDir + "/" + "assets", exist_ok=True)
+        os.makedirs(self.resultDir + "/" + "traces", exist_ok=True)
 
         try:
             self.secretArgIndex: tuple[int, ...] = (args.index("@"),)
         except ValueError:
             for arg in self.args:
-                if '@' in arg:
-                    self.secretArgIndex: tuple[int, ...] = (args.index(arg), arg.find('@'))
+                if "@" in arg:
+                    self.secretArgIndex: tuple[int, ...] = (
+                        args.index(arg),
+                        arg.find("@"),
+                    )
         if self.deterministic:
             log.info("hooking sources of randomness")
         if not os.path.exists(self.binPath):
@@ -70,15 +81,15 @@ class BinaryLoader:
         fileinfo = magic.from_file(path)
         self.filemagic = fileinfo
         if "80386" in fileinfo:
-            self.ARCH = 'X86_32'
+            self.ARCH = "X86_32"
         elif "x86" in fileinfo:
-            self.ARCH = 'X86_64'
+            self.ARCH = "X86_64"
         elif "ARM" in fileinfo:
-            self.ARCH = 'ARM'
+            self.ARCH = "ARM"
         elif "MIPS32" in fileinfo:
-            self.ARCH = 'MIPS32'
+            self.ARCH = "MIPS32"
         elif "RISC-V" in fileinfo:
-            self.ARCH = 'RISCV'
+            self.ARCH = "RISCV"
         else:
             log.info(fileinfo)
             log.error("Target architecture not implemented")
@@ -132,7 +143,7 @@ class BinaryLoader:
             log.error(f"Emulation dry run failed: {str(e)}")
             tback = traceback.format_exc()
             log.error(tback)
-            if 'cur_thread' in tback and 'spawn' not in str(e):
+            if "cur_thread" in tback and "spawn" not in str(e):
                 log.info("re-running with threading support enabled")
                 try:
                     self.multithreaded = True
@@ -171,7 +182,9 @@ class BinaryLoader:
             if len(self.secretArgIndex) == 1:
                 self.newArgs[self.secretArgIndex[0]] = val
             else:
-                self.newArgs[self.secretArgIndex[0]] = self.newArgs[self.secretArgIndex[0]].replace('@', val)
+                self.newArgs[self.secretArgIndex[0]] = self.newArgs[
+                    self.secretArgIndex[0]
+                ].replace("@", val)
         return val, path
 
     def _fixed(self):
@@ -197,7 +210,7 @@ class BinaryLoader:
                 exit(-1)
         log.info("executable segments:")
         for s, e, perm, label, c in self.mappings:
-            if 'x' not in perm:
+            if "x" not in perm:
                 continue
             log.info(f"{hex(s)}-{hex(e)} {perm} {label}")
             labelIgnored = True
@@ -263,17 +276,17 @@ class MemWatcher:
     """
 
     def __init__(
-            self,
-            binpath,
-            args,
-            rootfs,
-            ignoredObjects,
-            mappings,
-            locations=None,
-            getAssembly=False,
-            deterministic=False,
-            multithread=True,
-            codeRanges=[]
+        self,
+        binpath,
+        args,
+        rootfs,
+        ignoredObjects,
+        mappings,
+        locations=None,
+        getAssembly=False,
+        deterministic=False,
+        multithread=True,
+        codeRanges=[],
     ) -> None:
         self.tracetime = None
         self.traces: List[MemTrace] = []
@@ -306,7 +319,9 @@ class MemWatcher:
         if pc in self.locations:
             buf = ql.mem.read(address, size)
             for insn in ql.arch.disassembler.disasm(buf, address):
-                self.asm[hex(pc)] = f'|{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}'
+                self.asm[
+                    hex(pc)
+                ] = f"|{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}"
 
     def getlibname(self, addr):
         return next(
@@ -321,9 +336,10 @@ class MemWatcher:
             args[args.index("@")] = secret
         except ValueError as e:
             for i in range(len(args)):
-                if '@' in args[i]:
-                    args[i] = args[i].replace('@', secret)
+                if "@" in args[i]:
+                    args[i] = args[i].replace("@", secret)
         import sys
+
         sys.stdout.fileno = lambda: False
         sys.stderr.fileno = lambda: False
         self.QLEngine = Qiling(
@@ -392,13 +408,13 @@ class CFWatcher:
     """
 
     def __init__(
-            self,
-            binpath,
-            args,
-            rootfs,
-            tracedObjects,
-            deterministic=False,
-            multithread=True
+        self,
+        binpath,
+        args,
+        rootfs,
+        tracedObjects,
+        deterministic=False,
+        multithread=True,
     ) -> None:
         self.QLEngine = None
         self.currenttrace = None
@@ -420,9 +436,10 @@ class CFWatcher:
             args[args.index("@")] = secret
         except ValueError as e:
             for i in range(len(args)):
-                if '@' in args[i]:
-                    args[i] = args[i].replace('@', secret)
+                if "@" in args[i]:
+                    args[i] = args[i].replace("@", secret)
         import sys
+
         sys.stdout.fileno = lambda: False
         sys.stderr.fileno = lambda: False
         self.QLEngine = Qiling(
@@ -476,7 +493,9 @@ class CFWatcher:
 
 @ray.remote(num_cpus=1)
 def train(X, Y, leakAddr, keylen, reportDir, threshold, pba):
-    nleakage = NeuralLeakageModel(X, Y, leakAddr, keylen, reportDir + "/assets", threshold)
+    nleakage = NeuralLeakageModel(
+        X, Y, leakAddr, keylen, reportDir + "/assets", threshold
+    )
     try:
         nleakage.train()
     except Exception as e:
@@ -542,10 +561,7 @@ class ProgressBar:
 
 class LeakageClassification:
     def __init__(
-            self,
-            rndTraceCollection: TraceCollection,
-            binaryLoader: BinaryLoader,
-            threshold
+        self, rndTraceCollection: TraceCollection, binaryLoader: BinaryLoader, threshold
     ):
         self.rndTraceCollection = rndTraceCollection
         self.possibleLeaks = rndTraceCollection.possibleLeaks
@@ -563,13 +579,23 @@ class LeakageClassification:
         actor = pb.actor
         for k, v in self.rndTraceCollection.DF.items():
             futures.append(
-                train.remote(v.loc[:, v.columns != 'hits'].values, v.index.to_numpy(), k, self.KEYLEN,
-                             self.loader.resultDir, self.threshold, actor)
+                train.remote(
+                    v.loc[:, v.columns != "hits"].values,
+                    v.index.to_numpy(),
+                    k,
+                    self.KEYLEN,
+                    self.loader.resultDir,
+                    self.threshold,
+                    actor,
+                )
             )
 
         pb.print_until_done()
         results = ray.get(futures)
         for r in results:
             (MIScore, leakAddr) = r
-            self.results[hex(leakAddr)] = (MIScore, self.rndTraceCollection.DF[leakAddr]['hits'].max(),
-                                           len(self.rndTraceCollection.DF[leakAddr]))
+            self.results[hex(leakAddr)] = (
+                MIScore,
+                self.rndTraceCollection.DF[leakAddr]["hits"].max(),
+                len(self.rndTraceCollection.DF[leakAddr]),
+            )

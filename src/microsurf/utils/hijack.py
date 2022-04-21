@@ -11,16 +11,17 @@ Original hooks taken from
 TODO Add tests to check how well this works on different platforms !
 """
 
+import ctypes
 import os
 import stat
 from typing import Union
-from qiling.os.mapper import QlFsMappedObject
-from .logger import getLogger
+
 from qiling.const import QL_ARCH
+from qiling.os.mapper import QlFsMappedObject
 from qiling.os.posix.stat import Stat
 from qiling.os.posix.syscall import pack_stat_struct, AT_FDCWD, NR_OPEN
 
-import ctypes
+from .logger import getLogger
 
 log = getLogger()
 
@@ -89,7 +90,7 @@ Intercept gettime()
 
 
 def const_clock_gettime(
-        ql, clock_gettime_clock_id, clock_gettime_timespec, *args, **kw
+    ql, clock_gettime_clock_id, clock_gettime_timespec, *args, **kw
 ):
     tv_sec = 42
     tv_nsec = 42
@@ -186,14 +187,17 @@ def transform_path(ql, dirfd: int, path: int):
     dirfd = ql.unpacks(ql.pack(dirfd))
     path = ql.os.utils.read_cstring(path)
 
-    if path.startswith('/'):
+    if path.startswith("/"):
         return None, os.path.join(ql.rootfs, path)
 
     if dirfd == AT_FDCWD:
         return None, ql.os.path.transform_to_real_path(path)
 
     if 0 < dirfd < NR_OPEN:
-        return ql.os.fd[dirfd].fileno(), ql.os.fd[dirfd].name  # FIXED, return the path if fd is present
+        return (
+            ql.os.fd[dirfd].fileno(),
+            ql.os.fd[dirfd].name,
+        )  # FIXED, return the path if fd is present
 
 
 # copy of the fixed_syscall_newfstatat Qiling code, forces the usage of our fixed transform_path function
@@ -223,6 +227,7 @@ def syscall_exit_group(ql, code: int):
         os._exit(0)
 
     if ql.multithread:
+
         def _sched_cb_exit(cur_thread):
             ql.log.debug(f"[Thread {cur_thread.get_id()}] Terminated")
             cur_thread.stop()
