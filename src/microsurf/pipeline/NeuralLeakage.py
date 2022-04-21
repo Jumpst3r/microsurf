@@ -124,9 +124,6 @@ class NeuralLeakageModel(nn.Module):
             score = mest_total.forward(lpred).detach().numpy()
             # TODO add sklearn call for comp.
             self.MIScores.append(score)
-            if score < self.threshold:
-                self.MIScore = max(self.MIScores)
-                break
             input = torch.ones((1, self.keylen)) - 0.5
             lm.eval()
             input.requires_grad = True
