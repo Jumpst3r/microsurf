@@ -1,18 +1,14 @@
-import os
-import logging
-from matplotlib.pyplot import yticks
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from mine.models.mine import Mine
 from sklearn.model_selection import train_test_split
-import torch.nn as nn
-import numpy as np
 from sklearn.preprocessing import minmax_scale
-import torch
-from tqdm import tqdm
-from microsurf.utils.logger import LOGGING_LEVEL, getLogger
-import seaborn as sns
-import torch.nn.functional as F
-from rich.progress import track
-import matplotlib.pyplot as plt
+
+from microsurf.utils.logger import getLogger
 
 log = getLogger()
 
@@ -50,12 +46,12 @@ class MIEstimator(nn.Module):
         y = y.repeat(1, self.X.shape[1])
         return self.mine.mi(self.X, y)
 
-import ray
 
 class NeuralLeakageModel(nn.Module):
-    def __init__(self, X, Y, leakAddr, keylen, assetDir) -> None:
+    def __init__(self, X, Y, leakAddr, keylen, assetDir, threshold) -> None:
         super().__init__()
         self.X = X
+        self.threshold = threshold
         if len(self.X) <= 1:
             log.debug(f"sample count too low for {hex(leakAddr)}, returning MI = 0.0")
             self.abort = True
@@ -72,7 +68,8 @@ class NeuralLeakageModel(nn.Module):
         self.leakAddr = leakAddr
 
     def train(self):
-        if self.abort: return
+        if self.abort:
+            return
         self.MIScores = []
         heatmaps = []
 
@@ -96,9 +93,7 @@ class NeuralLeakageModel(nn.Module):
             Y_val = []
             mest_val = MIEstimator(x_val)
             mest_train = MIEstimator(x_train)
-            old_val_mean = 0
-            new_val_mean = 0
-            for e in range(1, 250):
+            for e in range(1, 200):
                 lpred = lm(y_train)
                 mest_train.trainEstimator(lpred)
                 loss = -mest_train.forward(lpred)
@@ -118,7 +113,7 @@ class NeuralLeakageModel(nn.Module):
                         new_val_mean = np.mean(Y_val[-5:])
                         old_val_mean = np.mean(Y_val[-10:-5])
                         eps = new_val_mean - old_val_mean
-                        if abs(eps) < 0.001 or eps > 0:
+                        if eps > 0:
                             break
                     lm.train()
                 Y.append(loss.detach().numpy())
@@ -129,9 +124,6 @@ class NeuralLeakageModel(nn.Module):
             score = mest_total.forward(lpred).detach().numpy()
             # TODO add sklearn call for comp.
             self.MIScores.append(score)
-            if score < 0.2:
-                self.MIScore = max(self.MIScores)
-                break
             input = torch.ones((1, self.keylen)) - 0.5
             lm.eval()
             input.requires_grad = True
@@ -139,18 +131,21 @@ class NeuralLeakageModel(nn.Module):
             grad = torch.autograd.grad(pred, input)[0]
             keys = minmax_scale(torch.abs(grad)[0].detach().numpy(), (0, 1))
             heatmaps.append(keys[::-1, None].T)
-        self.MIScore = max(self.MIScores)
-        if self.MIScore >= 0.2:
+        self.MIScore = abs(max(self.MIScores))
+        if self.MIScore >= self.threshold:
             sns.set(font_scale=0.3)
             plt.tight_layout()
             f, ax = plt.subplots()
             try:
-                dependencies = np.stack(heatmaps, axis=0).reshape(-1, heatmaps[0].shape[1])
+                dependencies = np.stack(heatmaps, axis=0).reshape(
+                    -1, heatmaps[0].shape[1]
+                )
             except Exception as e:
                 return
-            self.MIScores = np.array(self.MIScores[:len(heatmaps)])
+            self.MIScores = np.array(self.MIScores[: len(heatmaps)])
             # add a column to the far right to include the MI score in the heatmap
             dependencies = np.c_[dependencies, self.MIScores]
+            dependencies[dependencies[:,-1] < self.threshold] = 0
             deps = dependencies.copy()
             mi = dependencies.copy()
             deps.T[-1] = np.nan
@@ -158,7 +153,7 @@ class NeuralLeakageModel(nn.Module):
             ax = sns.heatmap(
                 deps,
                 ax=ax,
-                vmin=0, 
+                vmin=0,
                 vmax=1,
                 cbar_kws={
                     "orientation": "horizontal",
@@ -171,7 +166,7 @@ class NeuralLeakageModel(nn.Module):
                 mi,
                 cmap="Reds",
                 ax=ax,
-                vmin=0, 
+                vmin=0,
                 vmax=1,
                 cbar_kws={
                     "label": "Estimated MI score per call",

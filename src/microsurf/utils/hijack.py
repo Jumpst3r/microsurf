@@ -11,16 +11,17 @@ Original hooks taken from
 TODO Add tests to check how well this works on different platforms !
 """
 
+import ctypes
 import os
 import stat
 from typing import Union
-from qiling.os.mapper import QlFsMappedObject
-from .logger import getLogger
+
 from qiling.const import QL_ARCH
+from qiling.os.mapper import QlFsMappedObject
 from qiling.os.posix.stat import Stat
 from qiling.os.posix.syscall import pack_stat_struct, AT_FDCWD, NR_OPEN
 
-import ctypes
+from .logger import getLogger
 
 log = getLogger()
 
@@ -164,6 +165,7 @@ def ql_fixed_syscall_faccessat(ql, dfd: int, filename: int, mode: int):
 
     return regreturn
 
+
 """
 When testing the emulation of certain RISCV 64 bit binaries, some shared objects would fail to load.
 This is because in the Qiling emulator, the transform_path return an empty path string if a file 
@@ -176,6 +178,7 @@ The following two functions are fixed versions of the ones found in
 qiling/os/posix/syscall/stat.py
 """
 
+
 def transform_path(ql, dirfd: int, path: int):
     """
     Fixed version of the Qiling implementation.
@@ -184,19 +187,23 @@ def transform_path(ql, dirfd: int, path: int):
     dirfd = ql.unpacks(ql.pack(dirfd))
     path = ql.os.utils.read_cstring(path)
 
-    if path.startswith('/'):
+    if path.startswith("/"):
         return None, os.path.join(ql.rootfs, path)
 
     if dirfd == AT_FDCWD:
         return None, ql.os.path.transform_to_real_path(path)
 
     if 0 < dirfd < NR_OPEN:
-        return ql.os.fd[dirfd].fileno(), ql.os.fd[dirfd].name # FIXED, return the path if fd is present
+        return (
+            ql.os.fd[dirfd].fileno(),
+            ql.os.fd[dirfd].name,
+        )  # FIXED, return the path if fd is present
+
 
 # copy of the fixed_syscall_newfstatat Qiling code, forces the usage of our fixed transform_path function
 def ql_fixed_syscall_newfstatat(ql, dirfd: int, path: int, buf_ptr: int, flag: int):
     dirfd, real_path = transform_path(ql, dirfd, path)
-    
+
     if os.path.exists(real_path):
         buf = pack_stat_struct(ql, Stat(real_path, dirfd))
         ql.mem.write(buf_ptr, buf)
@@ -208,7 +215,6 @@ def ql_fixed_syscall_newfstatat(ql, dirfd: int, path: int, buf_ptr: int, flag: i
     return regreturn
 
 
-
 """
 adapted from qiling's os/unistd.py
 to return the application exit code.
@@ -217,7 +223,7 @@ to return the application exit code.
 
 def syscall_exit_group(ql, code: int):
     success = code == 0
-    if ql.os.child_processes == True:
+    if ql.os.child_processes:
         os._exit(0)
 
     if ql.multithread:
@@ -234,7 +240,7 @@ def syscall_exit_group(ql, code: int):
         ql.os.exit_code = code
         ql.os.stop()
     if not success:
-        log.error("Application returned a non zero exit code. Bad args ?")
+        log.error("Application returned a non zero exit code.")
         exit(0)
     else:
         return 0
