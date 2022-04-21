@@ -148,6 +148,7 @@ class NeuralLeakageModel(nn.Module):
             self.MIScores = np.array(self.MIScores[: len(heatmaps)])
             # add a column to the far right to include the MI score in the heatmap
             dependencies = np.c_[dependencies, self.MIScores]
+            dependencies[dependencies[:,-1] < self.threshold] = 0
             deps = dependencies.copy()
             mi = dependencies.copy()
             deps.T[-1] = np.nan
