@@ -26,17 +26,19 @@ class Detector:
         self.NB_CORES = multiprocessing.cpu_count() - 1
 
     def recordTraces(
-            self, n: int, pcList: List[int] = None, fixedSecret=False,
+            self, n: int, pcList: List[int] = None, fixedSecret=False, getAssembly=False
     ) -> TraceCollection:
         pass
+
 
 class DataLeakDetector(Detector):
     def __init__(self, *, binaryLoader, save=True, miThreshold=0.2):
         super().__init__(binaryLoader, save, miThreshold)
 
     def recordTraces(
-            self, n: int, pcList: List[int] = None, fixedSecret=False,
+            self, n: int, pcList: List[int] = None, fixedSecret=False, getAssembly=False
     ) -> MemTraceCollection:
+        codeRanges = self.loader.executableCode
         NB_CORES = min(self.NB_CORES, n)
         memWatchers = [
             MemWatcher.remote(
@@ -46,8 +48,10 @@ class DataLeakDetector(Detector):
                 self.loader.ignoredObjects,
                 self.loader.mappings,
                 locations=pcList,
+                getAssembly=getAssembly,
                 deterministic=self.loader.deterministic,
-                multithread=self.loader.multithreaded
+                multithread=self.loader.multithreaded,
+                codeRanges=codeRanges
             )
             for _ in range(NB_CORES)
         ]
@@ -91,7 +95,7 @@ class CFLeakDetector(Detector):
                 binpath=self.loader.binPath,
                 args=self.loader.args,
                 rootfs=self.loader.rootfs,
-                tracedObjects =self.loader.executableCode,
+                tracedObjects=self.loader.executableCode,
                 deterministic=self.loader.deterministic,
                 multithread=self.loader.multithreaded
             )

@@ -211,7 +211,6 @@ class BinaryLoader:
                 self.ignoredObjects.append(label)
             else:
                 self.executableCode.append((s, e))
-                log.info(f"Tracing code: {hex(s)}-{hex(e)}-{perm}-{label}")
 
         self.ignoredObjects = list(set(self.ignoredObjects))
 
@@ -271,8 +270,10 @@ class MemWatcher:
             ignoredObjects,
             mappings,
             locations=None,
+            getAssembly=False,
             deterministic=False,
-            multithread=True
+            multithread=True,
+            codeRanges=[]
     ) -> None:
         self.tracetime = None
         self.traces: List[MemTrace] = []
@@ -282,10 +283,12 @@ class MemWatcher:
         self.locations = (
             {l: 1 for l in locations} if locations is not None else locations
         )
+        self.getAssembly = getAssembly
         self.ignoredObjects = ignoredObjects
         self.mappings = mappings
         self.deterministic = deterministic
         self.multithread = multithread
+        self.codeRanges = codeRanges
         self.asm = {}
 
     def _trace_mem_read(self, ql: Qiling, access, addr, size, value):
@@ -298,7 +301,7 @@ class MemWatcher:
 
     def _hook_code(self, ql: Qiling, address: int, size: int):
         pc = ql.arch.regs.arch_pc
-        if self.locations is None:
+        if self.locations is None or not self.getAssembly:
             return
         if pc in self.locations:
             buf = ql.mem.read(address, size)
@@ -333,7 +336,11 @@ class MemWatcher:
         )
         self.currenttrace = MemTrace(secret)
         self.QLEngine.hook_mem_read(self._trace_mem_read)
-        self.QLEngine.hook_code(self._hook_code)
+        if self.codeRanges:
+            for (s, e) in self.codeRanges:
+                self.QLEngine.hook_code(self._hook_code, begin=s, end=e)
+        else:
+            self.QLEngine.hook_code(self._hook_code)
         # duplicate code. Ugly - fixme.
         if self.deterministic:
             self.QLEngine.add_fs_mapper("/dev/urandom", device_random)
@@ -427,7 +434,7 @@ class CFWatcher:
             libcache=True,
         )
         self.currenttrace = PCTrace(secret)
-        for (s,e) in self.tracedObjects:
+        for (s, e) in self.tracedObjects:
             self.QLEngine.hook_code(self._trace_op, begin=s, end=e)
         if self.deterministic:
             self.QLEngine.add_fs_mapper("/dev/urandom", device_random)

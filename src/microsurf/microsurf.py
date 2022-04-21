@@ -26,7 +26,7 @@ log = getLogger()
 
 
 class SCDetector:
-    def __init__(self, modules: List[Detector], itercount=1000):
+    def __init__(self, modules: List[Detector], itercount=500):
         self.modules = modules
         self.ITER_COUNT = itercount
         if not modules:
@@ -44,7 +44,9 @@ class SCDetector:
             log.info(f"module {str(module)}")
             # Find possible leaks
             collection, _ = module.recordTraces(5)
-            rndTraces, asm = module.recordTraces(self.ITER_COUNT, pcList=collection.possibleLeaks)
+            # Collect one trace to get assembly code
+            _, asm = module.recordTraces(1, pcList=collection.possibleLeaks, getAssembly=True)
+            rndTraces, _ = module.recordTraces(self.ITER_COUNT, pcList=collection.possibleLeaks)
             lc = LeakageClassification(rndTraces, module.loader, module.miThreshold)
             self.KEYLEN = lc.KEYLEN
             lc.analyze()
@@ -92,7 +94,7 @@ class SCDetector:
                             console.print(
                                 f'{offset:#08x} - [MI = {mival:.2f}] \t at {symbname if symbname else "??":<30} {label}'
                             )
-                            asmsnippet = f'[{offset}]' + asm[leakAddr].split[']'][1]
+                            asmsnippet = f'[{hex(offset)}]' + asm[leakAddr].split(']')[1]
                             self.MDresults.append(
                                 {
                                     "runtime Addr": k,
@@ -116,7 +118,7 @@ class SCDetector:
                             console.print(
                                 f'{k:#08x} -[MI = {mival:.2f}]  \t at {symbname if symbname else "??":<30} {label}'
                             )
-                            asmsnippet = f'[{k}]' + asm[leakAddr].split[']'][1]
+                            asmsnippet = f'[{hex(k)}]' + asm[leakAddr].split(']')[1]
                             self.MDresults.append(
                                 {
                                     "runtime Addr": k,
