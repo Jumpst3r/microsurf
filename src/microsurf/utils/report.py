@@ -45,54 +45,56 @@ class ReportGenerator:
         self.mdString += f"__Emulation root__: `{ self.loader.rootfs}` \n\n"
 
     def generateResults(self):
-        self.mdString += "## Results\n\n"
-
         significant = self.results[
             self.results["MI score"] > self.threshold
         ].sort_values(by=["MI score"], ascending=False, inplace=False)
         if len(significant) > 0:
-            self.mdString += "### Leaks with MI > threshold\n\n"
-            for i in range(len(significant)):
-                row = significant[i : i + 1]
-                if len(row) == 0:
-                    break
-                self.mdString += row.loc[
-                    :,
-                    [
-                        "offset",
-                        "MI score",
-                        "Detection Module",
-                        "Leakage model",
-                        "Num of hits per trace",
-                        "Number of traces in which leak was observed",
-                        "Symbol Name",
-                        "Object Name",
-                        "Source Path",
-                    ],
-                ].to_markdown(index=False)
-                self.mdString += "\n\nSource code snippet\n\n"
-                src = row[["src"]].values[0][0]
-                if len(src) == 0:
-                    self.mdString += "\n```\nn/a\n```"
-                else:
+            self.mdString += "## Leaks with MI > threshold (grouped by symbol name)\n\n"
+            snames = set(list(significant.loc[:, ['Symbol Name']].to_dict('list').values())[0])
+            for s in snames:
+                self.mdString += f"### Leaks for {s}\n\n"
+                symbdf = significant[significant['Symbol Name'] == s]
+                for i in range(len(symbdf)):
+                    row = symbdf[i : i + 1]
+                    if len(row) == 0:
+                        break
+                    self.mdString += row.loc[
+                                     :,
+                                     [
+                                         "offset",
+                                         "MI score",
+                                         "Detection Module",
+                                         "Leakage model",
+                                         "Num of hits per trace",
+                                         "Number of traces in which leak was observed",
+                                         "Symbol Name",
+                                         "Object Name",
+                                         "Source Path",
+                                     ],
+                                     ].to_markdown(index=False)
+                    self.mdString += "\n\nSource code snippet\n\n"
+                    src = row[["src"]].values[0][0]
+                    if len(src) == 0:
+                        self.mdString += "\n```\nn/a\n```"
+                    else:
+                        self.mdString += "```C\n"
+                        for l in src:
+                            self.mdString += l
+                        self.mdString += "\n```\n"
+                    self.mdString += "\n\nLeaking instruction\n\n"
+                    src = row[["asm"]].values[0][0]
                     self.mdString += "```C\n"
-                    for l in src:
-                        self.mdString += l
+                    self.mdString += src
                     self.mdString += "\n```\n"
-                self.mdString += "\n\nLeaking instruction\n\n"
-                src = row[["asm"]].values[0][0]
-                self.mdString += "```C\n"
-                self.mdString += src
-                self.mdString += "\n```\n"
-                self.mdString += "\nKey bit dependencies (estimated):"
-                if Path(
-                    f"{self.loader.resultDir}/assets/saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png"
-                ).is_file():
-                    self.mdString += f"\n\n![saliency map](assets/saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png)\n\n"
-                else:
-                    self.mdString += (
-                        "\n\n MI not significant enough to estimate dependencies. \n\n"
-                    )
+                    self.mdString += "\nKey bit dependencies (estimated):"
+                    if Path(
+                            f"{self.loader.resultDir}/assets/saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png"
+                    ).is_file():
+                        self.mdString += f"\n\n![saliency map](assets/saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png)\n\n"
+                    else:
+                        self.mdString += (
+                            "\n\n MI not significant enough to estimate dependencies. \n\n"
+                        )
         self.mdString += "\n ### Grouped by function name\n\n"
         self.mdString += (
             self.results.groupby("Symbol Name")
