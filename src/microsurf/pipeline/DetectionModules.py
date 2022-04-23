@@ -135,7 +135,7 @@ class CFLeakDetector(Detector):
                 f'{"fixed" if fixedSecret else "random"}-{n}-{self.loader.ARCH}.pickle'
             )
             mt.toDisk(path)
-        return mt
+        return mt, None
 
     def __str__(self):
         return "Secret dep. CF detector"

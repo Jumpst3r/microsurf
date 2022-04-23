@@ -1,10 +1,10 @@
 import itertools
+
+import networkx as nx
 import pickle
 from collections import defaultdict
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Tuple
 
-import cdifflib as dfl
-import numpy as np
 import pandas as pd
 from rich.progress import track
 
@@ -169,21 +169,18 @@ class PCTrace(Trace):
 
     def __init__(self, secret) -> None:
         super().__init__(secret)
-        self.trace: List[int] = []
-        self.posDict = defaultdict(list)
+        self.trace: List[Tuple[int,int]] = []
 
-    def add(self, ip):
+    def add(self, range):
         """Adds an element to the current trace.
         Note that several target memory addresses
         can be added to the same PC by calling the
         function repeatedly.
 
         Args:
-            ip: The instruction pointer / PC which caused
-            the memory read
+            range: the start / end PC of the instruction block (as a tuple)
         """
-        self.trace.append(ip)
-        self.posDict[ip].append(len(self.trace) - 1)
+        self.trace.append(range)
 
     def __len__(self):
         return len(self.trace)
@@ -206,32 +203,11 @@ class PCTraceCollection(TraceCollection):
         with open(path, "wb") as f:
             pickle.dump(self, f)
 
-    def deterministic(self):
-        """Determines whether the traces in the collection
-        have identical control flow
-
-        Returns:
-            True if all traces have the same CF, False otherwise
-        """
-        lengths = set([len(t) for t in self.traces])
-        if len(lengths) > 1:
-            return False
-        mat = np.array([list(t.trace.keys()) for t in self.traces], dtype=np.uint64)
-        return len(np.unique(mat, axis=0)) == 1
-
-    def getmaxlen(self):
-        """Returns the maximal trace length.
-
-        Returns:
-            the maximal trace length.
-        """
-        return max([len(t) for t in self.traces])
-
     def __len__(self):
         return len(self.traces)
 
     def __getitem__(self, item):
-        return list(self.traces[item].trace.keys())
+        return list(self.traces[item].trace)
 
 
 class PCTraceCollectionFixed(PCTraceCollection):
@@ -263,63 +239,40 @@ class PCTraceCollectionRandom(PCTraceCollection):
         self.possibleLeaks: Set[int] = set()
         self.DF = None
         self.possibleLeaks = possibleLeaks
+        self.buildCFGraph()
         self.buildDataFrames()
 
     def buildDataFrames(self):
-        perLeakDict = {}
-        maxlen = self.getmaxlen()
-        mat = np.zeros((1, maxlen))
-        # run this the first time but not the second !
-        if self.possibleLeaks is None:
-            for t1, t2 in itertools.combinations(self.traces, r=2):
-                seq = dfl.CSequenceMatcher(None, t1.trace, t2.trace)
-                blocks = list(seq.get_matching_blocks())
-                for s1, s2, length in blocks:
-                    mat[0, s1 : s1 + length] += 1
-                    mat[0, s2 : s2 + length] += 1
-            mat[mat == 0] = np.max(mat)
-            import matplotlib.pyplot as plt
-            import seaborn as sns
+        marked = nx.get_node_attributes(self.G, 'color')
+        for v in self.G.nodes:
+            if v in marked:
+                log.info(v[1])
 
-            s = sns.heatmap(mat, cmap="Reds_r", yticklabels=[])
-            s.set(xlabel="Instruction number", ylabel="IP trace differences")
-            plt.show()
-            candidates = np.flatnonzero(mat != np.amax(mat))
+    def buildCFGraph(self):
+        G = nx.MultiDiGraph()
 
-            D = defaultdict(int)
-            for c, cn in zip(candidates, candidates[1:]):
-                if mat[0, c] != mat[0, cn]:
-                    for t in self.traces:
-                        if c < len(t):
-                            D[t[c]] += 1
-            self.possibleLeaks = list(D.keys())
-        for l in track(self.possibleLeaks, description="analyzing traces"):
-            row = []
-            hits = []
-            maxhit = 0
-            for trace in self.traces:
-                if l not in trace.posDict:
-                    continue
-                entry = [int(trace.secret, 16)]
-                elist = []
-                for a in trace.posDict[l]:
-                    try:
-                        elist.append(trace[a + 1])
-                    except IndexError as e:
-                        # -1 as a marker for end of prog
-                        elist.append(-1)
-                entry += elist
-                numhits = len(trace.posDict[l])
-                hits.append(numhits)
-                maxhit = max(maxhit, numhits)
-                row.append(entry)
-            colnames = ["secret"] + [str(i) for i in range(maxhit)]
-            f = pd.DataFrame(row, columns=colnames)
-            f = f.set_index("secret")
-            f.drop(f.std()[f.std() == 0].index, axis=1, inplace=True)
-            if len(f.columns):
-                f.insert(loc=0, column="hits", value=hits)
-                perLeakDict[l] = f
-                perLeakDict[l].dropna(axis=0, inplace=True)
-        self.DF = perLeakDict
-        self.possibleLeaks = set(self.DF.keys())
+        edgecolors = ['black', 'red', 'beige', 'orange', 'blue']
+        for idx, t in enumerate(self.traces):
+            for i in range(len(t)-1):
+                # hex for debugging and greping offsets, change later
+                G.add_edge((hex(t[i][0]), hex(t[i][1])), (hex(t[i+1][0]), hex(t[i+1][1])), secret=t.secret ,color=edgecolors[idx])
+        for v in G.nodes:
+            hitcount = defaultdict(lambda: defaultdict(int))
+            for (_,tgt,di) in G.out_edges(nbunch=v, data=True):
+                hitcount[tgt][di['secret']] += 1
+            # more than one target node
+            if len(hitcount.keys()) > 1:
+                # C1: do the target nodes have differing secret sets ?
+                secretSets = ((frozenset(l for l in list(hitcount[x].keys())) for x in hitcount))
+                secretSets = set(secretSets)
+                # C2: if they have the same secrets, do all targets have the same secret ?
+                hitSets = ((frozenset(l for l in list(hitcount[x].values())) for x in hitcount))
+                hitSets = set(hitSets)
+
+                if len(hitSets) > 1 or len(secretSets) > 1:
+                    # mark block as possibly secret dep.
+                    G.nodes[v]['color'] = 'red'
+
+        self.G = G
+        nx.nx_pydot.write_dot(G, 'graph.dot')
+

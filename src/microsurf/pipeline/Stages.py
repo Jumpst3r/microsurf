@@ -426,8 +426,19 @@ class CFWatcher:
         self.deterministic = deterministic
         self.multithread = multithread
 
-    def _trace_op(self, ql: Qiling, *args):
-        self.currenttrace.add(ql.arch.regs.arch_pc)
+    def _trace_block(self, ql, address, size):
+        buf = ql.mem.read(address, size)
+        #log.info("BEGIN BLOCK")
+        ql.arch.disassembler.detail = True
+        addrs = []
+        for insn in ql.arch.disassembler.disasm(buf, address):
+            addrs.append(insn.address)
+            #print(
+            #    f"{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str} ({insn.operands[0].type if len(insn.operands) else '-'})"
+            #)
+        #log.info("END BLOCK")
+        self.currenttrace.add((addrs[0], addrs[-1]))
+
 
     def exec(self, secret):
         start_time = time.time()
@@ -451,8 +462,9 @@ class CFWatcher:
             libcache=True,
         )
         self.currenttrace = PCTrace(secret)
+        # self.tracedObjects = [(0x401775, 0x40180b)]
         for (s, e) in self.tracedObjects:
-            self.QLEngine.hook_code(self._trace_op, begin=s, end=e)
+            self.QLEngine.hook_block(self._trace_block, begin=s, end=e)
         if self.deterministic:
             self.QLEngine.add_fs_mapper("/dev/urandom", device_random)
             self.QLEngine.add_fs_mapper("/dev/random", device_random)
@@ -499,7 +511,7 @@ def train(X, Y, leakAddr, keylen, reportDir, threshold, pba):
     try:
         nleakage.train()
     except Exception as e:
-        log.error("worked encountered exception:")
+        log.error("worker encountered exception:")
         log.error(str(e))
         log.error(traceback.format_exc())
         pba.update.remote(1)
