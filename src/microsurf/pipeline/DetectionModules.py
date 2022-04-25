@@ -100,6 +100,7 @@ class CFLeakDetector(Detector):
         n: int,
         pcList: List[int] = None,
         fixedSecret=False,
+        getAssembly=False
     ) -> PCTraceCollection:
         NB_CORES = min(self.NB_CORES, n)
         cfWatchers = [
@@ -108,6 +109,8 @@ class CFLeakDetector(Detector):
                 args=self.loader.args,
                 rootfs=self.loader.rootfs,
                 tracedObjects=self.loader.executableCode,
+                locations=pcList,
+                getAssembly=getAssembly,
                 deterministic=self.loader.deterministic,
                 multithread=self.loader.multithreaded,
             )
@@ -124,18 +127,19 @@ class CFLeakDetector(Detector):
                 [m.exec.remote(secret=self.loader.rndArg()[0]) for m in cfWatchers]
             futures = [m.getResults.remote() for m in cfWatchers]
             res = ray.get(futures)
-            resList += [r[0] for r in res]
+            resList += [r for r in res]
+        asm = [r[1] for r in resList]
         if fixedSecret:
-            mt = PCTraceCollectionFixed([r for r in resList])
+            mt = PCTraceCollectionFixed([r[0] for r in resList])
         else:
-            mt = PCTraceCollectionRandom([r for r in resList], possibleLeaks=pcList)
+            mt = PCTraceCollectionRandom([r[0] for r in resList], possibleLeaks=pcList)
         if self.save:
             path = (
                 f"{self.loader.resultDir}/traces/traces-CF-"
                 f'{"fixed" if fixedSecret else "random"}-{n}-{self.loader.ARCH}.pickle'
             )
             mt.toDisk(path)
-        return mt, None
+        return mt, dict(ChainMap(*asm))
 
     def __str__(self):
         return "Secret dep. CF detector"

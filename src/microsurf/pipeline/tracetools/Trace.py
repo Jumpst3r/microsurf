@@ -17,8 +17,12 @@ console = getConsole()
 class Trace:
     def __init__(self, secret) -> None:
         self.secret = secret
+        self.trace = None
 
     def add(self, *args):
+        pass
+
+    def __getitem__(self, item):
         pass
 
 
@@ -238,41 +242,118 @@ class PCTraceCollectionRandom(PCTraceCollection):
         super().__init__(traces)
         self.possibleLeaks: Set[int] = set()
         self.DF = None
-        self.possibleLeaks = possibleLeaks
         self.buildCFGraph()
         self.buildDataFrames()
 
     def buildDataFrames(self):
         marked = nx.get_node_attributes(self.G, 'color')
+        self.possibleLeaks = []
+        self.res = {}
         for v in self.G.nodes:
-            if v in marked:
-                log.info(v[1])
+            if v in marked and marked[v] == 'red':
+                self.possibleLeaks.append(v)
+                self.res[v[1]] = (1,0,0)
+        log.error(len(self.possibleLeaks))
+        for (_,e) in self.possibleLeaks:
+            log.error(e)
+        exit()
+
 
     def buildCFGraph(self):
         G = nx.MultiDiGraph()
 
-        edgecolors = ['black', 'red', 'beige', 'orange', 'blue']
+        edgecolors = ['black', 'red', 'blue', 'orange']
         for idx, t in enumerate(self.traces):
             for i in range(len(t)-1):
                 # hex for debugging and greping offsets, change later
                 G.add_edge((hex(t[i][0]), hex(t[i][1])), (hex(t[i+1][0]), hex(t[i+1][1])), secret=t.secret ,color=edgecolors[idx])
-        for v in G.nodes:
-            hitcount = defaultdict(lambda: defaultdict(int))
-            for (_,tgt,di) in G.out_edges(nbunch=v, data=True):
-                hitcount[tgt][di['secret']] += 1
-            # more than one target node
-            if len(hitcount.keys()) > 1:
-                # C1: do the target nodes have differing secret sets ?
-                secretSets = ((frozenset(l for l in list(hitcount[x].keys())) for x in hitcount))
-                secretSets = set(secretSets)
-                # C2: if they have the same secrets, do all targets have the same secret ?
-                hitSets = ((frozenset(l for l in list(hitcount[x].values())) for x in hitcount))
-                hitSets = set(hitSets)
 
-                if len(hitSets) > 1 or len(secretSets) > 1:
-                    # mark block as possibly secret dep.
-                    G.nodes[v]['color'] = 'red'
+        nx.set_node_attributes(G, 0, 'visited')
+        for idx, trace in enumerate(self.traces):
+            for id, t in enumerate(trace):
+                block_c = (hex(t[0]), hex(t[1]))
+                G.nodes[block_c]['visited'] = 1
+                self._check_self_loops(G, block_c)
+                self._check_state(G, block_c)
 
         self.G = G
         nx.nx_pydot.write_dot(G, 'graph.dot')
+
+    def _check_self_loops(self, G, block_c):
+        if block_c[0] == block_c[1]: return
+        loops = defaultdict(int)
+        for (_, tgt, di) in G.out_edges(nbunch=block_c, data=True):
+            if tgt == block_c:
+                loops[di['secret']] += 1
+        if loops:
+            hitSets = (frozenset(l for l in list(loops.values())))
+            if len(hitSets) > 1:
+                G.nodes[block_c]['color'] = 'orange'
+                # log.error("SDCF")
+
+    def _check_state(self, G, block_c):
+        if block_c[0] == block_c[1]: return
+        outgoing_edges = []
+        incomming_edges = []
+        # ignore loops
+        tgtnodes = defaultdict(lambda: defaultdict(int))
+        for (_, tgt, di) in G.out_edges(nbunch=block_c, data=True):
+            if tgt != block_c:
+                outgoing_edges.append((tgt, di))
+                tgtnodes[tgt][di['secret']] = 1
+        keysetglobal = set()
+        for t,v in tgtnodes.items():
+            keyset = set()
+            for secret in v:
+                keyset.add(secret)
+            keysetglobal.add(frozenset(keyset))
+        if len(keysetglobal) > 1:
+            G.nodes[block_c]['color'] = 'red'
+
+        for (src, _, di) in G.in_edges(nbunch=block_c, data=True):
+            if src != block_c:
+                incomming_edges.append((src, di))
+
+        # any outgoing edges to previously visited nodes ?
+        for (tgt, di) in outgoing_edges[:]:
+            if G.nodes[tgt]['visited']:
+                edgepruned = False
+                # pop an incomming edge of the same secret:
+                # (provided it was visited)
+
+                for src, d in incomming_edges[:]:
+                    if d['secret'] == di['secret'] and G.nodes[src]['visited']:
+                        try:
+                            incomming_edges.remove((src,d))
+                            edgepruned = True
+                        except ValueError:
+                            pass
+                        break
+                if edgepruned:
+                    # pop this outgoing edge:
+                    outgoing_edges.remove((tgt, di))
+
+        # check that all remaining incomming secrets are routed equally:
+        if incomming_edges and outgoing_edges:
+            assert len(incomming_edges) == len(outgoing_edges)
+            tgset = set()
+            hitcount = defaultdict(lambda: defaultdict(int))
+            for (tgt, di) in outgoing_edges:
+                tgset.add(tgt)
+                hitcount[tgt][di['secret']] += 1
+            if len(tgset) > 1:
+                anomaly = False
+                keysetglobal = set()
+                for _,v in hitcount.items():
+                    keyset = set()
+                    count = -1
+                    for k2,v2 in v.items():
+                        keyset.add(k2)
+                        if count == -1:
+                            count = v2
+                        elif count != v2:
+                            anomaly = True
+                    keysetglobal.add(frozenset(keyset))
+                if anomaly or len(keysetglobal) > 1:
+                    G.nodes[block_c]['color'] = 'red'
 

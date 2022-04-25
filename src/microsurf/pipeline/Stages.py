@@ -228,7 +228,6 @@ class BinaryLoader:
         self.ignoredObjects = list(set(self.ignoredObjects))
 
         log.info(f"The following objects are not traced {self.ignoredObjects}")
-
     def getlibname(self, addr):
         return next(
             (label for s, e, _, label, _ in self.mappings if s < addr < e),
@@ -394,8 +393,6 @@ class MemWatcher:
             if self.getlibname(t) in self.ignoredObjects:
                 dropset.append(t)
         self.currenttrace.remove(dropset)
-        endtime = time.time()
-        self.tracetime = endtime - start_time
 
     def getResults(self):
         return self.currenttrace, self.asm
@@ -413,6 +410,8 @@ class CFWatcher:
         args,
         rootfs,
         tracedObjects,
+        locations = None,
+        getAssembly=False,
         deterministic=False,
         multithread=True,
     ) -> None:
@@ -423,8 +422,24 @@ class CFWatcher:
         self.args = args
         self.rootfs = rootfs
         self.tracedObjects = tracedObjects
+        self.locations = (
+            {l: 1 for l in locations} if locations is not None else locations
+        )
+        self.getAssembly = getAssembly
         self.deterministic = deterministic
         self.multithread = multithread
+        self.asm = {}
+
+    def _hook_code(self, ql: Qiling, address: int, size: int):
+        pc = ql.arch.regs.arch_pc
+        if self.locations is None or not self.getAssembly:
+            return
+        if pc in self.locations:
+            buf = ql.mem.read(address, size)
+            for insn in ql.arch.disassembler.disasm(buf, address):
+                self.asm[
+                    hex(pc)
+                ] = f"{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}"
 
     def _trace_block(self, ql, address, size):
         buf = ql.mem.read(address, size)
@@ -462,9 +477,11 @@ class CFWatcher:
             libcache=True,
         )
         self.currenttrace = PCTrace(secret)
-        # self.tracedObjects = [(0x401775, 0x40180b)]
+        #self.tracedObjects = [( 0x419000,  0x473000)]
         for (s, e) in self.tracedObjects:
             self.QLEngine.hook_block(self._trace_block, begin=s, end=e)
+        if self.getAssembly:
+            self.QLEngine.hook_code(self._hook_code)
         if self.deterministic:
             self.QLEngine.add_fs_mapper("/dev/urandom", device_random)
             self.QLEngine.add_fs_mapper("/dev/random", device_random)
@@ -496,11 +513,9 @@ class CFWatcher:
         self.QLEngine.os.set_syscall("exit_group", syscall_exit_group)
         self.QLEngine.run()
         self.QLEngine.stop()
-        endtime = time.time()
-        self.tracetime = endtime - start_time
 
     def getResults(self):
-        return self.currenttrace, self.tracetime
+        return self.currenttrace, self.asm
 
 
 @ray.remote(num_cpus=1)

@@ -20,13 +20,13 @@ def urandom_from_random(rng, length):
     return result
 
 
-rnd = random.Random(42)
+rnd = random.Random(4)
 
 
 def _genRandomHexKey(keylen: int) -> str:
     kbytes = keylen // 8
     rbytes = os.urandom(kbytes)
-    # rbytes = urandom_from_random(rnd, kbytes)
+    rbytes = urandom_from_random(rnd, kbytes)
     return f"{int.from_bytes(rbytes, byteorder='big'):0{kbytes * 2}x}"
 
 
