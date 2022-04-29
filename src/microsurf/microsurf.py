@@ -43,8 +43,7 @@ class SCDetector:
         for module in self.modules:
             log.info(f"module {str(module)}")
             # Find possible leaks
-            collection, _ = module.recordTraces(4)
-            exit()
+            collection, _ = module.recordTraces(3)
             # Collect one trace to get assembly code
             _, asm = module.recordTraces(
                 1, pcList=collection.possibleLeaks, getAssembly=True

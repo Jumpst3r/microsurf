@@ -2,7 +2,7 @@ import itertools
 
 import networkx as nx
 import pickle
-from collections import defaultdict
+from collections import defaultdict, Counter
 from typing import Dict, List, Set, Tuple
 
 import pandas as pd
@@ -256,26 +256,39 @@ class PCTraceCollectionRandom(PCTraceCollection):
         log.error(len(self.possibleLeaks))
         for (_,e) in self.possibleLeaks:
             log.error(e)
-        exit()
 
 
     def buildCFGraph(self):
         G = nx.MultiDiGraph()
-
         edgecolors = ['black', 'red', 'blue', 'orange']
+        self.colordict = {}
         for idx, t in enumerate(self.traces):
             for i in range(len(t)-1):
                 # hex for debugging and greping offsets, change later
-                G.add_edge((hex(t[i][0]), hex(t[i][1])), (hex(t[i+1][0]), hex(t[i+1][1])), secret=t.secret ,color=edgecolors[idx])
+                u = (hex(t[i][0]), hex(t[i][1]))
+                v = (hex(t[i+1][0]), hex(t[i+1][1]))
+                out = G.out_edges(nbunch=u, data=True)
+                addedge = True
+                for e in out:
+                    src, tgt, di = e
+                    if tgt == v and di['secret'] == t.secret:
+                        di['count'] += 1
+                        addedge=False
+                if addedge:
+                    G.add_edge(u,v, secret=t.secret ,color=edgecolors[idx], count=0)
+                    self.colordict[t.secret] = edgecolors[idx]
+        self._remove_consistent_loops(G)
+        #nx.set_node_attributes(G, 0, 'checked')
+        log.info(f"CF graph before pruning: {nx.info(G)}")
+        self._remove_consistent_loops(G)
+        self._contract_nodes(G, self.traces[0])
 
-        nx.set_node_attributes(G, 0, 'visited')
-        for idx, trace in enumerate(self.traces):
-            for id, t in enumerate(trace):
-                block_c = (hex(t[0]), hex(t[1]))
-                G.nodes[block_c]['visited'] = 1
-                self._check_self_loops(G, block_c)
-                self._check_state(G, block_c)
-
+        log.info(f"CF graph after pruning: {nx.info(G)}")
+        # remove self loops with consistent iteration count for every secret
+        # contract edges which link two linear blocks [b1]->[b2]
+        for v in G.nodes:
+            self._check_self_loops(G, v)
+            self._check_state(G, v)
         self.G = G
         nx.nx_pydot.write_dot(G, 'graph.dot')
 
@@ -297,8 +310,8 @@ class PCTraceCollectionRandom(PCTraceCollection):
         incomming_edges = []
         # ignore loops
         tgtnodes = defaultdict(lambda: defaultdict(int))
-        for (_, tgt, di) in G.out_edges(nbunch=block_c, data=True):
-            if tgt != block_c:
+        for (src, tgt, di) in G.out_edges(nbunch=block_c, data=True):
+            if tgt != src:
                 outgoing_edges.append((tgt, di))
                 tgtnodes[tgt][di['secret']] = 1
         keysetglobal = set()
@@ -309,30 +322,7 @@ class PCTraceCollectionRandom(PCTraceCollection):
             keysetglobal.add(frozenset(keyset))
         if len(keysetglobal) > 1:
             G.nodes[block_c]['color'] = 'red'
-
-        for (src, _, di) in G.in_edges(nbunch=block_c, data=True):
-            if src != block_c:
-                incomming_edges.append((src, di))
-
-        # any outgoing edges to previously visited nodes ?
-        for (tgt, di) in outgoing_edges[:]:
-            if G.nodes[tgt]['visited']:
-                edgepruned = False
-                # pop an incomming edge of the same secret:
-                # (provided it was visited)
-
-                for src, d in incomming_edges[:]:
-                    if d['secret'] == di['secret'] and G.nodes[src]['visited']:
-                        try:
-                            incomming_edges.remove((src,d))
-                            edgepruned = True
-                        except ValueError:
-                            pass
-                        break
-                if edgepruned:
-                    # pop this outgoing edge:
-                    outgoing_edges.remove((tgt, di))
-
+        return
         # check that all remaining incomming secrets are routed equally:
         if incomming_edges and outgoing_edges:
             assert len(incomming_edges) == len(outgoing_edges)
@@ -356,4 +346,66 @@ class PCTraceCollectionRandom(PCTraceCollection):
                     keysetglobal.add(frozenset(keyset))
                 if anomaly or len(keysetglobal) > 1:
                     G.nodes[block_c]['color'] = 'red'
+
+
+    def _contract_nodes(self, G, t):
+        to_contract = [[]]
+        for i in track(range(len(t) - 1)):
+            v = (hex(t[i][0]), hex(t[i][1]))
+            if v not in G.nodes: continue
+            if len(list(G.neighbors(v))) > 1:
+                continue
+            elif len(list(G.neighbors(v))) == 1:
+                isrc = None
+                for src, dst in G.in_edges(nbunch=v):
+                    isrc = src
+                    break
+                if not isrc:
+                    continue
+                if not to_contract[-1] or isrc in to_contract[-1][-1]:
+                    to_contract[-1].append((isrc,v))
+                else:
+                    to_contract.append([(isrc,v)])
+
+        to_contract_clean = []
+        for e in to_contract:
+            row = []
+            for s in e:
+                for x in s:
+                    if x not in row: row.append(x)
+            to_contract_clean.append(row)
+        for e in track(to_contract_clean):
+            for endofchain in range(1, len(e)):
+                try:
+                    nx.contracted_nodes(G, e[0],  e[endofchain], self_loops=False, copy=False)
+                except Exception:
+                    break
+        if e[0] in G.nodes:
+            # clean up any duplicate edges caused by node contractions
+            edges = defaultdict(int)
+            if len(list(G.neighbors(e[0]))) == 1:
+                neigbour = list(G.neighbors(e[0]))[0]
+                oedges = list(G.out_edges(nbunch=e[0], data=True))
+                for e in oedges[:]:
+                    src,tgt,di = e
+                    edges[di['secret']] += 1
+                    G.remove_edge(src, tgt)
+                    print('removed edges')
+                for k in edges:
+                    G.add_edge(e[0], neigbour, secret=k, count=edges[k], color=self.colordict[k])
+
+
+
+    def _remove_consistent_loops(self, G):
+        for v in G.nodes:
+            secrets = []
+            selfloops = []
+            outgoing_edges = G.out_edges(nbunch=v, data=True)
+            for src,tgt,di in outgoing_edges:
+                if tgt == src:
+                    secrets.append(di['secret'])
+                    selfloops.append((src,tgt))
+            if len(set(Counter(secrets).values())) == 1:
+                for edge in selfloops:
+                    G.remove_edge(*edge)
 

@@ -477,7 +477,6 @@ class CFWatcher:
             libcache=True,
         )
         self.currenttrace = PCTrace(secret)
-        #self.tracedObjects = [( 0x419000,  0x473000)]
         for (s, e) in self.tracedObjects:
             self.QLEngine.hook_block(self._trace_block, begin=s, end=e)
         if self.getAssembly:
