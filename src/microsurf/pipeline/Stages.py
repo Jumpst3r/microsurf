@@ -429,31 +429,35 @@ class CFWatcher:
         self.deterministic = deterministic
         self.multithread = multithread
         self.asm = {}
+        '''
+        if a list of location is given (possible leaks), then we need to record
+            a) the block at the leak location
+            b) the next block (target of jump, call, etc)
+        '''
+        self.saveNext = False
 
     def _hook_code(self, ql: Qiling, address: int, size: int):
-        pc = ql.arch.regs.arch_pc
-        if self.locations is None or not self.getAssembly:
-            return
-        if pc in self.locations:
-            buf = ql.mem.read(address, size)
-            for insn in ql.arch.disassembler.disasm(buf, address):
-                self.asm[
-                    hex(pc)
-                ] = f"{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}"
+        pass
 
     def _trace_block(self, ql, address, size):
         buf = ql.mem.read(address, size)
-        #log.info("BEGIN BLOCK")
         ql.arch.disassembler.detail = True
         addrs = []
+        asm = []
         for insn in ql.arch.disassembler.disasm(buf, address):
             addrs.append(insn.address)
-            #print(
-            #    f"{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str} ({insn.operands[0].type if len(insn.operands) else '-'})"
-            #)
-        #log.info("END BLOCK")
-        self.currenttrace.add((addrs[0], addrs[-1]))
-
+            asm.append(f"{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}")
+        loc = (hex(addrs[0]), hex(addrs[-1]))
+        self.asm[hex(addrs[-1])] = asm[-1]
+        if not self.locations:
+            self.currenttrace.add((addrs[0], addrs[-1]))
+            return
+        if loc in self.locations or self.saveNext:
+            if loc in self.locations:
+                self.saveNext = True
+            else:
+                self.saveNext = False
+            self.currenttrace.add((addrs[0], addrs[-1]))
 
     def exec(self, secret):
         start_time = time.time()
@@ -479,8 +483,6 @@ class CFWatcher:
         self.currenttrace = PCTrace(secret)
         for (s, e) in self.tracedObjects:
             self.QLEngine.hook_block(self._trace_block, begin=s, end=e)
-        if self.getAssembly:
-            self.QLEngine.hook_code(self._hook_code)
         if self.deterministic:
             self.QLEngine.add_fs_mapper("/dev/urandom", device_random)
             self.QLEngine.add_fs_mapper("/dev/random", device_random)

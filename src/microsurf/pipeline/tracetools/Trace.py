@@ -136,7 +136,7 @@ class MemTraceCollectionRandom(MemTraceCollection):
         perLeakDict = {}
         addrs = [list(a.trace.keys()) for a in self.traces]
         addrs = set([i for l in addrs for i in l])  # flatten
-        for l in track(addrs, description="analyzing traces"):
+        for l in track(addrs, description="building dataframe"):
             row = []
             hits = []
             numhits = 0
@@ -240,22 +240,49 @@ class PCTraceCollectionRandom(PCTraceCollection):
 
     def __init__(self, traces: list[PCTrace], possibleLeaks=None):
         super().__init__(traces)
-        self.possibleLeaks: Set[int] = set()
+        if possibleLeaks:
+            self.possibleLeaks = possibleLeaks
+        else:
+            self.possibleLeaks: Set[int] = set()
         self.DF = None
-        self.buildCFGraph()
+        if not self.possibleLeaks:
+            self.buildCFGraph()
         self.buildDataFrames()
 
     def buildDataFrames(self):
-        marked = nx.get_node_attributes(self.G, 'color')
-        self.possibleLeaks = []
-        self.res = {}
-        for v in self.G.nodes:
-            if v in marked and marked[v] == 'red':
-                self.possibleLeaks.append(v)
-                self.res[v[1]] = (1,0,0)
-        log.error(len(self.possibleLeaks))
-        for (_,e) in self.possibleLeaks:
-            log.error(e)
+        if not self.possibleLeaks:
+            marked = nx.get_node_attributes(self.G, 'color')
+            self.possibleLeaks = []
+            for v in self.G.nodes:
+                if v in marked and marked[v] == 'red':
+                    self.possibleLeaks.append(v)
+                    log.info(f"preliminary: {v[1]}")
+
+        perLeakDict = {}
+        for l in self.possibleLeaks:
+            row = []
+            hits = []
+            numhits = 0
+            for t in self.traces:
+                entry = [int(t.secret, 16)]
+                for idx, e in enumerate(t):
+                    e = (hex(e[0]), hex(e[1]))
+                    if e == l:
+                        if idx+1 < len(t):
+                            entry.append(t[idx+1][0])
+                numhits = max(numhits, len(entry) - 1)
+                hits.append(1)
+                row.append(entry)
+            colnames = ["secret"] + [str(i) for i in range(numhits)]
+            f = pd.DataFrame(row, columns=colnames)
+            f = f.set_index("secret")
+            f.drop(f.std()[f.std() == 0].index, axis=1, inplace=True)
+            if len(f.columns):
+                f.insert(loc=0, column="hits", value=hits)
+                perLeakDict[int(l[1], 16)] = f
+                perLeakDict[int(l[1], 16)].dropna(axis=0, inplace=True)
+        self.DF = perLeakDict
+
 
 
     def buildCFGraph(self):
@@ -277,16 +304,13 @@ class PCTraceCollectionRandom(PCTraceCollection):
                 if addedge:
                     G.add_edge(u,v, secret=t.secret ,color=edgecolors[idx], count=0)
                     self.colordict[t.secret] = edgecolors[idx]
+        log.debug(f"CF graph before pruning: {nx.info(G)}")
         self._remove_consistent_loops(G)
-        #nx.set_node_attributes(G, 0, 'checked')
-        log.info(f"CF graph before pruning: {nx.info(G)}")
-        self._remove_consistent_loops(G)
-        self._contract_nodes(G, self.traces[0])
-
-        log.info(f"CF graph after pruning: {nx.info(G)}")
+        #self._contract_nodes(G, self.traces[0])
+        log.debug(f"CF graph after pruning: {nx.info(G)}")
         # remove self loops with consistent iteration count for every secret
         # contract edges which link two linear blocks [b1]->[b2]
-        for v in G.nodes:
+        for v in track(G.nodes, description="analyzing control flow graph"):
             self._check_self_loops(G, v)
             self._check_state(G, v)
         self.G = G
@@ -313,44 +337,21 @@ class PCTraceCollectionRandom(PCTraceCollection):
         for (src, tgt, di) in G.out_edges(nbunch=block_c, data=True):
             if tgt != src:
                 outgoing_edges.append((tgt, di))
-                tgtnodes[tgt][di['secret']] = 1
+                tgtnodes[tgt][di['secret']] = di['count']
         keysetglobal = set()
         for t,v in tgtnodes.items():
             keyset = set()
-            for secret in v:
+            for secret, count in v.items():
                 keyset.add(secret)
             keysetglobal.add(frozenset(keyset))
+        log.info(f'{keysetglobal} - len = {len(keysetglobal)}')
         if len(keysetglobal) > 1:
             G.nodes[block_c]['color'] = 'red'
         return
-        # check that all remaining incomming secrets are routed equally:
-        if incomming_edges and outgoing_edges:
-            assert len(incomming_edges) == len(outgoing_edges)
-            tgset = set()
-            hitcount = defaultdict(lambda: defaultdict(int))
-            for (tgt, di) in outgoing_edges:
-                tgset.add(tgt)
-                hitcount[tgt][di['secret']] += 1
-            if len(tgset) > 1:
-                anomaly = False
-                keysetglobal = set()
-                for _,v in hitcount.items():
-                    keyset = set()
-                    count = -1
-                    for k2,v2 in v.items():
-                        keyset.add(k2)
-                        if count == -1:
-                            count = v2
-                        elif count != v2:
-                            anomaly = True
-                    keysetglobal.add(frozenset(keyset))
-                if anomaly or len(keysetglobal) > 1:
-                    G.nodes[block_c]['color'] = 'red'
-
 
     def _contract_nodes(self, G, t):
         to_contract = [[]]
-        for i in track(range(len(t) - 1)):
+        for i in range(len(t) - 1):
             v = (hex(t[i][0]), hex(t[i][1]))
             if v not in G.nodes: continue
             if len(list(G.neighbors(v))) > 1:
@@ -374,7 +375,7 @@ class PCTraceCollectionRandom(PCTraceCollection):
                 for x in s:
                     if x not in row: row.append(x)
             to_contract_clean.append(row)
-        for e in track(to_contract_clean):
+        for e in to_contract_clean:
             for endofchain in range(1, len(e)):
                 try:
                     nx.contracted_nodes(G, e[0],  e[endofchain], self_loops=False, copy=False)

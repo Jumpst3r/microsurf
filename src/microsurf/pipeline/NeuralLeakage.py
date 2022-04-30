@@ -135,13 +135,13 @@ class NeuralLeakageModel(nn.Module):
         if self.MIScore >= self.threshold:
             sns.set(font_scale=0.3)
             plt.tight_layout()
-            f, ax = plt.subplots()
             try:
                 dependencies = np.stack(heatmaps, axis=0).reshape(
                     -1, heatmaps[0].shape[1]
                 )
-            except Exception as e:
+            except Exception:
                 return
+            f, ax = plt.subplots(figsize=(8, 2*len(heatmaps)))
             self.MIScores = np.array(self.MIScores[: len(heatmaps)])
             # add a column to the far right to include the MI score in the heatmap
             dependencies = np.c_[dependencies, self.MIScores]
@@ -150,6 +150,7 @@ class NeuralLeakageModel(nn.Module):
             mi = dependencies.copy()
             deps.T[-1] = np.nan
             mi.T[:-1] = np.nan
+            #plt.figure(figsize=(15, 2))
             ax = sns.heatmap(
                 deps,
                 ax=ax,
@@ -161,6 +162,7 @@ class NeuralLeakageModel(nn.Module):
                     "shrink": 0.5,
                 },
                 cmap="Blues",
+                square=True,
             )
             sns.heatmap(
                 mi,
@@ -181,6 +183,7 @@ class NeuralLeakageModel(nn.Module):
                     f"inv-{i}" if i % 2 else " " for i in range(self.MIScores.shape[0])
                 ],  # MSB to LSB
                 linewidths=0.5,
+                square=True,
             )
             ax.xaxis.set_label_position("top")
             f.savefig(

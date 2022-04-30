@@ -26,7 +26,7 @@ log = getLogger()
 
 
 class SCDetector:
-    def __init__(self, modules: List[Detector], itercount=1000):
+    def __init__(self, modules: List[Detector], itercount=100):
         self.modules = modules
         self.ITER_COUNT = itercount
         if not modules:
@@ -43,16 +43,12 @@ class SCDetector:
         for module in self.modules:
             log.info(f"module {str(module)}")
             # Find possible leaks
-            collection, _ = module.recordTraces(3)
-            # Collect one trace to get assembly code
-            _, asm = module.recordTraces(
-                1, pcList=collection.possibleLeaks, getAssembly=True
-            )
-            self.results[str(module)] = (collection.res, asm)
-            break
+            collection, asm = module.recordTraces(4)
+
             rndTraces, _ = module.recordTraces(
                 self.ITER_COUNT, pcList=collection.possibleLeaks
             )
+
             lc = LeakageClassification(rndTraces, module.loader, module.miThreshold)
             self.KEYLEN = lc.KEYLEN
             lc.analyze()

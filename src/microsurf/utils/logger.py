@@ -50,7 +50,7 @@ class RayFilter(object):
         return getattr(self.stream, attr_name)
 
     def write(self, data):
-        if ":actor_name:" in data:
+        if ":actor_name:" or "pid=" in data:
             return
         self.stream.write(data)
         self.stream.flush()
