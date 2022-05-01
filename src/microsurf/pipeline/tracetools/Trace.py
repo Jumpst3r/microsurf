@@ -256,7 +256,7 @@ class PCTraceCollectionRandom(PCTraceCollection):
             for v in self.G.nodes:
                 if v in marked and marked[v] == 'red':
                     self.possibleLeaks.append(v)
-                    log.info(f"preliminary: {v[1]}")
+                    log.info(f"preliminary: {v}")
 
         perLeakDict = {}
         for l in self.possibleLeaks:
@@ -269,7 +269,7 @@ class PCTraceCollectionRandom(PCTraceCollection):
                     e = (hex(e[0]), hex(e[1]))
                     if e == l:
                         if idx+1 < len(t):
-                            entry.append(t[idx+1][0])
+                            entry.append(t[idx+1])
                 numhits = max(numhits, len(entry) - 1)
                 hits.append(1)
                 row.append(entry)
@@ -283,8 +283,6 @@ class PCTraceCollectionRandom(PCTraceCollection):
                 perLeakDict[int(l[1], 16)].dropna(axis=0, inplace=True)
         self.DF = perLeakDict
 
-
-
     def buildCFGraph(self):
         G = nx.MultiDiGraph()
         edgecolors = ['black', 'red', 'blue', 'orange']
@@ -292,8 +290,8 @@ class PCTraceCollectionRandom(PCTraceCollection):
         for idx, t in enumerate(self.traces):
             for i in range(len(t)-1):
                 # hex for debugging and greping offsets, change later
-                u = (hex(t[i][0]), hex(t[i][1]))
-                v = (hex(t[i+1][0]), hex(t[i+1][1]))
+                u = hex(t[i])
+                v = hex(t[i+1])
                 out = G.out_edges(nbunch=u, data=True)
                 addedge = True
                 for e in out:
@@ -302,11 +300,11 @@ class PCTraceCollectionRandom(PCTraceCollection):
                         di['count'] += 1
                         addedge=False
                 if addedge:
-                    G.add_edge(u,v, secret=t.secret ,color=edgecolors[idx], count=0)
+                    G.add_edge(u,v, secret=t.secret, color=edgecolors[idx], count=0)
                     self.colordict[t.secret] = edgecolors[idx]
         log.debug(f"CF graph before pruning: {nx.info(G)}")
         self._remove_consistent_loops(G)
-        #self._contract_nodes(G, self.traces[0])
+        self._contract_nodes(G, self.traces[0])
         log.debug(f"CF graph after pruning: {nx.info(G)}")
         # remove self loops with consistent iteration count for every secret
         # contract edges which link two linear blocks [b1]->[b2]
@@ -317,7 +315,6 @@ class PCTraceCollectionRandom(PCTraceCollection):
         nx.nx_pydot.write_dot(G, 'graph.dot')
 
     def _check_self_loops(self, G, block_c):
-        if block_c[0] == block_c[1]: return
         loops = defaultdict(int)
         for (_, tgt, di) in G.out_edges(nbunch=block_c, data=True):
             if tgt == block_c:
@@ -329,10 +326,12 @@ class PCTraceCollectionRandom(PCTraceCollection):
                 # log.error("SDCF")
 
     def _check_state(self, G, block_c):
-        if block_c[0] == block_c[1]: return
         outgoing_edges = []
-        incomming_edges = []
-        # ignore loops
+        inc_secrets = set()
+        for (src, tgt, di) in G.in_edges(nbunch=block_c, data=True):
+            if tgt != src:
+                inc_secrets.add(di['secret'])
+
         tgtnodes = defaultdict(lambda: defaultdict(int))
         for (src, tgt, di) in G.out_edges(nbunch=block_c, data=True):
             if tgt != src:
@@ -352,7 +351,7 @@ class PCTraceCollectionRandom(PCTraceCollection):
     def _contract_nodes(self, G, t):
         to_contract = [[]]
         for i in range(len(t) - 1):
-            v = (hex(t[i][0]), hex(t[i][1]))
+            v = hex(t[i])
             if v not in G.nodes: continue
             if len(list(G.neighbors(v))) > 1:
                 continue
@@ -367,7 +366,6 @@ class PCTraceCollectionRandom(PCTraceCollection):
                     to_contract[-1].append((isrc,v))
                 else:
                     to_contract.append([(isrc,v)])
-
         to_contract_clean = []
         for e in to_contract:
             row = []

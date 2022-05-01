@@ -43,8 +43,9 @@ class SCDetector:
         for module in self.modules:
             log.info(f"module {str(module)}")
             # Find possible leaks
-            collection, asm = module.recordTraces(4)
-
+            collection, asm = module.recordTraces(10)
+            if not collection.possibleLeaks:
+                break
             rndTraces, _ = module.recordTraces(
                 self.ITER_COUNT, pcList=collection.possibleLeaks
             )
