@@ -78,7 +78,7 @@ class DataLeakDetector(Detector):
         if fixedSecret:
             mt = MemTraceCollectionFixed([r[0] for r in resList])
         else:
-            mt = MemTraceCollectionRandom([r[0] for r in resList])
+            mt = MemTraceCollectionRandom([r[0] for r in resList], possibleLeaks=pcList)
         if self.save:
             path = (
                 f"{self.loader.resultDir}/traces/traces-data-"

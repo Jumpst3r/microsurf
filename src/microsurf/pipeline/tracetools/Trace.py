@@ -4,7 +4,7 @@ import networkx as nx
 import pickle
 from collections import defaultdict, Counter
 from typing import Dict, List, Set, Tuple
-
+from rich import print as pprint
 import pandas as pd
 from rich.progress import track
 
@@ -121,10 +121,11 @@ class MemTraceCollectionRandom(MemTraceCollection):
         traces: List of memory traces
     """
 
-    def __init__(self, traces: list[MemTrace]):
+    def __init__(self, traces: list[MemTrace], possibleLeaks=None):
         super().__init__(traces)
         self.secretDepCF = None
-        self.possibleLeaks: Set[int] = set()
+        self.possibleLeaks = possibleLeaks
+        self.results = {}
         self.DF = None
         self.buildDataFrames()
 
@@ -150,13 +151,15 @@ class MemTraceCollectionRandom(MemTraceCollection):
                 row.append(entry)
             colnames = ["secret"] + [str(i) for i in range(numhits)]
             f = pd.DataFrame(row, columns=colnames)
+            f.insert(loc=0, column="hits", value=hits)
             f = f.set_index("secret")
             f.drop(f.std()[f.std() == 0].index, axis=1, inplace=True)
-            if len(f.columns):
-                f.insert(loc=0, column="hits", value=hits)
+            f.dropna(axis=0, inplace=True)
+            if len(f.columns) > 0 and len(f.index) > 1:
                 perLeakDict[l] = f
-                perLeakDict[l].dropna(axis=0, inplace=True)
         self.DF = perLeakDict
+        for k in self.DF.keys():
+            self.results[hex(k)] = (-1,1,1)
         self.possibleLeaks = set(self.DF.keys())
 
 
@@ -240,6 +243,7 @@ class PCTraceCollectionRandom(PCTraceCollection):
 
     def __init__(self, traces: list[PCTrace], possibleLeaks=None):
         super().__init__(traces)
+        self.results = {}
         if possibleLeaks:
             self.possibleLeaks = possibleLeaks
         else:
@@ -251,13 +255,11 @@ class PCTraceCollectionRandom(PCTraceCollection):
 
     def buildDataFrames(self):
         if not self.possibleLeaks:
-            marked = nx.get_node_attributes(self.G, 'color')
             self.possibleLeaks = []
-            for v in self.G.nodes:
-                if v in marked and marked[v] == 'red':
-                    self.possibleLeaks.append(v)
-                    log.info(f"preliminary: {v}")
-
+            for k in self.MARK:
+                self.possibleLeaks.append(k)
+                self.results[hex(k)] = (-1, 1, 1)
+        return
         perLeakDict = {}
         for l in self.possibleLeaks:
             row = []
@@ -284,6 +286,7 @@ class PCTraceCollectionRandom(PCTraceCollection):
         self.DF = perLeakDict
 
     def buildCFGraph(self):
+        '''
         G = nx.MultiDiGraph()
         edgecolors = ['black', 'red', 'blue', 'orange']
         self.colordict = {}
@@ -313,6 +316,34 @@ class PCTraceCollectionRandom(PCTraceCollection):
             self._check_state(G, v)
         self.G = G
         nx.nx_pydot.write_dot(G, 'graph.dot')
+        '''
+        self.find_secret_dep_nodes()
+
+    def find_secret_dep_nodes(self):
+        T = defaultdict(lambda: defaultdict(list))
+        MARK = dict()
+
+        for t in self.traces:
+            for idx, v in enumerate(t):
+                if idx+1 < len(t):
+                    T[v][t].append(t[idx + 1])
+        for k,v in T.items():
+            normVec = list(v.values())[0]
+            for vec in v.values():
+                if len(vec) == len(normVec):
+                    if normVec and vec != normVec:
+                        MARK[k] = "SECRET DEP C1"
+                else:
+                    a = normVec if len(normVec) < len(vec) else vec
+                    b = normVec if len(normVec) > len(vec) else vec
+                    if b[:len(a)] == a:
+                        MARK[k] = "SECRET DEP HIT COUNT"
+                    else:
+                        MARK[k] = "SECRET DEP C2"
+        for k,v in MARK.items():
+            log.debug(f"{hex(k -  0x7fffb7ef1000)}, {v}")
+        self.MARK = MARK
+        return
 
     def _check_self_loops(self, G, block_c):
         loops = defaultdict(int)

@@ -26,7 +26,7 @@ if __name__ == "__main__":
     binLoader = BinaryLoader(path=binpath, args=args, rootfs='/home/nicolas/Documents/msc-thesis-work/tests/binaries/secret-dep-cf/', rndGen=getRandomHexKeyFunction(8))
 
     scd = SCDetector(modules=[
-        CFLeakDetector(binaryLoader=binLoader),
+        DataLeakDetector(binaryLoader=binLoader),
     ])
 
     scd.exec()

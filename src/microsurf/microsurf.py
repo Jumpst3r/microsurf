@@ -26,9 +26,10 @@ log = getLogger()
 
 
 class SCDetector:
-    def __init__(self, modules: List[Detector], itercount=100):
+    def __init__(self, modules: List[Detector], itercount=100, quickscan=True):
         self.modules = modules
         self.ITER_COUNT = itercount
+        self.quickscan = True
         if not modules:
             log.error("module list must contain at least one module")
             exit(1)
@@ -39,21 +40,27 @@ class SCDetector:
 
     def exec(self):
         self.starttime = time.time()
-        # first capture a small number of traces to identify possible leak locations.
         for module in self.modules:
-            log.info(f"module {str(module)}")
-            # Find possible leaks
-            collection, asm = module.recordTraces(10)
+            console.rule(f"module {str(module)}")
+            # first capture a small number of traces to identify possible leak locations.
+            collection, asm = module.recordTraces(5)
             if not collection.possibleLeaks:
                 break
-            rndTraces, _ = module.recordTraces(
-                self.ITER_COUNT, pcList=collection.possibleLeaks
-            )
+            if 'mem' in str(module):
+                # for performance reasons we need to get the assembly on a separate run for the memwatcher
+                _, asm = module.recordTraces(1, pcList=collection.possibleLeaks)
+            self.results[str(module)] = (collection.results, asm)
+            log.info(f"Identified {len(collection.results)} possible leaks")
+            # If requested, analyze the leaks for MI estimates and key bit dependencies
+            if not self.quickscan:
+                rndTraces, _ = module.recordTraces(
+                    self.ITER_COUNT, pcList=collection.possibleLeaks
+                )
 
-            lc = LeakageClassification(rndTraces, module.loader, module.miThreshold)
-            self.KEYLEN = lc.KEYLEN
-            lc.analyze()
-            self.results[str(module)] = (lc.results, asm)
+                lc = LeakageClassification(rndTraces, module.loader, module.miThreshold)
+                self.KEYLEN = lc.KEYLEN
+                lc.analyze()
+                self.results[str(module)] = (lc.results, asm)
 
         if self.results:
             self._formatResults()
@@ -155,8 +162,9 @@ class SCDetector:
             rg = ReportGenerator(
                 results=pd.DataFrame.from_dict(self.MDresults),
                 loader=self.loader,
-                keylen=self.KEYLEN,
+                keylen=8,
                 itercount=self.ITER_COUNT,
                 threshold=min([m.miThreshold for m in self.modules]),
+                quickscan=self.quickscan
             )
         rg.saveMD()

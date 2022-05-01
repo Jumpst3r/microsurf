@@ -8,6 +8,7 @@ from elftools.elf.elffile import ELFFile, SymbolTableSection
 from ..utils.logger import getLogger
 
 ELFSYBOLS = {}
+CODE = {}
 
 log = getLogger()
 
@@ -47,8 +48,9 @@ def getfnname(file: str, loc: int):
     key = list(ELFSYBOLS[file].keys())[ind - 1]
     return ELFSYBOLS[file][key]
 
-
-# PRIVATE
+# TODO: this is slow - fixme.
+# snippet from official https://github.com/eliben/pyelftools repo example
+# https://github.com/eliben/pyelftools/blob/master/examples/dwarf_decode_address.py
 def _decode_file_line(dwarfinfo, address):
     # Go over all the line programs in the DWARF information, looking for
     # one that describes the given address.
@@ -76,7 +78,7 @@ def _decode_file_line(dwarfinfo, address):
             else:
                 prevstate = entry.state
     return None, None
-
+# -- END SNIPPET
 
 def getCodeSnippet(file: str, loc: int) -> List[str]:
     """Returns a list of source code lines, 3 before
@@ -93,15 +95,20 @@ def getCodeSnippet(file: str, loc: int) -> List[str]:
     Raises:
         FileNotFoundError: If the given ELF file does not exist
     """
+    global CODE
     with open(file, "rb") as f:
         elf = ELFFile(f)
         path, ln = _decode_file_line(elf.get_dwarf_info(), loc)
         log.info(f"src path: {path}")
-        try:
-            with open(path, "r") as f2:
-                lines = f2.readlines()
-            # lines[ln - 1] = "!!! " + lines[ln - 1].strip('\n') + " !!!\n"
-            return lines[ln - 5 : ln + 5], path, ln
-        except Exception as e:
-            log.debug(f"source lines not available for PC {hex(loc)}")
-            return [], None, None
+        if path in CODE:
+            lines = CODE[path]
+        else:
+            try:
+                with open(path, "r") as f2:
+                    lines = f2.readlines()
+                    CODE[path] = lines
+                # lines[ln - 1] = "!!! " + lines[ln - 1].strip('\n') + " !!!\n"
+            except Exception as e:
+                log.debug(f"source lines not available for PC {hex(loc)}")
+                return [], None, None
+        return lines[ln - 5: ln + 5], path, ln

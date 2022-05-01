@@ -313,7 +313,7 @@ class MemWatcher:
 
     def _hook_code(self, ql: Qiling, address: int, size: int):
         pc = ql.arch.regs.arch_pc
-        if self.locations is None or not self.getAssembly:
+        if self.locations is None:
             return
         if pc in self.locations:
             buf = ql.mem.read(address, size)
