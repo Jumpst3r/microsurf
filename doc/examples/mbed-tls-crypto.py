@@ -21,9 +21,9 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == 'arm64':
         jailroot = "doc/examples/rootfs/jail-mbedtls-arm64/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'x8632':
-        jailroot = "doc/examples/rootfs/jail-openssl-x8632/"
+        jailroot = "doc/examples/rootfs/jail-mbedtls-x8632/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'x8664':
-        jailroot = "doc/examples/rootfs/jail-mbedtls-x8664/"
+        jailroot = "doc/examples/rootfs/jail-mbedtls-x8664-no-ni/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'mipsel32':
         jailroot = "doc/examples/rootfs/jail-openssl-mipsel32/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'riscv64':
