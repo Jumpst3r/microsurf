@@ -108,7 +108,7 @@ class NeuralLeakageModel(nn.Module):
                     loss_val = -mest_val.forward(lpred)
                     Y_val.append(loss_val.detach().numpy())
                     X_val.append(e)
-                    log.debug(f"pc-{self.leakAddr} idx-{idx}, e-{e}, score-{loss_val}")
+                    log.info(f"pc-{self.leakAddr} idx-{idx}/{len(self.X.T)}, e-{e}/200")
                     if len(Y_val) > 10:
                         new_val_mean = np.mean(Y_val[-5:])
                         old_val_mean = np.mean(Y_val[-10:-5])

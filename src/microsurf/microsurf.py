@@ -26,10 +26,11 @@ log = getLogger()
 
 
 class SCDetector:
-    def __init__(self, modules: List[Detector], itercount=100, quickscan=True):
+    def __init__(self, modules: List[Detector], itercount=1000, quickscan=True):
         self.modules = modules
         self.ITER_COUNT = itercount
-        self.quickscan = True
+        self.quickscan = False
+
         if not modules:
             log.error("module list must contain at least one module")
             exit(1)
@@ -57,7 +58,7 @@ class SCDetector:
                     self.ITER_COUNT, pcList=collection.possibleLeaks
                 )
 
-                lc = LeakageClassification(rndTraces, module.loader, module.miThreshold)
+                lc = LeakageClassification(rndTraces, module.loader, module.miThreshold, scanList=[0x7fffb7e3400b])
                 self.KEYLEN = lc.KEYLEN
                 lc.analyze()
                 self.results[str(module)] = (lc.results, asm)
@@ -106,6 +107,7 @@ class SCDetector:
                             asmsnippet = (
                                 f"[{hex(offset)}]" + asm[leakAddr].split("|")[1]
                             )
+                            log.info(f'runtime Addr: {hex(k)}, offset: {offset:#08x}, symbol name: {symbname}')
                             self.MDresults.append(
                                 {
                                     "runtime Addr": k,

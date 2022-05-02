@@ -589,8 +589,9 @@ class ProgressBar:
 
 class LeakageClassification:
     def __init__(
-        self, rndTraceCollection: TraceCollection, binaryLoader: BinaryLoader, threshold
+        self, rndTraceCollection: TraceCollection, binaryLoader: BinaryLoader, threshold, scanList=None
     ):
+        self.scanList = scanList
         self.rndTraceCollection = rndTraceCollection
         self.possibleLeaks = rndTraceCollection.possibleLeaks
         self.loader = binaryLoader
@@ -600,23 +601,27 @@ class LeakageClassification:
 
     def analyze(self):
         futures = []
-        num_ticks = len(self.rndTraceCollection.possibleLeaks)
+        num_ticks = 0
+        for k, v in self.rndTraceCollection.DF.items():
+            if self.scanList is None or k in self.scanList:
+                num_ticks += 1
         if num_ticks == 0:
             return self.results
         pb = ProgressBar(num_ticks)
         actor = pb.actor
         for k, v in self.rndTraceCollection.DF.items():
-            futures.append(
-                train.remote(
-                    v.loc[:, v.columns != "hits"].values,
-                    v.index.to_numpy(),
-                    k,
-                    self.KEYLEN,
-                    self.loader.resultDir,
-                    self.threshold,
-                    actor,
+            if self.scanList is None or k in self.scanList:
+                futures.append(
+                    train.remote(
+                        v.loc[:, v.columns != "hits"].values,
+                        v.index.to_numpy(),
+                        k,
+                        self.KEYLEN,
+                        self.loader.resultDir,
+                        self.threshold,
+                        actor,
+                    )
                 )
-            )
 
         pb.print_until_done()
         results = ray.get(futures)
