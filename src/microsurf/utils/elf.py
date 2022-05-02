@@ -99,7 +99,6 @@ def getCodeSnippet(file: str, loc: int) -> List[str]:
     with open(file, "rb") as f:
         elf = ELFFile(f)
         path, ln = _decode_file_line(elf.get_dwarf_info(), loc)
-        log.info(f"src path: {path}")
         if path in CODE:
             lines = CODE[path]
         else:

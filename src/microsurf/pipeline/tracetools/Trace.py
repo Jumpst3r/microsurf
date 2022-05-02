@@ -151,7 +151,6 @@ class MemTraceCollectionRandom(MemTraceCollection):
                 row.append(entry)
             colnames = ["secret"] + [str(i) for i in range(numhits)]
             f = pd.DataFrame(row, columns=colnames)
-            f.insert(loc=0, column="hits", value=hits)
             f = f.set_index("secret")
             f.drop(f.std()[f.std() == 0].index, axis=1, inplace=True)
             f.dropna(axis=0, inplace=True)
@@ -159,7 +158,7 @@ class MemTraceCollectionRandom(MemTraceCollection):
                 perLeakDict[l] = f
         self.DF = perLeakDict
         for k in self.DF.keys():
-            self.results[hex(k)] = (-1,1,1)
+            self.results[hex(k)] = -1
         self.possibleLeaks = set(self.DF.keys())
 
 
@@ -258,7 +257,7 @@ class PCTraceCollectionRandom(PCTraceCollection):
             self.possibleLeaks = []
             for k in self.MARK:
                 self.possibleLeaks.append(k)
-                self.results[hex(k)] = (-1, 1, 1)
+                self.results[hex(k)] = -1
         return
         perLeakDict = {}
         for l in self.possibleLeaks:

@@ -10,7 +10,7 @@ import os
 import random
 import sys
 from microsurf.microsurf import SCDetector
-from microsurf.pipeline.DetectionModules import DataLeakDetector
+from microsurf.pipeline.DetectionModules import DataLeakDetector, CFLeakDetector
 from microsurf.pipeline.LeakageModels import hamming, identity
 from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.utils.generators import getRandomHexKeyFunction
@@ -42,10 +42,20 @@ if __name__ == "__main__":
         "SHA512",
         "hex:@",
     ]
-    sharedObjects = ['libmbedx509', 'libmbedtls', 'libmbedcrypto']
-    binLoader = BinaryLoader(path=binpath, args=args, rootfs=jailroot, rndGen=getRandomHexKeyFunction(128), sharedObjects=sharedObjects)
+
+    sharedObjects = ['libmbedcrypto']
+
+    binLoader = BinaryLoader(
+        path=binpath,
+        args=args,
+        rootfs=jailroot,
+        rndGen=getRandomHexKeyFunction(128),
+        sharedObjects=sharedObjects,
+        deterministic=True
+    )
 
     scd = SCDetector(modules=[
+        CFLeakDetector(binaryLoader=binLoader),
         DataLeakDetector(binaryLoader=binLoader),
     ])
 

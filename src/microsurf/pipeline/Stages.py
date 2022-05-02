@@ -10,7 +10,7 @@ from typing import Dict, List, Tuple, Callable
 
 import magic
 import ray
-from capstone import CS_ARCH_ARM, CS_ARCH_X86, CS_MODE_32, CS_MODE_64
+from capstone import CS_ARCH_ARM, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, Cs, CS_ARCH_MIPS, CS_ARCH_RISCV, CS_MODE_ARM
 from qiling import Qiling
 from qiling.const import QL_VERBOSE
 from unicorn.unicorn_const import UC_MEM_READ
@@ -82,14 +82,19 @@ class BinaryLoader:
         self.filemagic = fileinfo
         if "80386" in fileinfo:
             self.ARCH = "X86_32"
+            self.md = Cs(CS_ARCH_X86, CS_MODE_32)
         elif "x86" in fileinfo:
             self.ARCH = "X86_64"
+            self.md = Cs(CS_ARCH_X86, CS_MODE_64)
         elif "ARM" in fileinfo:
             self.ARCH = "ARM"
+            self.md = Cs(CS_ARCH_ARM, CS_MODE_ARM)
         elif "MIPS32" in fileinfo:
             self.ARCH = "MIPS32"
+            self.md = Cs(CS_ARCH_MIPS, CS_MODE_32)
         elif "RISC-V" in fileinfo:
             self.ARCH = "RISCV"
+            self.md = Cs(CS_ARCH_RISCV, CS_MODE_64)
         else:
             log.info(fileinfo)
             log.error("Target architecture not implemented")
@@ -281,6 +286,8 @@ class MemWatcher:
         rootfs,
         ignoredObjects,
         mappings,
+        arch,
+        mode,
         locations=None,
         getAssembly=False,
         deterministic=False,
@@ -290,6 +297,8 @@ class MemWatcher:
         self.tracetime = None
         self.traces: List[MemTrace] = []
         self.binPath = binpath
+        self.arch = arch
+        self.mode = mode
         self.args = args
         self.rootfs = rootfs
         self.locations = (
@@ -362,16 +371,16 @@ class MemWatcher:
             self.QLEngine.add_fs_mapper("/dev/random", device_random)
             self.QLEngine.add_fs_mapper("/dev/arandom", device_random)
             # ref https://marcin.juszkiewicz.com.pl/download/tables/syscalls.html
-            if self.md.arch == CS_ARCH_ARM:
+            if self.arch == CS_ARCH_ARM:
                 self.QLEngine.os.set_syscall(403, const_time)
                 self.QLEngine.os.set_syscall(384, const_getrandom)
                 self.QLEngine.os.set_syscall(78, const_clock_gettimeofday)
                 self.QLEngine.os.set_syscall(263, const_clock_gettime)
-            if self.md.arch == CS_ARCH_X86 and self.md.mode == CS_MODE_64:
+            if self.arch == CS_ARCH_X86 and self.mode == CS_MODE_64:
                 self.QLEngine.os.set_syscall(318, const_getrandom)
                 self.QLEngine.os.set_syscall(96, const_clock_gettimeofday)
                 self.QLEngine.os.set_syscall(228, const_clock_gettime)
-            if self.md.arch == CS_ARCH_X86 and self.md.mode == CS_MODE_32:
+            if self.arch == CS_ARCH_X86 and self.mode == CS_MODE_32:
                 self.QLEngine.os.set_syscall(403, const_time)
                 self.QLEngine.os.set_syscall(13, const_time)
                 self.QLEngine.os.set_syscall(355, const_getrandom)
@@ -410,7 +419,9 @@ class CFWatcher:
         args,
         rootfs,
         tracedObjects,
-        locations = None,
+        arch,
+        mode,
+        locations=None,
         getAssembly=False,
         deterministic=False,
         multithread=True,
@@ -422,6 +433,8 @@ class CFWatcher:
         self.args = args
         self.rootfs = rootfs
         self.tracedObjects = tracedObjects
+        self.arch = arch
+        self.mode = mode
         self.locations = (
             {l: 1 for l in locations} if locations is not None else locations
         )
@@ -488,16 +501,16 @@ class CFWatcher:
             self.QLEngine.add_fs_mapper("/dev/random", device_random)
             self.QLEngine.add_fs_mapper("/dev/arandom", device_random)
             # ref https://marcin.juszkiewicz.com.pl/download/tables/syscalls.html
-            if self.md.arch == CS_ARCH_ARM:
+            if self.arch == CS_ARCH_ARM:
                 self.QLEngine.os.set_syscall(403, const_time)
                 self.QLEngine.os.set_syscall(384, const_getrandom)
                 self.QLEngine.os.set_syscall(78, const_clock_gettimeofday)
                 self.QLEngine.os.set_syscall(263, const_clock_gettime)
-            if self.md.arch == CS_ARCH_X86 and self.md.mode == CS_MODE_64:
+            if self.arch == CS_ARCH_X86 and self.mode == CS_MODE_64:
                 self.QLEngine.os.set_syscall(318, const_getrandom)
                 self.QLEngine.os.set_syscall(96, const_clock_gettimeofday)
                 self.QLEngine.os.set_syscall(228, const_clock_gettime)
-            if self.md.arch == CS_ARCH_X86 and self.md.mode == CS_MODE_32:
+            if self.arch == CS_ARCH_X86 and self.mode == CS_MODE_32:
                 self.QLEngine.os.set_syscall(403, const_time)
                 self.QLEngine.os.set_syscall(13, const_time)
                 self.QLEngine.os.set_syscall(355, const_getrandom)
@@ -589,9 +602,8 @@ class ProgressBar:
 
 class LeakageClassification:
     def __init__(
-        self, rndTraceCollection: TraceCollection, binaryLoader: BinaryLoader, threshold, scanList=None
+        self, rndTraceCollection: TraceCollection, binaryLoader: BinaryLoader, threshold,
     ):
-        self.scanList = scanList
         self.rndTraceCollection = rndTraceCollection
         self.possibleLeaks = rndTraceCollection.possibleLeaks
         self.loader = binaryLoader
@@ -603,32 +615,26 @@ class LeakageClassification:
         futures = []
         num_ticks = 0
         for k, v in self.rndTraceCollection.DF.items():
-            if self.scanList is None or k in self.scanList:
                 num_ticks += 1
         if num_ticks == 0:
             return self.results
         pb = ProgressBar(num_ticks)
         actor = pb.actor
         for k, v in self.rndTraceCollection.DF.items():
-            if self.scanList is None or k in self.scanList:
-                futures.append(
-                    train.remote(
-                        v.loc[:, v.columns != "hits"].values,
-                        v.index.to_numpy(),
-                        k,
-                        self.KEYLEN,
-                        self.loader.resultDir,
-                        self.threshold,
-                        actor,
-                    )
+            futures.append(
+                train.remote(
+                    v.loc[:, v.columns != "hits"].values,
+                    v.index.to_numpy(),
+                    k,
+                    self.KEYLEN,
+                    self.loader.resultDir,
+                    self.threshold,
+                    actor,
                 )
+            )
 
         pb.print_until_done()
         results = ray.get(futures)
         for r in results:
             (MIScore, leakAddr) = r
-            self.results[hex(leakAddr)] = (
-                MIScore,
-                self.rndTraceCollection.DF[leakAddr]["hits"].max(),
-                len(self.rndTraceCollection.DF[leakAddr]),
-            )
+            self.results[hex(leakAddr)] = MIScore

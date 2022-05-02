@@ -16,33 +16,40 @@ class ReportGenerator:
             self,
             results: pandas.DataFrame,
             loader: BinaryLoader,
-            keylen: int,
             itercount: int,
             threshold: int,
-            quickscan: bool
+            quickscan: bool,
+            addrList: list
     ) -> None:
         self.results = results
         self.mdString = ""
         self.loader = loader
         self.datetime = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
-        self.keylen = keylen
         self.itercount = itercount
         self.threshold = threshold
         self.quickscan = quickscan
+        self.addrList = addrList
 
     def generateHeaders(self):
         if self.quickscan:
-            self.mdString += f"# Microsurf Analysis Results (quickscan) \n\n"
+            self.mdString += f"# Microsurf Analysis Results (quick scan) \n\n"
         else:
-            self.mdString += f"# Microsurf Analysis Results\n\n"
+            if len(self.addrList) == 0:
+                self.mdString += f"# Microsurf Analysis Results (full scan)\n\n"
+            elif len(self.addrList) > 0:
+                self.mdString += f"# Microsurf Analysis Results (selective scan)\n\n"
         self.mdString += f"__Run at__: {self.datetime} \n\n"
         self.mdString += f"__Elapsed time (analysis)__: {self.loader.runtime} \n\n"
         self.mdString += f"__Elapsed time (single run emulation)__: {self.loader.emulationruntime} \n\n"
-        self.mdString += f"__Total leak count__: {len(self.results)} \n\n"
+        if self.quickscan:
+            self.mdString += f"__Total leak count__: {len(self.results)} \n\n"
+        else:
+            self.mdString += f"__Number of leak locations to investigate (selective scan)__: {len(self.addrList)} \n\n"
+            self.mdString += f"__Provided leak locations: __: {[hex(k) for k in self.addrList]} \n\n"
         if not self.quickscan:
             self.mdString += f"__MI threshold__: {self.threshold} \n\n"
-            self.mdString += f"__Leaks with MI score > {self.threshold} __: {len(self.results[self.results['MI score'] > self.threshold])} \n\n"
-            self.mdString += f"__mean/stdev MI score accross leaks with > threshold MI __: {self.results[self.results['MI score'] > self.threshold]['MI score'].mean():.2f} ± {self.results[self.results['MI score'] > self.threshold]['MI score'].std() if self.results[self.results['MI score'] > self.threshold]['MI score'].std() != np.nan else 0:.2f}\n\n"
+            self.mdString += f"__Leaks with MI score > {self.threshold}__: {len(self.results[self.results['MI score'] > self.threshold])} \n\n"
+            self.mdString += f"__mean/stdev MI score accross leaks with > threshold MI__: {self.results[self.results['MI score'] > self.threshold]['MI score'].mean():.2f} ± {self.results[self.results['MI score'] > self.threshold]['MI score'].std() if self.results[self.results['MI score'] > self.threshold]['MI score'].std() != np.nan else 0:.2f}\n\n"
         self.mdString += (
             f"__Binary__: `{self.loader.binPath}`\n >{self.loader.filemagic} \n\n"
         )
@@ -50,6 +57,7 @@ class ReportGenerator:
         self.mdString += f"__Emulation root__: `{self.loader.rootfs}` \n\n"
         if self.quickscan:
             self.columns = [
+                "Runtime Addr",
                 "offset",
                 "Detection Module",
                 "Symbol Name",
@@ -58,11 +66,10 @@ class ReportGenerator:
             ]
         else:
             self.columns = [
+                "Runtime Addr",
                 "offset",
                 "MI score",
                 "Detection Module",
-                "Num of hits per trace",
-                "Number of traces in which leak was observed",
                 "Symbol Name",
                 "Object Name",
                 "Source Path",

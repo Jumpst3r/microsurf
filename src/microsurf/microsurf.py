@@ -26,10 +26,19 @@ log = getLogger()
 
 
 class SCDetector:
-    def __init__(self, modules: List[Detector], itercount=1000, quickscan=True):
+    def __init__(self, modules: List[Detector], itercount=1000, addrList=None):
         self.modules = modules
         self.ITER_COUNT = itercount
-        self.quickscan = False
+        self.addrList = addrList
+        if addrList is None:
+            self.quickscan = True
+            log.info("mode: Quickscan (addrList=None).")
+        elif len(addrList) == 0:
+            log.info("mode: Full scan (addrList=[])")
+            self.quickscan = False
+        elif len(addrList) > 0:
+            log.info(f"mode: Selective scan (addrList={[hex(k) for k in self.addrList]})")
+            self.quickscan = False
 
         if not modules:
             log.error("module list must contain at least one module")
@@ -46,19 +55,29 @@ class SCDetector:
             # first capture a small number of traces to identify possible leak locations.
             collection, asm = module.recordTraces(5)
             if not collection.possibleLeaks:
-                break
+                log.info(f"module {str(module)} returned no possible leaks")
+                continue
             if 'mem' in str(module):
                 # for performance reasons we need to get the assembly on a separate run for the memwatcher
                 _, asm = module.recordTraces(1, pcList=collection.possibleLeaks)
             self.results[str(module)] = (collection.results, asm)
+            if self.addrList:
+                # check if the provided addresses were indeed found, if not, raise an error
+                for addr in self.addrList[:]:
+                    if hex(addr) not in collection.results:
+                        log.warning(f'provided address {hex(addr)} was not detected as a possible leak - retry or '
+                                    f'check address. Ignoring for now.')
+                        self.addrList.remove(addr)
+
             log.info(f"Identified {len(collection.results)} possible leaks")
             # If requested, analyze the leaks for MI estimates and key bit dependencies
             if not self.quickscan:
+                log.info(f"performing in-depth analysis for {len(self.addrList) if self.addrList else len(collection.results)}/{len(collection.results)} leaks")
                 rndTraces, _ = module.recordTraces(
-                    self.ITER_COUNT, pcList=collection.possibleLeaks
+                    self.ITER_COUNT, pcList=self.addrList if self.addrList else collection.possibleLeaks
                 )
 
-                lc = LeakageClassification(rndTraces, module.loader, module.miThreshold, scanList=[0x7fffb7e3400b])
+                lc = LeakageClassification(rndTraces, module.loader, module.miThreshold)
                 self.KEYLEN = lc.KEYLEN
                 lc.analyze()
                 self.results[str(module)] = (lc.results, asm)
@@ -100,24 +119,19 @@ class SCDetector:
                                 else getCodeSnippet(path, k)
                             )
 
-                            mival, nhits, samples = dic[hex(k)]
-                            console.print(
-                                f'{offset:#08x} - [MI = {mival:.2f}] \t at {symbname if symbname else "??":<30} {label}'
-                            )
+                            mival = dic[hex(k)]
                             asmsnippet = (
                                 f"[{hex(offset)}]" + asm[leakAddr].split("|")[1]
                             )
-                            log.info(f'runtime Addr: {hex(k)}, offset: {offset:#08x}, symbol name: {symbname}')
+                            # log.info(f'runtime Addr: {hex(k)}, offset: {offset:#08x}, symbol name: {symbname}')
                             self.MDresults.append(
                                 {
-                                    "runtime Addr": k,
+                                    "Runtime Addr": hex(k),
                                     "offset": f"{offset:#08x}",
                                     "MI score": mival,
                                     "Leakage model": "neural-learnt",
                                     "Symbol Name": f'{symbname if symbname else "??":}',
                                     "Object Name": f'{path.split("/")[-1]}',
-                                    "Num of hits per trace": nhits,
-                                    "Number of traces in which leak was observed": samples,
                                     "src": source,
                                     "asm": asmsnippet,
                                     "Source Path": f"{srcpath}:{ln}",
@@ -127,21 +141,16 @@ class SCDetector:
                         else:
                             symbname = getfnname(path, k)
                             source, srcpath, ln = getCodeSnippet(path, k)
-                            mival, nhits, samples = dic[hex(k)]
-                            console.print(
-                                f'{k:#08x} -[MI = {mival:.2f}]  \t at {symbname if symbname else "??":<30} {label}'
-                            )
+                            mival = dic[hex(k)]
                             asmsnippet = f"[{hex(k)}]" + asm[leakAddr].split("|")[1]
                             self.MDresults.append(
                                 {
-                                    "runtime Addr": k,
+                                    "Runtime Addr": hex(k),
                                     "offset": f"{k:#08x}",
                                     "MI score": mival,
                                     "Leakage model": "neural-learnt",
                                     "Symbol Name": f'{symbname if symbname else "??":}',
                                     "Object Name": f'{path.split("/")[-1]}',
-                                    "Num of hits per trace": nhits,
-                                    "Number of traces in which leak was observed": samples,
                                     "src": source,
                                     "asm": asmsnippet,
                                     "Source Path": f"{srcpath}:{ln}",
@@ -164,9 +173,9 @@ class SCDetector:
             rg = ReportGenerator(
                 results=pd.DataFrame.from_dict(self.MDresults),
                 loader=self.loader,
-                keylen=8,
                 itercount=self.ITER_COUNT,
                 threshold=min([m.miThreshold for m in self.modules]),
-                quickscan=self.quickscan
+                quickscan=self.quickscan,
+                addrList=self.addrList,
             )
         rg.saveMD()
