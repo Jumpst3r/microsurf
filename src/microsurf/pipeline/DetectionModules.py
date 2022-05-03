@@ -98,11 +98,7 @@ class CFLeakDetector(Detector):
         super().__init__(binaryLoader, save, miThreshold)
 
     def recordTraces(
-        self,
-        n: int,
-        pcList: List[int] = None,
-        fixedSecret=False,
-        getAssembly=False
+        self, n: int, pcList: List[int] = None, fixedSecret=False, getAssembly=False
     ) -> PCTraceCollection:
         NB_CORES = min(self.NB_CORES, n)
         cfWatchers = [

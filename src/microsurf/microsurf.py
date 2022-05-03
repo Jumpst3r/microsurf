@@ -37,7 +37,9 @@ class SCDetector:
             log.info("mode: Full scan (addrList=[])")
             self.quickscan = False
         elif len(addrList) > 0:
-            log.info(f"mode: Selective scan (addrList={[hex(k) for k in self.addrList]})")
+            log.info(
+                f"mode: Selective scan (addrList={[hex(k) for k in self.addrList]})"
+            )
             self.quickscan = False
 
         if not modules:
@@ -57,7 +59,7 @@ class SCDetector:
             if not collection.possibleLeaks:
                 log.info(f"module {str(module)} returned no possible leaks")
                 continue
-            if 'mem' in str(module):
+            if "mem" in str(module):
                 # for performance reasons we need to get the assembly on a separate run for the memwatcher
                 _, asm = module.recordTraces(1, pcList=collection.possibleLeaks)
             self.results[str(module)] = (collection.results, asm)
@@ -65,24 +67,34 @@ class SCDetector:
                 # check if the provided addresses were indeed found, if not, raise an error
                 for addr in self.addrList[:]:
                     if hex(addr) not in collection.results:
-                        log.warning(f'provided address {hex(addr)} was not detected as a possible leak - retry or '
-                                    f'check address. Ignoring for now.')
-                        self.addrList.remove(addr)
+                        log.warning(
+                            f"provided address {hex(addr)} was not detected as a possible leak - retry or "
+                            f"check address. Ignoring for now."
+                        )
 
             log.info(f"Identified {len(collection.results)} possible leaks")
             # If requested, analyze the leaks for MI estimates and key bit dependencies
             if not self.quickscan:
-                log.info(f"performing in-depth analysis for {len(self.addrList) if self.addrList else len(collection.results)}/{len(collection.results)} leaks")
+                log.info(
+                    f"performing in-depth analysis for {len(self.addrList) if self.addrList else len(collection.results)}/{len(collection.results)} leaks"
+                )
                 rndTraces, _ = module.recordTraces(
-                    self.ITER_COUNT, pcList=self.addrList if self.addrList else collection.possibleLeaks
+                    self.ITER_COUNT,
+                    pcList=self.addrList if self.addrList else collection.possibleLeaks,
                 )
 
                 lc = LeakageClassification(rndTraces, module.loader, module.miThreshold)
                 self.KEYLEN = lc.KEYLEN
                 lc.analyze()
                 self.results[str(module)] = (lc.results, asm)
+        if not self.results:
+            endtime = time.time()
+            runtime = time.strftime("%H:%M:%S", time.gmtime(endtime - self.starttime))
+            log.info(f"total runtime: {runtime}")
+            exit(0)
 
         if self.results:
+            log.info("Generating report - this might take a while.")
             self._formatResults()
             self.generateReport()
 

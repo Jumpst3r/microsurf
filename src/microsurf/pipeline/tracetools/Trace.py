@@ -175,7 +175,7 @@ class PCTrace(Trace):
 
     def __init__(self, secret) -> None:
         super().__init__(secret)
-        self.trace: List[Tuple[int,int]] = []
+        self.trace: List[Tuple[int, int]] = []
 
     def add(self, range):
         """Adds an element to the current trace.
@@ -269,8 +269,8 @@ class PCTraceCollectionRandom(PCTraceCollection):
                 for idx, e in enumerate(t):
                     e = (hex(e[0]), hex(e[1]))
                     if e == l:
-                        if idx+1 < len(t):
-                            entry.append(t[idx+1])
+                        if idx + 1 < len(t):
+                            entry.append(t[idx + 1])
                 numhits = max(numhits, len(entry) - 1)
                 hits.append(1)
                 row.append(entry)
@@ -285,7 +285,7 @@ class PCTraceCollectionRandom(PCTraceCollection):
         self.DF = perLeakDict
 
     def buildCFGraph(self):
-        '''
+        """
         G = nx.MultiDiGraph()
         edgecolors = ['black', 'red', 'blue', 'orange']
         self.colordict = {}
@@ -315,7 +315,7 @@ class PCTraceCollectionRandom(PCTraceCollection):
             self._check_state(G, v)
         self.G = G
         nx.nx_pydot.write_dot(G, 'graph.dot')
-        '''
+        """
         self.find_secret_dep_nodes()
 
     def find_secret_dep_nodes(self):
@@ -324,9 +324,9 @@ class PCTraceCollectionRandom(PCTraceCollection):
 
         for t in self.traces:
             for idx, v in enumerate(t):
-                if idx+1 < len(t):
+                if idx + 1 < len(t):
                     T[v][t].append(t[idx + 1])
-        for k,v in T.items():
+        for k, v in T.items():
             normVec = list(v.values())[0]
             for vec in v.values():
                 if len(vec) == len(normVec):
@@ -335,11 +335,11 @@ class PCTraceCollectionRandom(PCTraceCollection):
                 else:
                     a = normVec if len(normVec) < len(vec) else vec
                     b = normVec if len(normVec) > len(vec) else vec
-                    if b[:len(a)] == a:
+                    if b[: len(a)] == a:
                         MARK[k] = "SECRET DEP HIT COUNT"
                     else:
                         MARK[k] = "SECRET DEP C2"
-        for k,v in MARK.items():
+        for k, v in MARK.items():
             log.debug(f"{hex(k -  0x7fffb7ef1000)}, {v}")
         self.MARK = MARK
         return
@@ -348,11 +348,11 @@ class PCTraceCollectionRandom(PCTraceCollection):
         loops = defaultdict(int)
         for (_, tgt, di) in G.out_edges(nbunch=block_c, data=True):
             if tgt == block_c:
-                loops[di['secret']] += 1
+                loops[di["secret"]] += 1
         if loops:
-            hitSets = (frozenset(l for l in list(loops.values())))
+            hitSets = frozenset(l for l in list(loops.values()))
             if len(hitSets) > 1:
-                G.nodes[block_c]['color'] = 'orange'
+                G.nodes[block_c]["color"] = "orange"
                 # log.error("SDCF")
 
     def _check_state(self, G, block_c):
@@ -360,29 +360,30 @@ class PCTraceCollectionRandom(PCTraceCollection):
         inc_secrets = set()
         for (src, tgt, di) in G.in_edges(nbunch=block_c, data=True):
             if tgt != src:
-                inc_secrets.add(di['secret'])
+                inc_secrets.add(di["secret"])
 
         tgtnodes = defaultdict(lambda: defaultdict(int))
         for (src, tgt, di) in G.out_edges(nbunch=block_c, data=True):
             if tgt != src:
                 outgoing_edges.append((tgt, di))
-                tgtnodes[tgt][di['secret']] = di['count']
+                tgtnodes[tgt][di["secret"]] = di["count"]
         keysetglobal = set()
-        for t,v in tgtnodes.items():
+        for t, v in tgtnodes.items():
             keyset = set()
             for secret, count in v.items():
                 keyset.add(secret)
             keysetglobal.add(frozenset(keyset))
-        log.info(f'{keysetglobal} - len = {len(keysetglobal)}')
+        log.info(f"{keysetglobal} - len = {len(keysetglobal)}")
         if len(keysetglobal) > 1:
-            G.nodes[block_c]['color'] = 'red'
+            G.nodes[block_c]["color"] = "red"
         return
 
     def _contract_nodes(self, G, t):
         to_contract = [[]]
         for i in range(len(t) - 1):
             v = hex(t[i])
-            if v not in G.nodes: continue
+            if v not in G.nodes:
+                continue
             if len(list(G.neighbors(v))) > 1:
                 continue
             elif len(list(G.neighbors(v))) == 1:
@@ -393,20 +394,23 @@ class PCTraceCollectionRandom(PCTraceCollection):
                 if not isrc:
                     continue
                 if not to_contract[-1] or isrc in to_contract[-1][-1]:
-                    to_contract[-1].append((isrc,v))
+                    to_contract[-1].append((isrc, v))
                 else:
-                    to_contract.append([(isrc,v)])
+                    to_contract.append([(isrc, v)])
         to_contract_clean = []
         for e in to_contract:
             row = []
             for s in e:
                 for x in s:
-                    if x not in row: row.append(x)
+                    if x not in row:
+                        row.append(x)
             to_contract_clean.append(row)
         for e in to_contract_clean:
             for endofchain in range(1, len(e)):
                 try:
-                    nx.contracted_nodes(G, e[0],  e[endofchain], self_loops=False, copy=False)
+                    nx.contracted_nodes(
+                        G, e[0], e[endofchain], self_loops=False, copy=False
+                    )
                 except Exception:
                     break
         if e[0] in G.nodes:
@@ -416,25 +420,28 @@ class PCTraceCollectionRandom(PCTraceCollection):
                 neigbour = list(G.neighbors(e[0]))[0]
                 oedges = list(G.out_edges(nbunch=e[0], data=True))
                 for e in oedges[:]:
-                    src,tgt,di = e
-                    edges[di['secret']] += 1
+                    src, tgt, di = e
+                    edges[di["secret"]] += 1
                     G.remove_edge(src, tgt)
-                    print('removed edges')
+                    print("removed edges")
                 for k in edges:
-                    G.add_edge(e[0], neigbour, secret=k, count=edges[k], color=self.colordict[k])
-
-
+                    G.add_edge(
+                        e[0],
+                        neigbour,
+                        secret=k,
+                        count=edges[k],
+                        color=self.colordict[k],
+                    )
 
     def _remove_consistent_loops(self, G):
         for v in G.nodes:
             secrets = []
             selfloops = []
             outgoing_edges = G.out_edges(nbunch=v, data=True)
-            for src,tgt,di in outgoing_edges:
+            for src, tgt, di in outgoing_edges:
                 if tgt == src:
-                    secrets.append(di['secret'])
-                    selfloops.append((src,tgt))
+                    secrets.append(di["secret"])
+                    selfloops.append((src, tgt))
             if len(set(Counter(secrets).values())) == 1:
                 for edge in selfloops:
                     G.remove_edge(*edge)
-

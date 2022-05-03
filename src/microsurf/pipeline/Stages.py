@@ -10,7 +10,16 @@ from typing import Dict, List, Tuple, Callable
 
 import magic
 import ray
-from capstone import CS_ARCH_ARM, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, Cs, CS_ARCH_MIPS, CS_ARCH_RISCV, CS_MODE_ARM
+from capstone import (
+    CS_ARCH_ARM,
+    CS_ARCH_X86,
+    CS_MODE_32,
+    CS_MODE_64,
+    Cs,
+    CS_ARCH_MIPS,
+    CS_ARCH_RISCV,
+    CS_MODE_ARM,
+)
 from qiling import Qiling
 from qiling.const import QL_VERBOSE
 from unicorn.unicorn_const import UC_MEM_READ
@@ -233,6 +242,7 @@ class BinaryLoader:
         self.ignoredObjects = list(set(self.ignoredObjects))
 
         log.info(f"The following objects are not traced {self.ignoredObjects}")
+
     def getlibname(self, addr):
         return next(
             (label for s, e, _, label, _ in self.mappings if s < addr < e),
@@ -442,11 +452,11 @@ class CFWatcher:
         self.deterministic = deterministic
         self.multithread = multithread
         self.asm = {}
-        '''
+        """
         if a list of location is given (possible leaks), then we need to record
             a) the block at the leak location
             b) the next block (target of jump, call, etc)
-        '''
+        """
         self.saveNext = False
 
     def _hook_code(self, ql: Qiling, address: int, size: int):
@@ -602,7 +612,10 @@ class ProgressBar:
 
 class LeakageClassification:
     def __init__(
-        self, rndTraceCollection: TraceCollection, binaryLoader: BinaryLoader, threshold,
+        self,
+        rndTraceCollection: TraceCollection,
+        binaryLoader: BinaryLoader,
+        threshold,
     ):
         self.rndTraceCollection = rndTraceCollection
         self.possibleLeaks = rndTraceCollection.possibleLeaks
@@ -615,7 +628,7 @@ class LeakageClassification:
         futures = []
         num_ticks = 0
         for k, v in self.rndTraceCollection.DF.items():
-                num_ticks += 1
+            num_ticks += 1
         if num_ticks == 0:
             return self.results
         pb = ProgressBar(num_ticks)
