@@ -1,7 +1,8 @@
+# Microsurf: An architecture independent side channel detection framework
 
-## Microsurf: An architecture independent side channel detection framework
+<img align="center" width="100" height="100" src="doc/figures/logo.png" alt="application project app icon">
 
-***Microsurf*** is a framework for finding side channel vulnerabilities in compiled binaries. It features:<img align="right" width="250" height="250" src="doc/figures/logo.png" alt="application project app icon">
+***Microsurf*** is a framework for finding side channel vulnerabilities in compiled binaries. It features:
 
 
 - **Cross-architecture** support (tested on `i386`, `x86_64`, `arm32`, `arm64`, `riscv`, `mips`)
