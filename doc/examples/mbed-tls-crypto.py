@@ -46,9 +46,9 @@ if __name__ == "__main__":
     binLoader = BinaryLoader(path=binpath, args=args, rootfs=jailroot, rndGen=getRandomHexKeyFunction(128), sharedObjects=sharedObjects)
 
     scd = SCDetector(modules=[
-        DataLeakDetector(binaryLoader=binLoader),
         CFLeakDetector(binaryLoader=binLoader)
         ],
+        addrList=[]
     )
-    # addrList = [0x7fffb7e33f3f]
+    addrList = [0x7fffb7e33f3f]
     scd.exec()

@@ -470,7 +470,7 @@ class CFWatcher:
         for insn in ql.arch.disassembler.disasm(buf, address):
             addrs.append(insn.address)
             asm.append(f"{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}")
-        loc = hex(addrs[-1])
+        loc = addrs[-1]
         self.asm[hex(addrs[-1])] = asm[-1]
         if not self.locations:
             self.currenttrace.add(addrs[-1])

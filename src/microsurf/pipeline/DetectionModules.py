@@ -18,7 +18,7 @@ from microsurf.pipeline.tracetools.Trace import (
 
 
 class Detector:
-    def __init__(self, binaryLoader: BinaryLoader, save=True, miThreshold=0.2):
+    def __init__(self, binaryLoader: BinaryLoader, save=False, miThreshold=0.2):
         """Generic Detector class.
         Args:
             binaryLoader: A binary loader instance.
@@ -39,7 +39,7 @@ class Detector:
 
 
 class DataLeakDetector(Detector):
-    def __init__(self, *, binaryLoader, save=True, miThreshold=0.2):
+    def __init__(self, *, binaryLoader, save=False, miThreshold=0.2):
         super().__init__(binaryLoader, save, miThreshold)
 
     def recordTraces(
@@ -94,7 +94,7 @@ class DataLeakDetector(Detector):
 
 
 class CFLeakDetector(Detector):
-    def __init__(self, *, binaryLoader, save=True, miThreshold=0.2):
+    def __init__(self, *, binaryLoader, save=False, miThreshold=0.2):
         super().__init__(binaryLoader, save, miThreshold)
 
     def recordTraces(

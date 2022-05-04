@@ -82,7 +82,6 @@ class SCDetector:
                     self.ITER_COUNT,
                     pcList=self.addrList if self.addrList else collection.possibleLeaks,
                 )
-
                 lc = LeakageClassification(rndTraces, module.loader, module.miThreshold)
                 self.KEYLEN = lc.KEYLEN
                 lc.analyze()
@@ -132,9 +131,12 @@ class SCDetector:
                             )
 
                             mival = dic[hex(k)]
-                            asmsnippet = (
-                                f"[{hex(offset)}]" + asm[leakAddr].split("|")[1]
-                            )
+                            try:
+                                asmsnippet = (
+                                    f"[{hex(offset)}]" + asm[leakAddr].split("|")[1]
+                                )
+                            except KeyError:
+                                asmsnippet = 'n/aj'
                             # log.info(f'runtime Addr: {hex(k)}, offset: {offset:#08x}, symbol name: {symbname}')
                             self.MDresults.append(
                                 {
@@ -154,7 +156,10 @@ class SCDetector:
                             symbname = getfnname(path, k)
                             source, srcpath, ln = getCodeSnippet(path, k)
                             mival = dic[hex(k)]
-                            asmsnippet = f"[{hex(k)}]" + asm[leakAddr].split("|")[1]
+                            try:
+                                asmsnippet = f"[{hex(k)}]" + asm[leakAddr].split("|")[1]
+                            except KeyError:
+                                asmsnippet = 'n/a'
                             self.MDresults.append(
                                 {
                                     "Runtime Addr": hex(k),

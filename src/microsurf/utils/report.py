@@ -122,9 +122,9 @@ class ReportGenerator:
                     if not self.quickscan:
                         self.mdString += "\nKey bit dependencies (estimated):"
                         if Path(
-                            f"{self.loader.resultDir}/assets/saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png"
+                            f"{self.loader.resultDir}/assets/saliency-map-{row[['Runtime Addr']].values[0][0]}.png"
                         ).is_file():
-                            self.mdString += f"\n\n![saliency map](assets/saliency-map-{hex(row[['runtime Addr']].values[0][0])}.png)\n\n"
+                            self.mdString += f"\n\n![saliency map](assets/saliency-map-{row[['Runtime Addr']].values[0][0]}.png)\n\n"
                         else:
                             self.mdString += "\n\n MI not significant enough to estimate dependencies. \n\n"
         self.mdString += "\n ### Grouped by function name\n\n"

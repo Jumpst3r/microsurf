@@ -231,7 +231,7 @@ class PCTraceCollectionFixed(PCTraceCollection):
             secrets.add(t.secret)
         assert len(secrets) == 1
 
-
+MARK = dict()
 class PCTraceCollectionRandom(PCTraceCollection):
     """Creates a PC trace collection object.
     The secrets of the individual traces must be random.
@@ -249,78 +249,45 @@ class PCTraceCollectionRandom(PCTraceCollection):
             self.possibleLeaks: Set[int] = set()
         self.DF = None
         if not self.possibleLeaks:
-            self.buildCFGraph()
+            self.find_secret_dep_nodes()
         self.buildDataFrames()
 
     def buildDataFrames(self):
+        global MARK
         if not self.possibleLeaks:
             self.possibleLeaks = []
-            for k in self.MARK:
+            for k in MARK:
                 self.possibleLeaks.append(k)
                 self.results[hex(k)] = -1
-        return
-        perLeakDict = {}
-        for l in self.possibleLeaks:
-            row = []
-            hits = []
-            numhits = 0
-            for t in self.traces:
-                entry = [int(t.secret, 16)]
-                for idx, e in enumerate(t):
-                    e = (hex(e[0]), hex(e[1]))
-                    if e == l:
-                        if idx + 1 < len(t):
-                            entry.append(t[idx + 1])
-                numhits = max(numhits, len(entry) - 1)
-                hits.append(1)
-                row.append(entry)
-            colnames = ["secret"] + [str(i) for i in range(numhits)]
-            f = pd.DataFrame(row, columns=colnames)
-            f = f.set_index("secret")
-            f.drop(f.std()[f.std() == 0].index, axis=1, inplace=True)
-            if len(f.columns):
-                f.insert(loc=0, column="hits", value=hits)
-                perLeakDict[int(l[1], 16)] = f
-                perLeakDict[int(l[1], 16)].dropna(axis=0, inplace=True)
-        self.DF = perLeakDict
-
-    def buildCFGraph(self):
-        """
-        G = nx.MultiDiGraph()
-        edgecolors = ['black', 'red', 'blue', 'orange']
-        self.colordict = {}
-        for idx, t in enumerate(self.traces):
-            for i in range(len(t)-1):
-                # hex for debugging and greping offsets, change later
-                u = hex(t[i])
-                v = hex(t[i+1])
-                out = G.out_edges(nbunch=u, data=True)
-                addedge = True
-                for e in out:
-                    src, tgt, di = e
-                    if tgt == v and di['secret'] == t.secret:
-                        di['count'] += 1
-                        addedge=False
-                if addedge:
-                    G.add_edge(u,v, secret=t.secret, color=edgecolors[idx], count=0)
-                    self.colordict[t.secret] = edgecolors[idx]
-        log.debug(f"CF graph before pruning: {nx.info(G)}")
-        self._remove_consistent_loops(G)
-        self._contract_nodes(G, self.traces[0])
-        log.debug(f"CF graph after pruning: {nx.info(G)}")
-        # remove self loops with consistent iteration count for every secret
-        # contract edges which link two linear blocks [b1]->[b2]
-        for v in track(G.nodes, description="analyzing control flow graph"):
-            self._check_self_loops(G, v)
-            self._check_state(G, v)
-        self.G = G
-        nx.nx_pydot.write_dot(G, 'graph.dot')
-        """
-        self.find_secret_dep_nodes()
+        else:
+            perLeakDict = {}
+            for l in self.possibleLeaks:
+                row = []
+                numhits = 0
+                for t in self.traces:
+                    entry = [int(t.secret, 16)]
+                    for idx, e in enumerate(t):
+                        if e == l:
+                            if idx + 1 < len(t):
+                                entry.append(t[idx + 1])
+                    numhits = max(numhits, len(entry) - 1)
+                    row.append(entry)
+                colnames = ["secret"] + [str(i) for i in range(numhits)]
+                f = pd.DataFrame(row, columns=colnames)
+                f = f.set_index("secret")
+                if MARK[l] == "SECRET DEP C1":
+                    f.drop(f.std()[f.std() == 0].index, axis=1, inplace=True)
+                else:
+                    # in the secret dependent hit count case, record the number of hits per secret.
+                    f = f.count(axis=1).to_frame()
+                f.dropna(axis=0, inplace=True)
+                if len(f.columns) > 0 and len(f.index) > 1:
+                    perLeakDict[l] = f
+            self.DF = perLeakDict
 
     def find_secret_dep_nodes(self):
         T = defaultdict(lambda: defaultdict(list))
-        MARK = dict()
+        global MARK
 
         for t in self.traces:
             for idx, v in enumerate(t):
@@ -337,111 +304,8 @@ class PCTraceCollectionRandom(PCTraceCollection):
                     b = normVec if len(normVec) > len(vec) else vec
                     if b[: len(a)] == a:
                         MARK[k] = "SECRET DEP HIT COUNT"
-                    else:
-                        MARK[k] = "SECRET DEP C2"
+                    # else:
+                    #    MARK[k] = "SECRET DEP C2"
         for k, v in MARK.items():
-            log.debug(f"{hex(k -  0x7fffb7ef1000)}, {v}")
-        self.MARK = MARK
+            log.debug(f"{hex(k)}, {v}")
         return
-
-    def _check_self_loops(self, G, block_c):
-        loops = defaultdict(int)
-        for (_, tgt, di) in G.out_edges(nbunch=block_c, data=True):
-            if tgt == block_c:
-                loops[di["secret"]] += 1
-        if loops:
-            hitSets = frozenset(l for l in list(loops.values()))
-            if len(hitSets) > 1:
-                G.nodes[block_c]["color"] = "orange"
-                # log.error("SDCF")
-
-    def _check_state(self, G, block_c):
-        outgoing_edges = []
-        inc_secrets = set()
-        for (src, tgt, di) in G.in_edges(nbunch=block_c, data=True):
-            if tgt != src:
-                inc_secrets.add(di["secret"])
-
-        tgtnodes = defaultdict(lambda: defaultdict(int))
-        for (src, tgt, di) in G.out_edges(nbunch=block_c, data=True):
-            if tgt != src:
-                outgoing_edges.append((tgt, di))
-                tgtnodes[tgt][di["secret"]] = di["count"]
-        keysetglobal = set()
-        for t, v in tgtnodes.items():
-            keyset = set()
-            for secret, count in v.items():
-                keyset.add(secret)
-            keysetglobal.add(frozenset(keyset))
-        log.info(f"{keysetglobal} - len = {len(keysetglobal)}")
-        if len(keysetglobal) > 1:
-            G.nodes[block_c]["color"] = "red"
-        return
-
-    def _contract_nodes(self, G, t):
-        to_contract = [[]]
-        for i in range(len(t) - 1):
-            v = hex(t[i])
-            if v not in G.nodes:
-                continue
-            if len(list(G.neighbors(v))) > 1:
-                continue
-            elif len(list(G.neighbors(v))) == 1:
-                isrc = None
-                for src, dst in G.in_edges(nbunch=v):
-                    isrc = src
-                    break
-                if not isrc:
-                    continue
-                if not to_contract[-1] or isrc in to_contract[-1][-1]:
-                    to_contract[-1].append((isrc, v))
-                else:
-                    to_contract.append([(isrc, v)])
-        to_contract_clean = []
-        for e in to_contract:
-            row = []
-            for s in e:
-                for x in s:
-                    if x not in row:
-                        row.append(x)
-            to_contract_clean.append(row)
-        for e in to_contract_clean:
-            for endofchain in range(1, len(e)):
-                try:
-                    nx.contracted_nodes(
-                        G, e[0], e[endofchain], self_loops=False, copy=False
-                    )
-                except Exception:
-                    break
-        if e[0] in G.nodes:
-            # clean up any duplicate edges caused by node contractions
-            edges = defaultdict(int)
-            if len(list(G.neighbors(e[0]))) == 1:
-                neigbour = list(G.neighbors(e[0]))[0]
-                oedges = list(G.out_edges(nbunch=e[0], data=True))
-                for e in oedges[:]:
-                    src, tgt, di = e
-                    edges[di["secret"]] += 1
-                    G.remove_edge(src, tgt)
-                    print("removed edges")
-                for k in edges:
-                    G.add_edge(
-                        e[0],
-                        neigbour,
-                        secret=k,
-                        count=edges[k],
-                        color=self.colordict[k],
-                    )
-
-    def _remove_consistent_loops(self, G):
-        for v in G.nodes:
-            secrets = []
-            selfloops = []
-            outgoing_edges = G.out_edges(nbunch=v, data=True)
-            for src, tgt, di in outgoing_edges:
-                if tgt == src:
-                    secrets.append(di["secret"])
-                    selfloops.append((src, tgt))
-            if len(set(Counter(secrets).values())) == 1:
-                for edge in selfloops:
-                    G.remove_edge(*edge)
