@@ -136,7 +136,7 @@ class SCDetector:
                                     f"[{hex(offset)}]" + asm[leakAddr].split("|")[1]
                                 )
                             except KeyError:
-                                asmsnippet = 'n/aj'
+                                asmsnippet = "n/aj"
                             # log.info(f'runtime Addr: {hex(k)}, offset: {offset:#08x}, symbol name: {symbname}')
                             self.MDresults.append(
                                 {
@@ -159,7 +159,7 @@ class SCDetector:
                             try:
                                 asmsnippet = f"[{hex(k)}]" + asm[leakAddr].split("|")[1]
                             except KeyError:
-                                asmsnippet = 'n/a'
+                                asmsnippet = "n/a"
                             self.MDresults.append(
                                 {
                                     "Runtime Addr": hex(k),

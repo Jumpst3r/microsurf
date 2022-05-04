@@ -57,7 +57,7 @@ if __name__ == "__main__":
                              sharedObjects=sharedObjects)
 
     scd = SCDetector(modules=[
-        #DataLeakDetector(binaryLoader=binLoader),
+        DataLeakDetector(binaryLoader=binLoader),
         CFLeakDetector(binaryLoader=binLoader),
     ])
 

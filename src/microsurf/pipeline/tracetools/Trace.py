@@ -231,7 +231,10 @@ class PCTraceCollectionFixed(PCTraceCollection):
             secrets.add(t.secret)
         assert len(secrets) == 1
 
+
 MARK = dict()
+
+
 class PCTraceCollectionRandom(PCTraceCollection):
     """Creates a PC trace collection object.
     The secrets of the individual traces must be random.

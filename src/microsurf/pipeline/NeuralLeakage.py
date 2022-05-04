@@ -108,7 +108,9 @@ class NeuralLeakageModel(nn.Module):
                     loss_val = -mest_val.forward(lpred)
                     Y_val.append(loss_val.detach().numpy())
                     X_val.append(e)
-                    log.debug(f"pc-{self.leakAddr} idx-{idx}/{len(self.X.T)}, e-{e}/200")
+                    log.debug(
+                        f"pc-{self.leakAddr} idx-{idx}/{len(self.X.T)}, e-{e}/200"
+                    )
                     if len(Y_val) > 10:
                         new_val_mean = np.mean(Y_val[-5:])
                         old_val_mean = np.mean(Y_val[-10:-5])
@@ -141,7 +143,7 @@ class NeuralLeakageModel(nn.Module):
                 )
             except Exception:
                 return
-            f, ax = plt.subplots(figsize=(8, 2 * len(heatmaps)))
+            f, ax = plt.subplots(figsize=(8, 1.2 * len(heatmaps)))
             self.MIScores = np.array(self.MIScores[: len(heatmaps)])
             # add a column to the far right to include the MI score in the heatmap
             dependencies = np.c_[dependencies, self.MIScores]

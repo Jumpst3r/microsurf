@@ -2,6 +2,7 @@ import os
 import tempfile
 import time
 import traceback
+import uuid
 from asyncio import Event
 from datetime import datetime
 from functools import lru_cache
@@ -19,6 +20,7 @@ from capstone import (
     CS_ARCH_MIPS,
     CS_ARCH_RISCV,
     CS_MODE_ARM,
+    CS_MODE_RISCV64,
 )
 from qiling import Qiling
 from qiling.const import QL_VERBOSE
@@ -69,7 +71,8 @@ class BinaryLoader:
         self.runtime = None
         self.QLEngine: Qiling = None
         self.executableCode = []
-
+        self.uuid = uuid.uuid4()
+        self.resultDir += f"/{self.uuid}"
         os.makedirs(self.resultDir + "/" + "assets", exist_ok=True)
         os.makedirs(self.resultDir + "/" + "traces", exist_ok=True)
 
@@ -103,7 +106,7 @@ class BinaryLoader:
             self.md = Cs(CS_ARCH_MIPS, CS_MODE_32)
         elif "RISC-V" in fileinfo:
             self.ARCH = "RISCV"
-            self.md = Cs(CS_ARCH_RISCV, CS_MODE_64)
+            self.md = Cs(CS_ARCH_RISCV, CS_MODE_RISCV64)
         else:
             log.info(fileinfo)
             log.error("Target architecture not implemented")
@@ -625,6 +628,7 @@ class LeakageClassification:
         self.threshold = threshold
 
     def analyze(self):
+        log.info("Estimating scores and key bit dependencies")
         futures = []
         num_ticks = 0
         for k, v in self.rndTraceCollection.DF.items():

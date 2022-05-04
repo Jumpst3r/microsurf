@@ -31,13 +31,7 @@ class ReportGenerator:
         self.addrList = addrList
 
     def generateHeaders(self):
-        if self.quickscan:
-            self.mdString += f"# Microsurf Analysis Results (quick scan) \n\n"
-        else:
-            if len(self.addrList) == 0:
-                self.mdString += f"# Microsurf Analysis Results (full scan)\n\n"
-            elif len(self.addrList) > 0:
-                self.mdString += f"# Microsurf Analysis Results (selective scan)\n\n"
+        self.mdString += f"# Microsurf Analysis Results\n\n"
         self.mdString += f"__Run at__: {self.datetime} \n\n"
         self.mdString += f"__Elapsed time (analysis)__: {self.loader.runtime} \n\n"
         self.mdString += f"__Elapsed time (single run emulation)__: {self.loader.emulationruntime} \n\n"
@@ -46,7 +40,7 @@ class ReportGenerator:
         else:
             self.mdString += f"__Number of leak locations to investigate (selective scan)__: {len(self.addrList)} \n\n"
             self.mdString += (
-                f"__Provided leak locations: __: {[hex(k) for k in self.addrList]} \n\n"
+                f"__Provided leak locations:__: {[hex(k) for k in self.addrList]} \n\n"
             )
         if not self.quickscan:
             self.mdString += f"__MI threshold__: {self.threshold} \n\n"
@@ -78,6 +72,23 @@ class ReportGenerator:
             ]
 
     def generateResults(self):
+        self.mdString += "__Table of contents:__\n\n"
+        self.mdString += "[TOC] \n\n"
+        self.mdString += "\n ## Overview by function name\n"
+        countByFunc = (
+            self.results.groupby("Symbol Name")
+            .size()
+            .reset_index(name="Leak Count")
+            .sort_values(by=["Leak Count"], ascending=False)
+        )
+        ax = countByFunc.set_index("Symbol Name").plot.pie(
+            y="Leak Count", figsize=(6, 4), colormap="Blues_r", legend=False
+        )
+        fig = ax.get_figure()
+        fig.savefig(f"{self.loader.resultDir}/assets/functions.png")
+        self.mdString += f'\n\n <img align="right" src="assets/functions.png" /> \n\n'
+        self.mdString += countByFunc.to_markdown(index=False)
+        self.mdString += "\n\n\n\n\n\n\n\n\n"
         significant = self.results[
             self.results["MI score"] > self.threshold
         ].sort_values(by=["MI score"], ascending=False, inplace=False)
@@ -127,24 +138,9 @@ class ReportGenerator:
                             self.mdString += f"\n\n![saliency map](assets/saliency-map-{row[['Runtime Addr']].values[0][0]}.png)\n\n"
                         else:
                             self.mdString += "\n\n MI not significant enough to estimate dependencies. \n\n"
-        self.mdString += "\n ### Grouped by function name\n\n"
-        self.mdString += (
-            self.results.groupby("Symbol Name")
-            .size()
-            .reset_index(name="Leak Count")
-            .sort_values(by=["Leak Count"], ascending=False)
-            .to_markdown(index=False)
-        )
-        if self.quickscan:
-            self.mdString += "\n ### All Leaks, sorted by MI\n\n"
-        else:
-            self.mdString += "\n ### All Leaks\n\n"
-        if self.quickscan:
-            self.mdString += self.results.loc[
-                :,
-                self.columns,
-            ].to_markdown(index=False)
-        else:
+
+        if not self.quickscan:
+            self.mdString += "\n\n ### All Leaks, sorted by MI\n\n"
             self.mdString += (
                 self.results.loc[
                     :,
