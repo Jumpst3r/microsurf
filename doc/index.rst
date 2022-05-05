@@ -1,8 +1,10 @@
 :notoc:
 
-*************************
-Microsurf |version|
-*************************
+.. image:: figures/logo.png
+  :width: 750
+  :alt: Microsurf logo
+  :align: center
+
 
 **PDF version of this documentation**: `PDF Version <_static/microsurf.pdf>`__
 

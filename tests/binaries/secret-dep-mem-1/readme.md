@@ -6,14 +6,15 @@ A simple secret dependent control flow example, branching depending on bit posit
 
 ``
 if (secret & (1<<3)){
-    otherFct(2);
+otherFct(2);
 }
 ``
 
 ### Expected behavior:
 
 When running the detection module with default parameters (no variable secret dependent hit count detection),
-the following leaks should be detected (not including the dependencies in libc functions such as ``____strtoul_l_internal`,
+the following leaks should be detected (not including the dependencies in libc functions such as ``____
+strtoul_l_internal`,
 which also appear in the results):
 
 - The secret dependent conditional in the main function

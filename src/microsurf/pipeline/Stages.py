@@ -45,15 +45,29 @@ log = getLogger()
 
 
 class BinaryLoader:
+    """
+    The BinaryLoader class is used to tell the framwork where to located the target binary, shared libraries and to
+    specify emulation and general execution settings.
+
+    Args:
+        path: The path to the target executable (ELF-linux format, ARM/MIPS/X86/RISCV).
+        args: List of arguments to pass, '@' may be used to mark one argument as secret.
+        rootfs: The emulation root directory. Has to contain expected shared objects for dynamic binaries.
+        rndGen: The function which will be called to generate secret inputs.
+        sharedObjects: List of shared objects to trace, defaults to tracing everything.
+        deterministic: Force deterministic execution.
+        resultDir: Path to the results directory.
+    """
+
     def __init__(
-        self,
-        path: str,
-        args: List[str],
-        rootfs: str,
-        rndGen: Callable,
-        sharedObjects=[],
-        deterministic=False,
-        resultDir="results",
+            self,
+            path: Path,
+            args: List[str],
+            rootfs: str,
+            rndGen: Callable,
+            sharedObjects: List[str] = [],
+            deterministic: bool = False,
+            resultDir: str = "results",
     ) -> None:
         self.binPath = Path(path)
         self.args = args
@@ -307,19 +321,19 @@ class MemWatcher:
     """
 
     def __init__(
-        self,
-        binpath,
-        args,
-        rootfs,
-        ignoredObjects,
-        mappings,
-        arch,
-        mode,
-        locations=None,
-        getAssembly=False,
-        deterministic=False,
-        multithread=True,
-        codeRanges=[],
+            self,
+            binpath,
+            args,
+            rootfs,
+            ignoredObjects,
+            mappings,
+            arch,
+            mode,
+            locations=None,
+            getAssembly=False,
+            deterministic=False,
+            multithread=True,
+            codeRanges=[],
     ) -> None:
         self.tracetime = None
         self.traces: List[MemTrace] = []
@@ -441,17 +455,17 @@ class CFWatcher:
     """
 
     def __init__(
-        self,
-        binpath,
-        args,
-        rootfs,
-        tracedObjects,
-        arch,
-        mode,
-        locations=None,
-        getAssembly=False,
-        deterministic=False,
-        multithread=True,
+            self,
+            binpath,
+            args,
+            rootfs,
+            tracedObjects,
+            arch,
+            mode,
+            locations=None,
+            getAssembly=False,
+            deterministic=False,
+            multithread=True,
     ) -> None:
         self.QLEngine = None
         self.currenttrace = None
@@ -629,10 +643,10 @@ class ProgressBar:
 
 class LeakageClassification:
     def __init__(
-        self,
-        rndTraceCollection: TraceCollection,
-        binaryLoader: BinaryLoader,
-        threshold,
+            self,
+            rndTraceCollection: TraceCollection,
+            binaryLoader: BinaryLoader,
+            threshold,
     ):
         self.rndTraceCollection = rndTraceCollection
         self.possibleLeaks = rndTraceCollection.possibleLeaks

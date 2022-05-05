@@ -58,6 +58,7 @@ def getEntries(lineprog):
 
 CU_CACHE = {}
 
+
 # modified snippet from official https://github.com/eliben/pyelftools repo example
 # https://github.com/eliben/pyelftools/blob/master/examples/dwarf_decode_address.py
 def _decode_file_line(dwarfinfo, address):
@@ -141,4 +142,4 @@ def getCodeSnippet(file: str, loc: int) -> List[str]:
         except Exception as e:
             log.debug(f"source lines not available for PC {hex(loc)}")
             return [], None, None
-    return lines[ln - 5 : ln + 5], path, ln
+    return lines[ln - 5: ln + 5], path, ln

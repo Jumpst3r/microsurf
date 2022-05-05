@@ -7,15 +7,7 @@ to gather PC traces on the openssl camellia-128-ecbb 128 implementation
 openssl camellia-128-ecb -e -in input.bin -out output.bin -nosalt -K hexdata
 """
 
-from collections import defaultdict
-import itertools
-import pickle
 import sys
-
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import seaborn as sns
 from microsurf.microsurf import SCDetector
 from microsurf.pipeline.DetectionModules import CFLeakDetector, DataLeakDetector
 from microsurf.pipeline.Stages import BinaryLoader

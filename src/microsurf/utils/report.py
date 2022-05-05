@@ -13,13 +13,13 @@ log = getLogger()
 
 class ReportGenerator:
     def __init__(
-        self,
-        results: pandas.DataFrame,
-        loader: BinaryLoader,
-        itercount: int,
-        threshold: int,
-        quickscan: bool,
-        addrList: list,
+            self,
+            results: pandas.DataFrame,
+            loader: BinaryLoader,
+            itercount: int,
+            threshold: int,
+            quickscan: bool,
+            addrList: list,
     ) -> None:
         self.results = results
         self.mdString = ""
@@ -77,9 +77,9 @@ class ReportGenerator:
         self.mdString += "\n ## Overview by function name\n"
         countByFunc = (
             self.results.groupby("Symbol Name")
-            .size()
-            .reset_index(name="Leak Count")
-            .sort_values(by=["Leak Count"], ascending=False)
+                .size()
+                .reset_index(name="Leak Count")
+                .sort_values(by=["Leak Count"], ascending=False)
         )
         ax = countByFunc.set_index("Symbol Name").plot.pie(
             y="Leak Count", figsize=(6, 4), colormap="Blues_r", legend=False
@@ -91,7 +91,7 @@ class ReportGenerator:
         self.mdString += "\n\n\n\n\n\n\n\n\n"
         significant = self.results[
             self.results["MI score"] > self.threshold
-        ].sort_values(by=["MI score"], ascending=False, inplace=False)
+            ].sort_values(by=["MI score"], ascending=False, inplace=False)
         if self.quickscan:
             # quickscan case - show all details for every leak
             significant = self.results[self.results["MI score"] == -1].sort_values(
@@ -109,13 +109,13 @@ class ReportGenerator:
                 self.mdString += f"### Leaks for {s}\n\n"
                 symbdf = significant[significant["Symbol Name"] == s]
                 for i in range(len(symbdf)):
-                    row = symbdf[i : i + 1]
+                    row = symbdf[i: i + 1]
                     if len(row) == 0:
                         break
                     self.mdString += row.loc[
-                        :,
-                        self.columns,
-                    ].to_markdown(index=False)
+                                     :,
+                                     self.columns,
+                                     ].to_markdown(index=False)
                     self.mdString += "\n\nSource code snippet\n\n"
                     src = row[["src"]].values[0][0]
                     if len(src) == 0:
@@ -133,7 +133,7 @@ class ReportGenerator:
                     if not self.quickscan:
                         self.mdString += "\nKey bit dependencies (estimated):"
                         if Path(
-                            f"{self.loader.resultDir}/assets/saliency-map-{row[['Runtime Addr']].values[0][0]}.png"
+                                f"{self.loader.resultDir}/assets/saliency-map-{row[['Runtime Addr']].values[0][0]}.png"
                         ).is_file():
                             self.mdString += f"\n\n![saliency map](assets/saliency-map-{row[['Runtime Addr']].values[0][0]}.png)\n\n"
                         else:
@@ -143,11 +143,11 @@ class ReportGenerator:
             self.mdString += "\n\n ### All Leaks, sorted by MI\n\n"
             self.mdString += (
                 self.results.loc[
-                    :,
-                    self.columns,
+                :,
+                self.columns,
                 ]
-                .sort_values(by=["MI score"], ascending=False)
-                .to_markdown(index=False)
+                    .sort_values(by=["MI score"], ascending=False)
+                    .to_markdown(index=False)
             )
 
     def saveMD(self):

@@ -14,7 +14,7 @@ __version__ = "0.0.0a"
 import glob
 import os
 import time
-from typing import List
+from typing import List, Union
 
 import pandas as pd
 
@@ -29,7 +29,19 @@ log = getLogger()
 
 
 class SCDetector:
-    def __init__(self, modules: List[Detector], itercount=1000, addrList=None):
+    """
+    The SCDetector class is used to perform side channel detection analysis.
+    Args:
+        modules: List of detection modules to run.
+        itercount: Number of traces per module to collect when estimating key bit dependencies.
+        addrList: List of addresses for which to perform detailed key bit dependency estimates. If
+            None, no estimates will be performed. If an empty list is passed, estimates will be generated for
+            all leaks. To selectively perform estimates on given leaks, pass a list of runtime addresses as integers.
+            The runtime addresses can be taken from the generated reports (Run first with addrList=None and then
+            run a second time on addresses of interest as found in the report.)
+    """
+
+    def __init__(self, modules: List[Detector], itercount: int = 1000, addrList: Union[None, List[int]] = None):
         self.modules = modules
         self.ITER_COUNT = itercount
         self.addrList = addrList
@@ -54,6 +66,9 @@ class SCDetector:
         self.MDresults = []
 
     def exec(self):
+        """
+        Perform the side channel analysis using the provided modules, saving the results to 'results'.
+        """
         self.starttime = time.time()
         for module in self.modules:
             console.rule(f"module {str(module)}")
@@ -98,15 +113,15 @@ class SCDetector:
         if self.results:
             log.info("Generating report - this might take a while.")
             self._formatResults()
-            self.generateReport()
+            self._generateReport()
 
     def _formatResults(self):
         for (
-            lbound,
-            ubound,
-            _,
-            label,
-            container,
+                lbound,
+                ubound,
+                _,
+                label,
+                container,
         ) in self.loader.mappings:
             for (module, v) in self.results.items():
                 (dic, asm) = v
@@ -136,7 +151,7 @@ class SCDetector:
                             mival = dic[hex(k)]
                             try:
                                 asmsnippet = (
-                                    f"[{hex(offset)}]" + asm[leakAddr].split("|")[1]
+                                        f"[{hex(offset)}]" + asm[leakAddr].split("|")[1]
                                 )
                             except KeyError:
                                 asmsnippet = "n/aj"
@@ -184,7 +199,7 @@ class SCDetector:
         log.info(f"total runtime: {self.loader.runtime}")
         self.DF = pd.DataFrame.from_dict(self.MDresults)
 
-    def generateReport(self):
+    def _generateReport(self):
         if "PYTEST_CURRENT_TEST" in os.environ:
             log.info("Testing, no report generated.")
             return

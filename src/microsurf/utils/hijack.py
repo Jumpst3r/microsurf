@@ -90,7 +90,7 @@ Intercept gettime()
 
 
 def const_clock_gettime(
-    ql, clock_gettime_clock_id, clock_gettime_timespec, *args, **kw
+        ql, clock_gettime_clock_id, clock_gettime_timespec, *args, **kw
 ):
     tv_sec = 0
     tv_nsec = 0

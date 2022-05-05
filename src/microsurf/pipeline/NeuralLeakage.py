@@ -178,9 +178,9 @@ class NeuralLeakageModel(nn.Module):
                     "shrink": 0.5,
                 },
                 xticklabels=[
-                    (self.keylen - i) if i % 2 == 0 else " " for i in range(self.keylen)
-                ]
-                + ["MI"],
+                                (self.keylen - i) if i % 2 == 0 else " " for i in range(self.keylen)
+                            ]
+                            + ["MI"],
                 yticklabels=[
                     f"inv-{i}" if i % 2 else " " for i in range(self.MIScores.shape[0])
                 ],  # MSB to LSB
