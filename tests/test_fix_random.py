@@ -1,47 +1,44 @@
 """
 Tests if we correctly control all sources of ranomness on all architectures
-(for --norandom execution)
+(for deterministic=True execution)
 @author nicolas
 """
 
 import pytest
 from microsurf.pipeline.Stages import BinaryLoader
-from microsurf.pipeline.Executor import PipeLineExecutor
+from microsurf.utils.generators import getRandomHexKeyFunction
 from pathlib import Path, PurePath
-import json, sys, tempfile
 
 
-def test_norandom_arm(capfd, monkeypatch):
-    fp = tempfile.TemporaryFile()
-    monkeypatch.setattr("sys.stdin", fp)
+armPath = PurePath(Path(__file__).parent, Path("binaries/random/checkrandom-arm.bin"))
 
-    binPath = PurePath(
-        Path(__file__).parent, Path("binaries/random/checkrandom-arm.bin")
+x8632Path = PurePath(
+    Path(__file__).parent, Path("binaries/random/checkrandom-x86-32.bin")
+)
+
+x8664Path = PurePath(
+    Path(__file__).parent, Path("binaries/random/checkrandom-x86-64.bin")
+)
+
+mips32Path = PurePath(
+    Path(__file__).parent, Path("binaries/random/checkrandom-mipsel32.bin")
+)
+
+riscv64Path = PurePath(
+    Path(__file__).parent, Path("binaries/random/checkrandom-riscv64.bin")
+)
+
+targets = [armPath, x8632Path, x8664Path, mips32Path, riscv64Path]
+
+
+@pytest.mark.parametrize("binPath", targets)
+def test_norandom(capfd, binPath):
+    BinaryLoader(
+        binPath,
+        ["@"],
+        deterministic=True,
+        rndGen=getRandomHexKeyFunction(3),
+        rootfs="/tmp",
     )
-    BinaryLoader(binPath, ["@"], dryRunOnly=True, deterministic=True)
-    out, _ = capfd.readouterr()
-    assert "FAIL" not in out
-
-
-def test_norandom_ia32(capfd, monkeypatch):
-    fp = tempfile.TemporaryFile()
-    monkeypatch.setattr("sys.stdin", fp)
-    binPath = PurePath(
-        Path(__file__).parent,
-        Path("binaries/random/checkrandom-x86-32.bin"),
-    )
-    BinaryLoader(binPath, ["@"], dryRunOnly=True, deterministic=True)
-    out, _ = capfd.readouterr()
-    assert "FAIL" not in out
-
-
-def test_norandom_x86_64(capfd, monkeypatch):
-    fp = tempfile.TemporaryFile()
-    monkeypatch.setattr("sys.stdin", fp)
-    binPath = PurePath(
-        Path(__file__).parent,
-        Path("binaries/random/checkrandom-x86-64.bin"),
-    )
-    BinaryLoader(binPath, ["@"], dryRunOnly=True, deterministic=True)
     out, _ = capfd.readouterr()
     assert "FAIL" not in out

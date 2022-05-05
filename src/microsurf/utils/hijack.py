@@ -92,8 +92,8 @@ Intercept gettime()
 def const_clock_gettime(
     ql, clock_gettime_clock_id, clock_gettime_timespec, *args, **kw
 ):
-    tv_sec = 42
-    tv_nsec = 42
+    tv_sec = 0
+    tv_nsec = 0
     tp: Union[timespec32, timespec]
     if ql.arch.type == QL_ARCH.X8664:
         tp = timespec(tv_sec=tv_sec, tv_nsec=tv_nsec)
@@ -115,8 +115,8 @@ Intercept gettimeofday()
 
 
 def const_clock_gettimeofday(ql, gettimeofday_tv, gettimeofday_tz, *args, **kw):
-    tv_sec = 42
-    tv_nsec = 42
+    tv_sec = 0
+    tv_nsec = 0
     tp: Union[timespec32, timespec]
     if ql.arch.type == QL_ARCH.X8664:
         tp = timespec(tv_sec=tv_sec, tv_nsec=tv_nsec)

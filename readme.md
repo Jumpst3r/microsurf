@@ -1,6 +1,8 @@
-# Microsurf: An architecture independent side channel detection framework
+<img align="center" width="700" height="230" src="doc/figures/logo.png" alt="application project app icon">
 
-<img align="center" width="100" height="100" src="doc/figures/logo.png" alt="application project app icon">
+
+[![tests](https://github.com/Jumpst3r/msc-thesis-work/actions/workflows/pytest.yml/badge.svg?branch=main)](https://github.com/Jumpst3r/msc-thesis-work/actions/workflows/pytest.yml)
+
 
 ***Microsurf*** is a framework for finding side channel vulnerabilities in compiled binaries. It features:
 

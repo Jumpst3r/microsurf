@@ -69,7 +69,11 @@ def _decode_file_line(dwarfinfo, address):
         if CU in CU_CACHE:
             lineprog = CU_CACHE[CU]
         else:
-            lineprog = dwarfinfo.line_program_for_CU(CU)
+            try:
+                lineprog = dwarfinfo.line_program_for_CU(CU)
+            except KeyError:
+                log.warning("Could not retrieve debug symbols ! Only dwarf <= v4 is supported")
+                return None, None
             CU_CACHE[CU] = lineprog
         prevstate = None
         for entry in getEntries(lineprog):

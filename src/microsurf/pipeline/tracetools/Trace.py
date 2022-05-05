@@ -1,10 +1,7 @@
-import itertools
-
-import networkx as nx
 import pickle
-from collections import defaultdict, Counter
+from collections import defaultdict
 from typing import Dict, List, Set, Tuple
-from rich import print as pprint
+
 import pandas as pd
 from rich.progress import track
 
@@ -243,8 +240,9 @@ class PCTraceCollectionRandom(PCTraceCollection):
         traces: List of memory traces
     """
 
-    def __init__(self, traces: list[PCTrace], possibleLeaks=None):
+    def __init__(self, traces: list[PCTrace], possibleLeaks=None, flagVariableHitCount=False):
         super().__init__(traces)
+        self.flagVariableHitCount = flagVariableHitCount
         self.results = {}
         if possibleLeaks:
             self.possibleLeaks = possibleLeaks
@@ -261,32 +259,33 @@ class PCTraceCollectionRandom(PCTraceCollection):
             self.possibleLeaks = []
             for k in MARK:
                 self.possibleLeaks.append(k)
-                self.results[hex(k)] = -1
-        else:
-            perLeakDict = {}
-            for l in self.possibleLeaks:
-                row = []
-                numhits = 0
-                for t in self.traces:
-                    entry = [int(t.secret, 16)]
-                    for idx, e in enumerate(t):
-                        if e == l:
-                            if idx + 1 < len(t):
-                                entry.append(t[idx + 1])
-                    numhits = max(numhits, len(entry) - 1)
-                    row.append(entry)
-                colnames = ["secret"] + [str(i) for i in range(numhits)]
-                f = pd.DataFrame(row, columns=colnames)
-                f = f.set_index("secret")
-                if MARK[l] == "SECRET DEP C1":
-                    f.drop(f.std()[f.std() == 0].index, axis=1, inplace=True)
-                else:
-                    # in the secret dependent hit count case, record the number of hits per secret.
-                    f = f.count(axis=1).to_frame()
-                f.dropna(axis=0, inplace=True)
-                if len(f.columns) > 0 and len(f.index) > 1:
-                    perLeakDict[l] = f
-            self.DF = perLeakDict
+        perLeakDict = {}
+        for l in self.possibleLeaks:
+            row = []
+            numhits = 0
+            for t in self.traces:
+                entry = [int(t.secret, 16)]
+                for idx, e in enumerate(t):
+                    if e == l:
+                        if idx + 1 < len(t):
+                            entry.append(t[idx + 1])
+                numhits = max(numhits, len(entry) - 1)
+                row.append(entry)
+            colnames = ["secret"] + [str(i) for i in range(numhits)]
+            f = pd.DataFrame(row, columns=colnames)
+            f = f.set_index("secret")
+            if MARK[l] == "SECRET DEP C1":
+                f.drop(f.std()[f.std() == 0].index, axis=1, inplace=True)
+            else:
+                # in the secret dependent hit count case, record the number of hits per secret.
+                f = f.count(axis=1).to_frame()
+            f.dropna(axis=0, inplace=True)
+            if len(f.columns) > 0 and len(f.index) > 1:
+                perLeakDict[l] = f
+        self.DF = perLeakDict
+        self.possibleLeaks = self.DF.keys()
+        for k in self.possibleLeaks:
+            self.results[hex(k)] = -1
 
     def find_secret_dep_nodes(self):
         T = defaultdict(lambda: defaultdict(list))
@@ -306,9 +305,10 @@ class PCTraceCollectionRandom(PCTraceCollection):
                     a = normVec if len(normVec) < len(vec) else vec
                     b = normVec if len(normVec) > len(vec) else vec
                     if b[: len(a)] == a:
-                        MARK[k] = "SECRET DEP HIT COUNT"
+                        if self.flagVariableHitCount:
+                            MARK[k] = "SECRET DEP HIT COUNT"
                     # else:
                     #    MARK[k] = "SECRET DEP C2"
         for k, v in MARK.items():
-            log.debug(f"{hex(k)}, {v}")
+            log.info(f"{hex(k)}, {v}")
         return

@@ -43,11 +43,11 @@ if __name__ == "__main__":
         "hex:@",
     ]
     sharedObjects = ['libmbedx509', 'libmbedtls', 'libmbedcrypto']
-    binLoader = BinaryLoader(path=binpath, args=args, rootfs=jailroot, rndGen=getRandomHexKeyFunction(128), sharedObjects=sharedObjects)
+    binLoader = BinaryLoader(path=binpath, args=args, rootfs=jailroot, rndGen=getRandomHexKeyFunction(128), sharedObjects=sharedObjects, deterministic=True)
 
     scd = SCDetector(modules=[
         CFLeakDetector(binaryLoader=binLoader),
-        DataLeakDetector(binaryLoader=binLoader)
+        #DataLeakDetector(binaryLoader=binLoader)
         ],
     )
     scd.exec()

@@ -18,16 +18,16 @@ from microsurf.utils.generators import getRandomHexKeyFunction
 
 if __name__ == "__main__":
 
-    binpath = "/home/nicolas/Documents/msc-thesis-work/tests/binaries/secret-dep-cf/basic.bin"
+    binpath = "/home/nicolas/Documents/msc-thesis-work/tests/binaries/secret-dep-mem-1/secret-dep-mem-1-arm.bin"
     #binpath = "/home/nicolas/Documents/msc-thesis-work/tests/binaries/secret0/secret-x86-32.bin"
 
     args = ['@'] # single secret arg
 
-    binLoader = BinaryLoader(path=binpath, args=args, rootfs='/home/nicolas/Documents/msc-thesis-work/tests/binaries/secret-dep-cf/', rndGen=getRandomHexKeyFunction(8))
+    binLoader = BinaryLoader(path=binpath, args=args, rootfs='/tmp', rndGen=getRandomHexKeyFunction(14), deterministic=False)
 
     scd = SCDetector(modules=[
-        #DataLeakDetector(binaryLoader=binLoader),
-        CFLeakDetector(binaryLoader=binLoader)
-    ], addrList=[])
+        DataLeakDetector(binaryLoader=binLoader),
+        #CFLeakDetector(binaryLoader=binLoader)
+    ])
 
     scd.exec()

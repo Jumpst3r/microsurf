@@ -284,6 +284,20 @@ class BinaryLoader:
         self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
         self.QLEngine.os.set_syscall("newfstatat", ql_fixed_syscall_newfstatat)
         self.QLEngine.os.set_syscall("exit_group", syscall_exit_group)
+        if self.deterministic:
+            self.QLEngine.add_fs_mapper("/dev/urandom", device_random)
+            self.QLEngine.add_fs_mapper("/dev/random", device_random)
+            self.QLEngine.add_fs_mapper("/dev/arandom", device_random)
+            self.QLEngine.os.set_syscall('time', const_time)
+            self.QLEngine.os.set_syscall('getrandom', const_getrandom)
+            self.QLEngine.os.set_syscall('gettimeofday', const_clock_gettimeofday)
+            self.QLEngine.os.set_syscall('gettime', const_clock_gettime)
+            self.QLEngine.os.set_syscall('clock_gettime', const_clock_gettime)
+            self.QLEngine.os.set_syscall('clock_gettime64', const_clock_gettime)
+        else:
+            self.QLEngine.add_fs_mapper("/dev/urandom", "/dev/urandom")
+            self.QLEngine.add_fs_mapper("/dev/random", "/dev/random")
+            self.QLEngine.add_fs_mapper("/dev/arandom", "/dev/arandom")
 
 
 @ray.remote
@@ -366,7 +380,7 @@ class MemWatcher:
         self.QLEngine = Qiling(
             [str(self.binPath), *[str(a) for a in args]],
             str(self.rootfs),
-            console=True,
+            console=False,
             verbose=QL_VERBOSE.DISABLED,
             multithread=self.multithread,
             libcache=True,

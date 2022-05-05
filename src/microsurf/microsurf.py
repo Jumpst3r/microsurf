@@ -12,8 +12,11 @@ __author__ = "Nicolas Dutly"
 __version__ = "0.0.0a"
 
 import glob
+import os
 import time
 from typing import List
+
+import pandas as pd
 
 from .pipeline.DetectionModules import Detector
 from .pipeline.Stages import LeakageClassification
@@ -44,7 +47,7 @@ class SCDetector:
 
         if not modules:
             log.error("module list must contain at least one module")
-            exit(1)
+            exit(0)
         self.loader = modules[0].loader
         self.results = {}
         self.starttime = None
@@ -179,16 +182,18 @@ class SCDetector:
             "%H:%M:%S", time.gmtime(endtime - self.starttime)
         )
         log.info(f"total runtime: {self.loader.runtime}")
+        self.DF = pd.DataFrame.from_dict(self.MDresults)
 
     def generateReport(self):
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            log.info("Testing, no report generated.")
+            return
         if not self.MDresults:
             log.info("no results - no file.")
             return
         else:
-            import pandas as pd
-
             rg = ReportGenerator(
-                results=pd.DataFrame.from_dict(self.MDresults),
+                results=self.DF,
                 loader=self.loader,
                 itercount=self.ITER_COUNT,
                 threshold=min([m.miThreshold for m in self.modules]),

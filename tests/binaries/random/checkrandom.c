@@ -5,15 +5,18 @@
 #include <ctype.h>
 #include <signal.h>
 #include <time.h>
+#include <stdint.h>
+
+
 
 int main(int argc, char *argv[]) {
+    uint64_t secret = strtoul(argv[1], NULL, 16);
+    printf("START\n");
     int randomData = open("/dev/urandom", O_RDONLY);
     if (!randomData){
-        printf("Failed to open /dev/urandom !");
+        printf("Failed to open /dev/urandom !\n");
         exit(1);
     }
-
-    
 
     // read 10 integers, if we always get the same result - we (likely) succeeded in controlling randomness
     int res = 0;
@@ -54,14 +57,15 @@ int main(int argc, char *argv[]) {
     }
 
     if (res < 5){
-        printf("FAIL\n");
+        printf("FAIL res\n");
     }
     if (res2 < 5){
-        printf("FAIL\n");
+        printf("FAIL res2\n");
     }
     if (res3 < 5){
-        printf("FAIL\n");
+        printf("FAIL res3\n");
     }
     close(randomData);
+    printf("DONE\n");
     return 0;
 }

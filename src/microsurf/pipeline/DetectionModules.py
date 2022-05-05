@@ -94,8 +94,9 @@ class DataLeakDetector(Detector):
 
 
 class CFLeakDetector(Detector):
-    def __init__(self, *, binaryLoader, save=False, miThreshold=0.2):
+    def __init__(self, *, binaryLoader, save=False, miThreshold=0.2, flagVariableHitCount=False):
         super().__init__(binaryLoader, save, miThreshold)
+        self.flagVariableHitCount = flagVariableHitCount
 
     def recordTraces(
         self, n: int, pcList: List[int] = None, fixedSecret=False, getAssembly=False
@@ -132,7 +133,7 @@ class CFLeakDetector(Detector):
         if fixedSecret:
             mt = PCTraceCollectionFixed([r[0] for r in resList])
         else:
-            mt = PCTraceCollectionRandom([r[0] for r in resList], possibleLeaks=pcList)
+            mt = PCTraceCollectionRandom([r[0] for r in resList], possibleLeaks=pcList, flagVariableHitCount=self.flagVariableHitCount)
         if self.save:
             path = (
                 f"{self.loader.resultDir}/traces/traces-CF-"
