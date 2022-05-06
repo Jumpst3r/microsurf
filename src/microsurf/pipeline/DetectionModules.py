@@ -7,10 +7,6 @@ from rich.progress import track
 
 from microsurf.pipeline.Stages import MemWatcher, BinaryLoader, CFWatcher
 from microsurf.pipeline.tracetools.Trace import (
-    MemTraceCollectionFixed,
-    MemTraceCollectionRandom,
-    PCTraceCollectionRandom,
-    PCTraceCollectionFixed,
     TraceCollection,
     MemTraceCollection,
     PCTraceCollection,
@@ -24,7 +20,7 @@ class Detector:
         self.NB_CORES = multiprocessing.cpu_count() - 1
 
     def recordTraces(
-            self, n: int, pcList: List[int] = None, fixedSecret=False, getAssembly=False
+            self, n: int, pcList: List[int] = None, getAssembly=False
     ) -> TraceCollection:
         pass
 
@@ -32,9 +28,9 @@ class Detector:
 class DataLeakDetector(Detector):
     """
     The DataLeakDetector class is used to collect traces for analysis of secret dependent memory accesses.
-    Args:
-        binaryLoader: A BinaryLoader instance
-        miThreshold: The treshold for which to produce key bit estimates. Values lower than 0.2 might produce results which do not make any sense (overfitted estimation).
+
+    Args: binaryLoader: A BinaryLoader instance miThreshold: The treshold for which to produce key bit estimates.
+        Values lower than 0.2 might produce results which do not make any sense (overfitted estimation).
     """
 
     def __init__(self, *, binaryLoader: BinaryLoader, miThreshold: float = 0.2):
@@ -42,8 +38,7 @@ class DataLeakDetector(Detector):
         self.save = False
 
     def recordTraces(
-            self, n: int, pcList: List[int] = None, fixedSecret=False, getAssembly=False
-    ) -> MemTraceCollection:
+            self, n: int, pcList: List[int] = None, getAssembly=False) -> MemTraceCollection:
         codeRanges = self.loader.executableCode
         NB_CORES = min(self.NB_CORES, n)
         memWatchers = [
@@ -66,26 +61,14 @@ class DataLeakDetector(Detector):
         resList = []
         for _ in track(
                 range(0, n, NB_CORES),
-                description=f"Collecting {n} traces with {'fixed' if fixedSecret else 'random'} secrets",
+                description=f"Collecting {n} traces ",
         ):
-            if fixedSecret:
-                [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in memWatchers]
-            else:
-                [m.exec.remote(secret=self.loader.rndArg()[0]) for m in memWatchers]
+            [m.exec.remote(secretGenerator=self.loader.rndGen) for m in memWatchers]
             futures = [m.getResults.remote() for m in memWatchers]
             res = ray.get(futures)
             resList += [r for r in res]
         asm = [r[1] for r in resList]
-        if fixedSecret:
-            mt = MemTraceCollectionFixed([r[0] for r in resList])
-        else:
-            mt = MemTraceCollectionRandom([r[0] for r in resList], possibleLeaks=pcList)
-        if self.save:
-            path = (
-                f"{self.loader.resultDir}/traces/traces-data-"
-                f'{"fixed" if fixedSecret else "random"}-{n}-{self.loader.ARCH}.pickle '
-            )
-            mt.toDisk(path)
+        mt = MemTraceCollection([r[0] for r in resList], possibleLeaks=pcList)
         return mt, dict(ChainMap(*asm))
 
     def __str__(self):
@@ -94,12 +77,16 @@ class DataLeakDetector(Detector):
 
 class CFLeakDetector(Detector):
     """
-   The CFLeakDetector class is used to collect traces for analysis of secret dependent conctrol flow.
-   Args:
-       binaryLoader: A BinaryLoader instance
-       miThreshold: The treshold for which to produce key bit estimates. Values lower than 0.2 might produce results which do not make any sense (overfitted estimation).
-       flagVariableHitCount: Include branching instruction which were hit a variable number of times in the report. Doing so will catch things like secret dependent iteration counts but might also cause false positives. Usually these are caused by a secret dependent branch earlier in the control flow, which causes variable hit rates for subsequent branching instructions. Fixing any secret dependent branching and then running with flagVariableHitCount=True is advised.
-   """
+    The CFLeakDetector class is used to collect traces for analysis of secret dependent conctrol flow.
+
+    Args: binaryLoader: A BinaryLoader instance miThreshold: The treshold for which to produce key bit estimates.
+        Values lower than 0.2 might produce results which do not make any sense (overfitted estimation).
+    flagVariableHitCount: Include branching instruction which were hit a variable number of times in the report.
+        Doing so will catch things like secret dependent iteration counts but might also cause false positives. Usually
+        these are caused by a secret dependent branch earlier in the control flow, which causes variable hit rates for
+        subsequent branching instructions. Fixing any secret dependent branching and then running with
+        flagVariableHitCount=True is advised.
+    """
 
     def __init__(self, *, binaryLoader: BinaryLoader, miThreshold: float = 0.2, flagVariableHitCount: bool = False):
         super().__init__(binaryLoader, miThreshold)
@@ -107,7 +94,7 @@ class CFLeakDetector(Detector):
         self.save = False
 
     def recordTraces(
-            self, n: int, pcList: List[int] = None, fixedSecret=False, getAssembly=False
+            self, n: int, pcList: List[int] = None, getAssembly=False
     ) -> PCTraceCollection:
         NB_CORES = min(self.NB_CORES, n)
         cfWatchers = [
@@ -128,27 +115,15 @@ class CFLeakDetector(Detector):
         resList = []
         for _ in track(
                 range(0, n, NB_CORES),
-                description=f"Collecting {n} traces with  {'fixed' if fixedSecret else 'random'} secrets",
+                description=f"Collecting {n} traces",
         ):
-            if fixedSecret:
-                [m.exec.remote(secret=self.loader.fixedArg()[0]) for m in cfWatchers]
-            else:
-                [m.exec.remote(secret=self.loader.rndArg()[0]) for m in cfWatchers]
+            [m.exec.remote(secretGenerator=self.loader.rndGen) for m in cfWatchers]
             futures = [m.getResults.remote() for m in cfWatchers]
             res = ray.get(futures)
             resList += [r for r in res]
         asm = [r[1] for r in resList]
-        if fixedSecret:
-            mt = PCTraceCollectionFixed([r[0] for r in resList])
-        else:
-            mt = PCTraceCollectionRandom([r[0] for r in resList], possibleLeaks=pcList,
-                                         flagVariableHitCount=self.flagVariableHitCount)
-        if self.save:
-            path = (
-                f"{self.loader.resultDir}/traces/traces-CF-"
-                f'{"fixed" if fixedSecret else "random"}-{n}-{self.loader.ARCH}.pickle'
-            )
-            mt.toDisk(path)
+        mt = PCTraceCollection([r[0] for r in resList], possibleLeaks=pcList,
+                               flagVariableHitCount=self.flagVariableHitCount)
         return mt, dict(ChainMap(*asm))
 
     def __str__(self):

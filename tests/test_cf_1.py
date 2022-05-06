@@ -9,15 +9,16 @@ binaries/secret-dep-cf-1/readme.md
 
 @author nicolas
 """
+import json
+import tempfile
+from pathlib import Path, PurePath
 
 import pytest
 
+from microsurf import SCDetector
 from microsurf.pipeline.DetectionModules import CFLeakDetector
 from microsurf.pipeline.Stages import BinaryLoader
-from microsurf.utils.generators import getRandomHexKeyFunction
-from microsurf import SCDetector
-from pathlib import Path, PurePath
-import json, sys
+from microsurf.utils.generators import openssl_hex_key_generator
 
 PREFIX = "secret-dep-cf-1"
 ARCH_SUFIX = ["-arm.bin", "-x86-32.bin", "-x86-64.bin", "-mipsel32.bin", "-riscv64.bin"]
@@ -29,7 +30,9 @@ targets = [
 
 
 @pytest.mark.parametrize("binPath", targets)
-def test_analyze_secret_simple(binPath):
+def test_analyze_secret_simple(binPath, monkeypatch):
+    fd = tempfile.TemporaryFile()
+    monkeypatch.setattr("sys.stdin", fd)
     with open(resFile) as f:
         data = json.load(f)
         tAddr = data[binPath.name]
@@ -37,7 +40,7 @@ def test_analyze_secret_simple(binPath):
         path=binPath,
         deterministic=True,
         rootfs="/tmp",
-        rndGen=getRandomHexKeyFunction(8),
+        rndGen=openssl_hex_key_generator(8),
         args=["@"],
     )
     scd = SCDetector(modules=[CFLeakDetector(binaryLoader=bl)])
@@ -47,7 +50,7 @@ def test_analyze_secret_simple(binPath):
     leaking_symbols1 = {"main", "____strtoul_l_internal"}
     leaking_symbols2 = {"main", "____strtoull_l_internal"}
     observed = set(df["Symbol Name"].to_list())
-
+    fd.close()
     assert leaking_symbols1 == observed or leaking_symbols2 == observed
 
     for a in tAddr:

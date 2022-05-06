@@ -6,14 +6,12 @@ to test mbedtls using the sample drives program crypt_and_hash
 provided by mbedtls
 """
 
-import os
-import random
 import sys
+
 from microsurf.microsurf import SCDetector
-from microsurf.pipeline.DetectionModules import DataLeakDetector, CFLeakDetector
-from microsurf.pipeline.LeakageModels import hamming, identity
+from microsurf.pipeline.DetectionModules import CFLeakDetector, DataLeakDetector
 from microsurf.pipeline.Stages import BinaryLoader
-from microsurf.utils.generators import getRandomHexKeyFunction
+from microsurf.utils.generators import mbedTLS_hex_key_generator
 
 if __name__ == "__main__":
     # define lib / bin paths
@@ -40,14 +38,21 @@ if __name__ == "__main__":
         "output.bin",
         "AES-128-ECB",
         "SHA512",
-        "hex:@",
+        "@",
     ]
     sharedObjects = ['libmbedx509', 'libmbedtls', 'libmbedcrypto']
-    binLoader = BinaryLoader(path=binpath, args=args, rootfs=jailroot, rndGen=getRandomHexKeyFunction(128), sharedObjects=sharedObjects, deterministic=True)
+    binLoader = BinaryLoader(
+        path=binpath,
+        args=args,
+        rootfs=jailroot,
+        rndGen=mbedTLS_hex_key_generator(128),
+        sharedObjects=sharedObjects,
+        deterministic=True
+    )
 
     scd = SCDetector(modules=[
-        CFLeakDetector(binaryLoader=binLoader),
-        #DataLeakDetector(binaryLoader=binLoader)
-        ],
+        # CFLeakDetector(binaryLoader=binLoader),
+        DataLeakDetector(binaryLoader=binLoader)
+    ], addrList=[], itercount=50
     )
     scd.exec()

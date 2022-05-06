@@ -1,5 +1,5 @@
 """
-@file openssl-advanced.py
+@file openssl.py
 
 This is an example on how to use the microsurf library
 to gather PC traces on the openssl camellia-128-ecbb 128 implementation
@@ -8,10 +8,11 @@ openssl camellia-128-ecb -e -in input.bin -out output.bin -nosalt -K hexdata
 """
 
 import sys
+
 from microsurf.microsurf import SCDetector
 from microsurf.pipeline.DetectionModules import CFLeakDetector, DataLeakDetector
 from microsurf.pipeline.Stages import BinaryLoader
-from microsurf.utils.generators import getRandomHexKeyFunction
+from microsurf.utils.generators import openssl_hex_key_generator
 
 if __name__ == "__main__":
     # define lib / bin paths
@@ -41,12 +42,17 @@ if __name__ == "__main__":
         "-nosalt",
         "-K",
         "@",
-
     ]
+
     sharedObjects = ['libcrypto']
 
-    binLoader = BinaryLoader(path=binpath, args=opensslArgs, rootfs=jailroot, rndGen=getRandomHexKeyFunction(128),
-                             sharedObjects=sharedObjects)
+    binLoader = BinaryLoader(
+        path=binpath,
+        args=opensslArgs,
+        rootfs=jailroot,
+        rndGen=openssl_hex_key_generator(128),
+        sharedObjects=sharedObjects
+    )
 
     scd = SCDetector(modules=[
         DataLeakDetector(binaryLoader=binLoader),
@@ -54,4 +60,3 @@ if __name__ == "__main__":
     ])
 
     scd.exec()
-    

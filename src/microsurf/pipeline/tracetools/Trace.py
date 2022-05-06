@@ -84,33 +84,6 @@ class MemTrace(Trace):
 
 
 class MemTraceCollection(TraceCollection):
-    """A generic MemoryTraceCollection object.
-
-    Args:
-        traces: The traces that make up the collection.
-    """
-
-    def __init__(self, traces: list[MemTrace]):
-        super().__init__(traces)
-
-
-class MemTraceCollectionFixed(MemTraceCollection):
-    """Creates a Memory trace collection object.
-    The secrets of the individual traces must be fixed.
-
-    Args:
-        traces: List of memory traces
-    """
-
-    def __init__(self, traces: list[MemTrace]):
-        super().__init__(traces)
-        secrets = set()
-        for t in self.traces:
-            secrets.add(t.secret)
-        assert len(secrets) == 1
-
-
-class MemTraceCollectionRandom(MemTraceCollection):
     """Creates a Memory trace collection object.
     The secrets of the individual traces must be random.
 
@@ -141,7 +114,7 @@ class MemTraceCollectionRandom(MemTraceCollection):
             for trace in self.traces:
                 if l not in trace.trace:
                     continue
-                entry = [int(trace.secret, 16)]
+                entry = [trace.secret]
                 entry += trace.trace[l]
                 numhits = max(numhits, len(trace.trace[l]))
                 hits.append(len(trace.trace[l]))
@@ -192,47 +165,10 @@ class PCTrace(Trace):
         return self.trace[item]
 
 
-class PCTraceCollection(TraceCollection):
-    """A generic PCTraceCollection object.
-
-    Args:
-        traces: The traces that make up the collection.
-    """
-
-    def __init__(self, traces: list[PCTrace]):
-        super().__init__(traces)
-
-    def toDisk(self, path: str):
-        with open(path, "wb") as f:
-            pickle.dump(self, f)
-
-    def __len__(self):
-        return len(self.traces)
-
-    def __getitem__(self, item):
-        return list(self.traces[item].trace)
-
-
-class PCTraceCollectionFixed(PCTraceCollection):
-    """Creates a PC trace collection object.
-    The secrets of the individual traces must be fixed.
-
-    Args:
-        traces: List of memory traces
-    """
-
-    def __init__(self, traces: list[PCTrace]):
-        super().__init__(traces)
-        secrets = set()
-        for t in self.traces:
-            secrets.add(t.secret)
-        assert len(secrets) == 1
-
-
 MARK = dict()
 
 
-class PCTraceCollectionRandom(PCTraceCollection):
+class PCTraceCollection(TraceCollection):
     """Creates a PC trace collection object.
     The secrets of the individual traces must be random.
 
@@ -264,7 +200,7 @@ class PCTraceCollectionRandom(PCTraceCollection):
             row = []
             numhits = 0
             for t in self.traces:
-                entry = [int(t.secret, 16)]
+                entry = [t.secret]
                 for idx, e in enumerate(t):
                     if e == l:
                         if idx + 1 < len(t):

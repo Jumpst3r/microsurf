@@ -31,6 +31,7 @@ log = getLogger()
 class SCDetector:
     """
     The SCDetector class is used to perform side channel detection analysis.
+
     Args:
         modules: List of detection modules to run.
         itercount: Number of traces per module to collect when estimating key bit dependencies.

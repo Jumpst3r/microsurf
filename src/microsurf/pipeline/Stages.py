@@ -1,6 +1,6 @@
 import os
+import sys
 import tempfile
-import time
 import traceback
 import uuid
 from asyncio import Event
@@ -78,9 +78,7 @@ class BinaryLoader:
         self.resultDir = resultDir
         self.ignoredObjects = []
         self.newArgs = self.args.copy()
-        self.asFile = False
         self.mappings = None
-        self.OLDVAL = None
         self.emulationruntime = None
         self.runtime = None
         self.QLEngine: Qiling = None
@@ -91,14 +89,11 @@ class BinaryLoader:
         os.makedirs(self.resultDir + "/" + "traces", exist_ok=True)
 
         try:
-            self.secretArgIndex: tuple[int, ...] = (args.index("@"),)
+            self.secretArgIndex: int = args.index("@")
         except ValueError:
-            for arg in self.args:
-                if "@" in arg:
-                    self.secretArgIndex: tuple[int, ...] = (
-                        args.index(arg),
-                        arg.find("@"),
-                    )
+            log.error('no argument marked as secret dependent - exiting.')
+            exit(0)
+
         if self.deterministic:
             log.info("hooking sources of randomness")
         if not os.path.exists(self.binPath):
@@ -143,7 +138,8 @@ class BinaryLoader:
                 )
         try:
             # initialize args;
-            val, _ = self.rndArg()
+            val = self.rndGen()
+            self.newArgs[self.secretArgIndex] = val
             self.multithreaded = False
             self.QLEngine = Qiling(
                 [str(self.binPath), *self.newArgs],
@@ -174,6 +170,8 @@ class BinaryLoader:
             log.error(f"Emulation dry run failed: {str(e)}")
             tback = traceback.format_exc()
             log.error(tback)
+            sys.stdout.fileno = lambda: False
+            sys.stderr.fileno = lambda: False
             if "cur_thread" in tback and "spawn" not in str(e):
                 log.info("re-running with threading support enabled")
                 try:
@@ -199,35 +197,6 @@ class BinaryLoader:
                     tback = traceback.format_exc()
                     log.error(tback)
                     exit(1)
-
-    def _rand(self):
-        path = None
-        val = self.rndGen()
-        if self.asFile:
-            tmpfile, path = tempfile.mkstemp(dir=self.rootfs)
-            log.info(f"generated keyfile:{path}")
-            os.write(tmpfile, val.encode())
-            os.close(tmpfile)
-            # self.newArgs[self.secretArgIndex] = path.split("/")[-1]
-        else:
-            if len(self.secretArgIndex) == 1:
-                self.newArgs[self.secretArgIndex[0]] = val
-            else:
-                self.newArgs[self.secretArgIndex[0]] = self.newArgs[
-                    self.secretArgIndex[0]
-                ].replace("@", val)
-        return val, path
-
-    def _fixed(self):
-        if not self.OLDVAL:
-            self.OLDVAL, self.OLDPATH = self.rndArg()
-        return self.OLDVAL, self.OLDPATH
-
-    def rndArg(self):
-        return self._rand()
-
-    def fixedArg(self):
-        return self._fixed()
 
     def validateObjects(self):
         for obname in self.sharedObjects:
@@ -378,17 +347,9 @@ class MemWatcher:
             -1,
         )
 
-    def exec(self, secret):
-        start_time = time.time()
+    def exec(self, secretGenerator):
         args = self.args.copy()
-        try:
-            args[args.index("@")] = secret
-        except ValueError as e:
-            for i in range(len(args)):
-                if "@" in args[i]:
-                    args[i] = args[i].replace("@", secret)
-        import sys
-
+        args[args.index("@")] = secretGenerator()
         sys.stdout.fileno = lambda: False
         sys.stderr.fileno = lambda: False
         self.QLEngine = Qiling(
@@ -399,7 +360,7 @@ class MemWatcher:
             multithread=self.multithread,
             libcache=True,
         )
-        self.currenttrace = MemTrace(secret)
+        self.currenttrace = MemTrace(secretGenerator.getSecret())
         self.QLEngine.hook_mem_read(self._trace_mem_read)
         if self.codeRanges:
             for (s, e) in self.codeRanges:
@@ -513,28 +474,21 @@ class CFWatcher:
                 self.saveNext = False
             self.currenttrace.add(addrs[-1])
 
-    def exec(self, secret):
-        start_time = time.time()
+    def exec(self, secretGenerator):
         args = self.args.copy()
-        try:
-            args[args.index("@")] = secret
-        except ValueError as e:
-            for i in range(len(args)):
-                if "@" in args[i]:
-                    args[i] = args[i].replace("@", secret)
-        import sys
-
+        args[args.index("@")] = secretGenerator()
         sys.stdout.fileno = lambda: False
         sys.stderr.fileno = lambda: False
+
         self.QLEngine = Qiling(
-            [str(self.binPath), *[str(a) for a in args]],
+            [str(self.binPath), *args],
             str(self.rootfs),
             console=False,
             verbose=QL_VERBOSE.DISABLED,
             multithread=self.multithread,
             libcache=True,
         )
-        self.currenttrace = PCTrace(secret)
+        self.currenttrace = PCTrace(secretGenerator.getSecret())
         for (s, e) in self.tracedObjects:
             self.QLEngine.hook_block(self._trace_block, begin=s, end=e)
         if self.deterministic:
@@ -590,7 +544,7 @@ def train(X, Y, leakAddr, keylen, reportDir, threshold, pba):
     return (nleakage.MIScore, leakAddr)
 
 
-## BEGIN RAY UTILS PROGRESS BAR (taken from https://docs.ray.io/en/latest/ray-core/examples/progress_bar.html)
+# BEGIN RAY UTILS PROGRESS BAR (taken from https://docs.ray.io/en/latest/ray-core/examples/progress_bar.html)
 from ray.actor import ActorHandle
 from tqdm.rich import tqdm
 

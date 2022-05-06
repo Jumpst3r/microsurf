@@ -3,12 +3,13 @@ Tests if we correctly control all sources of ranomness on all architectures
 (for deterministic=True execution)
 @author nicolas
 """
-
-import pytest
-from microsurf.pipeline.Stages import BinaryLoader
-from microsurf.utils.generators import getRandomHexKeyFunction
+import tempfile
 from pathlib import Path, PurePath
 
+import pytest
+
+from microsurf.pipeline.Stages import BinaryLoader
+from microsurf.utils.generators import openssl_hex_key_generator
 
 armPath = PurePath(Path(__file__).parent, Path("binaries/random/checkrandom-arm.bin"))
 
@@ -32,13 +33,16 @@ targets = [armPath, x8632Path, x8664Path, mips32Path, riscv64Path]
 
 
 @pytest.mark.parametrize("binPath", targets)
-def test_norandom(capfd, binPath):
+def test_norandom(capfd, binPath, monkeypatch):
+    fd = tempfile.TemporaryFile()
+    monkeypatch.setattr("sys.stdin", fd)
     BinaryLoader(
         binPath,
         ["@"],
         deterministic=True,
-        rndGen=getRandomHexKeyFunction(3),
+        rndGen=openssl_hex_key_generator(3),
         rootfs="/tmp",
     )
     out, _ = capfd.readouterr()
+    fd.close()
     assert "FAIL" not in out
