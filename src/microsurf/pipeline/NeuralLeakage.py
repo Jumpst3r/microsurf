@@ -61,10 +61,8 @@ class NeuralLeakageModel(nn.Module):
             self.X = (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-5)
         self.keylen = keylen
         self.Y = self.binary(Y).reshape(Y.shape[0], self.keylen)
-        self.OriginalY = Y
         self.assetDir = assetDir
         self.HUnits = 50
-        self.LeakageModels = []
         self.leakAddr = leakAddr
 
     def train(self):

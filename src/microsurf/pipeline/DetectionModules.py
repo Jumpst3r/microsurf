@@ -11,6 +11,7 @@ from microsurf.pipeline.tracetools.Trace import (
     MemTraceCollection,
     PCTraceCollection,
 )
+from microsurf.utils.generators import RSAPrivKeyGenerator
 
 
 class Detector:
@@ -63,7 +64,7 @@ class DataLeakDetector(Detector):
                 range(0, n, NB_CORES),
                 description=f"Collecting {n} traces ",
         ):
-            [m.exec.remote(secretGenerator=self.loader.rndGen) for m in memWatchers]
+            [m.exec.remote(secretString=self.loader.rndGen(), asFile=self.loader.rndGen.asFile, secret=self.loader.rndGen.getSecret()) for m in memWatchers]
             futures = [m.getResults.remote() for m in memWatchers]
             res = ray.get(futures)
             resList += [r for r in res]
@@ -117,7 +118,7 @@ class CFLeakDetector(Detector):
                 range(0, n, NB_CORES),
                 description=f"Collecting {n} traces",
         ):
-            [m.exec.remote(secretGenerator=self.loader.rndGen) for m in cfWatchers]
+            [m.exec.remote(secretString=self.loader.rndGen(), asFile=self.loader.rndGen.asFile, secret=self.loader.rndGen.getSecret()) for m in cfWatchers]
             futures = [m.getResults.remote() for m in cfWatchers]
             res = ray.get(futures)
             resList += [r for r in res]

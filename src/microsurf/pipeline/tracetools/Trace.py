@@ -109,7 +109,6 @@ class MemTraceCollection(TraceCollection):
         addrs = set([i for l in addrs for i in l])  # flatten
         for l in track(addrs, description="building dataframe"):
             row = []
-            hits = []
             numhits = 0
             for trace in self.traces:
                 if l not in trace.trace:
@@ -117,14 +116,13 @@ class MemTraceCollection(TraceCollection):
                 entry = [trace.secret]
                 entry += trace.trace[l]
                 numhits = max(numhits, len(trace.trace[l]))
-                hits.append(len(trace.trace[l]))
                 row.append(entry)
             colnames = ["secret"] + [str(i) for i in range(numhits)]
-            f = pd.DataFrame(row, columns=colnames)
-            f = f.set_index("secret")
-            f.drop(f.std()[f.std() == 0].index, axis=1, inplace=True)
+            f = pd.DataFrame(row, columns=colnames, dtype=object)
+            stdev = f.loc[:, f.columns != "secret"].std()
+            f.drop(stdev[stdev == 0].index, axis=1, inplace=True)
             f.dropna(axis=0, inplace=True)
-            if len(f.columns) > 0 and len(f.index) > 1:
+            if len(f.columns) > 1 and len(f.index) > 1:
                 perLeakDict[l] = f
         self.DF = perLeakDict
         for k in self.DF.keys():
@@ -197,6 +195,7 @@ class PCTraceCollection(TraceCollection):
                 self.possibleLeaks.append(k)
         perLeakDict = {}
         for l in self.possibleLeaks:
+            log.info(hex(l))
             row = []
             numhits = 0
             for t in self.traces:
@@ -208,15 +207,15 @@ class PCTraceCollection(TraceCollection):
                 numhits = max(numhits, len(entry) - 1)
                 row.append(entry)
             colnames = ["secret"] + [str(i) for i in range(numhits)]
-            f = pd.DataFrame(row, columns=colnames)
-            f = f.set_index("secret")
+            f = pd.DataFrame(row, columns=colnames, dtype=object)
             if MARK[l] == "SECRET DEP C1":
-                f.drop(f.std()[f.std() == 0].index, axis=1, inplace=True)
+                stdev = f.loc[:, f.columns != "secret"].std()
+                f.drop(stdev[stdev == 0].index, axis=1, inplace=True)
             else:
                 # in the secret dependent hit count case, record the number of hits per secret.
                 f = f.count(axis=1).to_frame()
             f.dropna(axis=0, inplace=True)
-            if len(f.columns) > 0 and len(f.index) > 1:
+            if len(f.columns) > 1 and len(f.index) > 1:
                 perLeakDict[l] = f
         self.DF = perLeakDict
         self.possibleLeaks = self.DF.keys()

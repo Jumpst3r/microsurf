@@ -15,6 +15,8 @@ logging.basicConfig(
     handlers=[
         RichHandler(
             rich_tracebacks=True,
+            show_path=False,
+            show_level=False
         )
     ],
 )

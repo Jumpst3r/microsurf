@@ -28,6 +28,7 @@ from unicorn.unicorn_const import UC_MEM_READ
 
 from .NeuralLeakage import NeuralLeakageModel
 from .tracetools.Trace import MemTrace, PCTrace, TraceCollection
+from ..utils.generators import SecretGenerator
 from ..utils.hijack import (
     const_clock_gettime,
     const_clock_gettimeofday,
@@ -64,7 +65,7 @@ class BinaryLoader:
             path: Path,
             args: List[str],
             rootfs: str,
-            rndGen: Callable,
+            rndGen: SecretGenerator,
             sharedObjects: List[str] = [],
             deterministic: bool = False,
             resultDir: str = "results",
@@ -151,6 +152,8 @@ class BinaryLoader:
             )
             self.Cs = self.QLEngine.arch.disassembler
             self.fixSyscalls()
+            if self.rndGen.asFile:
+                self.QLEngine.add_fs_mapper(val, val)
         except FileNotFoundError as e:
             if ".so" in str(e):
                 log.error(
@@ -185,6 +188,8 @@ class BinaryLoader:
                         multithread=self.multithreaded,
                     )
                     self.fixSyscalls()
+                    if self.rndGen.asFile:
+                        self.QLEngine.add_fs_mapper(val, val)
                     starttime = datetime.now()
                     self.exec()
                     endtime = datetime.now()
@@ -216,7 +221,6 @@ class BinaryLoader:
             labelIgnored = True
             if not self.sharedObjects and self.binPath.name in label:
                 self.executableCode.append((s, e))
-                log.info(f"Tracing code: {hex(s)}-{hex(e)}-{perm}-{label}")
             for obname in self.sharedObjects:
                 if obname in label:
                     labelIgnored = False
@@ -347,9 +351,9 @@ class MemWatcher:
             -1,
         )
 
-    def exec(self, secretGenerator):
+    def exec(self, secretString, asFile, secret):
         args = self.args.copy()
-        args[args.index("@")] = secretGenerator()
+        args[args.index("@")] = secretString
         sys.stdout.fileno = lambda: False
         sys.stderr.fileno = lambda: False
         self.QLEngine = Qiling(
@@ -360,7 +364,9 @@ class MemWatcher:
             multithread=self.multithread,
             libcache=True,
         )
-        self.currenttrace = MemTrace(secretGenerator.getSecret())
+        if asFile:
+            self.QLEngine.add_fs_mapper(secretString, secretString)
+        self.currenttrace = MemTrace(secret)
         self.QLEngine.hook_mem_read(self._trace_mem_read)
         if self.codeRanges:
             for (s, e) in self.codeRanges:
@@ -474,9 +480,9 @@ class CFWatcher:
                 self.saveNext = False
             self.currenttrace.add(addrs[-1])
 
-    def exec(self, secretGenerator):
+    def exec(self, secretString, asFile, secret):
         args = self.args.copy()
-        args[args.index("@")] = secretGenerator()
+        args[args.index("@")] = secretString
         sys.stdout.fileno = lambda: False
         sys.stderr.fileno = lambda: False
 
@@ -488,7 +494,9 @@ class CFWatcher:
             multithread=self.multithread,
             libcache=True,
         )
-        self.currenttrace = PCTrace(secretGenerator.getSecret())
+        if asFile:
+            self.QLEngine.add_fs_mapper(secretString, secretString)
+        self.currenttrace = PCTrace(secret)
         for (s, e) in self.tracedObjects:
             self.QLEngine.hook_block(self._trace_block, begin=s, end=e)
         if self.deterministic:
@@ -623,7 +631,7 @@ class LeakageClassification:
             futures.append(
                 train.remote(
                     v.loc[:, v.columns != "hits"].values,
-                    v.index.to_numpy(),
+                    v.loc[:, "secret"].to_numpy(),
                     k,
                     self.KEYLEN,
                     self.loader.resultDir,
