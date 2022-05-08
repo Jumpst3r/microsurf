@@ -14,16 +14,9 @@ int otherFct(int val){
 }
 
 int main(int argc, char **argv){
-  uint64_t secret = strtoul(argv[1], NULL, 16);
-  int* T = malloc(1000 * sizeof(int));
-  // some non secret dep. accesses:
+  int secret = strtoul(argv[1], NULL, 16);
+  int* T = malloc(256 * sizeof(int));
   int val = 0;
-  for(int i = 0; i < 10; i++){
-    val += T[i];
-    // one secret.dep mem access
-    if (i == 3){
-        val += T[secret];
-    }
-  }
+  val += T[secret];
   return 0;
 }

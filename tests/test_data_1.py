@@ -36,14 +36,12 @@ def test_analyze_secret_simple(binPath, monkeypatch):
     with open(resFile) as f:
         data = json.load(f)
         tAddr = data[binPath.name]
-    bl = BinaryLoader(
-        path=binPath,
-        deterministic=True,
-        rootfs="/tmp",
-        rndGen=openssl_hex_key_generator(8),
-        args=["@"],
-    )
-    scd = SCDetector(modules=[DataLeakDetector(binaryLoader=bl)])
+    args = ['@']  # single secret arg
+
+    binLoader = BinaryLoader(path=binPath, args=args, rootfs='/tmp',
+                             rndGen=openssl_hex_key_generator(8),
+                             deterministic=False)
+    scd = SCDetector(modules=[DataLeakDetector(binaryLoader=binLoader)])
     scd.exec()
     df = scd.DF
     tAddr = [int(a, 16) for a in tAddr]

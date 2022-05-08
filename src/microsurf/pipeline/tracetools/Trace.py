@@ -107,7 +107,7 @@ class MemTraceCollection(TraceCollection):
         perLeakDict = {}
         addrs = [list(a.trace.keys()) for a in self.traces]
         addrs = set([i for l in addrs for i in l])  # flatten
-        for l in track(addrs, description="building dataframe"):
+        for l in track(addrs, description="analyzing memory read traces"):
             row = []
             numhits = 0
             for trace in self.traces:
@@ -119,8 +119,7 @@ class MemTraceCollection(TraceCollection):
                 row.append(entry)
             colnames = ["secret"] + [str(i) for i in range(numhits)]
             f = pd.DataFrame(row, columns=colnames, dtype=object)
-            stdev = f.loc[:, f.columns != "secret"].std()
-            f.drop(stdev[stdev == 0].index, axis=1, inplace=True)
+            f.drop_duplicates(subset=[str(i) for i in range(numhits)], keep=False, inplace=True)
             f.dropna(axis=0, inplace=True)
             if len(f.columns) > 1 and len(f.index) > 1:
                 perLeakDict[l] = f
@@ -194,8 +193,7 @@ class PCTraceCollection(TraceCollection):
             for k in MARK:
                 self.possibleLeaks.append(k)
         perLeakDict = {}
-        for l in self.possibleLeaks:
-            log.info(hex(l))
+        for l in track(self.possibleLeaks, description="analyzing PC traces"):
             row = []
             numhits = 0
             for t in self.traces:
@@ -208,10 +206,7 @@ class PCTraceCollection(TraceCollection):
                 row.append(entry)
             colnames = ["secret"] + [str(i) for i in range(numhits)]
             f = pd.DataFrame(row, columns=colnames, dtype=object)
-            if MARK[l] == "SECRET DEP C1":
-                stdev = f.loc[:, f.columns != "secret"].std()
-                f.drop(stdev[stdev == 0].index, axis=1, inplace=True)
-            else:
+            if MARK[l] != "SECRET DEP C1":
                 # in the secret dependent hit count case, record the number of hits per secret.
                 f = f.count(axis=1).to_frame()
             f.dropna(axis=0, inplace=True)

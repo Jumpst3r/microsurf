@@ -8,6 +8,23 @@ warnings.filterwarnings("ignore")
 
 LOGGING_LEVEL = logging.INFO
 
+banner = '''
+
+                   &&                   
+                    &&&      &&&&&      
+                      /&&&&&& &&&&      
+                      &&&&&&&&&&            Microsurf:  The Cross-Architecture Side Channel Detection Framework              
+                   &&&&&&&&&&  (&&&     
+                   &&&&&&&        &&&&      v.0.0-dev
+                  &&&&  &&&&&           
+             &&&&&&&      &&&           
+         /&&&&,          *&&&           
+               ,.        &&&*           
+                  ..     &&&            
+                     ..  &&.    
+                         ..                                                    
+        '''
+
 logging.basicConfig(
     level="INFO",
     format="[%(name)s]  %(message)s",

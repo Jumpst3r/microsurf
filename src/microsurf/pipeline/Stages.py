@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import tempfile
@@ -86,6 +87,8 @@ class BinaryLoader:
         self.executableCode = []
         self.uuid = uuid.uuid4()
         self.resultDir += f"/{self.uuid}"
+        from microsurf.utils.logger import banner
+        console.print(banner)
         os.makedirs(self.resultDir + "/" + "assets", exist_ok=True)
         os.makedirs(self.resultDir + "/" + "traces", exist_ok=True)
 
@@ -146,8 +149,8 @@ class BinaryLoader:
                 [str(self.binPath), *self.newArgs],
                 str(self.rootfs),
                 log_override=getQilingLogger(),
-                verbose=QL_VERBOSE.DEFAULT,
-                console=True,
+                verbose=QL_VERBOSE.DISABLED,
+                console=False,
                 multithread=self.multithreaded,
             )
             self.Cs = self.QLEngine.arch.disassembler
@@ -172,7 +175,6 @@ class BinaryLoader:
         except Exception as e:
             log.error(f"Emulation dry run failed: {str(e)}")
             tback = traceback.format_exc()
-            log.error(tback)
             sys.stdout.fileno = lambda: False
             sys.stderr.fileno = lambda: False
             if "cur_thread" in tback and "spawn" not in str(e):
@@ -183,8 +185,8 @@ class BinaryLoader:
                         [str(self.binPath), *self.newArgs],
                         str(self.rootfs),
                         log_override=getQilingLogger(),
-                        verbose=QL_VERBOSE.DEFAULT,
-                        console=True,
+                        verbose=QL_VERBOSE.DISABLED,
+                        console=False,
                         multithread=self.multithreaded,
                     )
                     self.fixSyscalls()
@@ -199,11 +201,18 @@ class BinaryLoader:
                     )
                 except Exception as e:
                     log.error(f"Emulation dry run failed: {str(e)}")
-                    tback = traceback.format_exc()
-                    log.error(tback)
+                    if log.level == logging.DEBUG:
+                        tback = traceback.format_exc()
+                        log.error(tback)
                     exit(1)
+            else:
+                log.error(tback)
+                exit(1)
 
     def validateObjects(self):
+        log.info("mappings:")
+        for s, e, perm, label, c in self.mappings:
+            log.info(f"{hex(s)}-{hex(e)} {perm} {label} {c if c is not None else ''}")
         for obname in self.sharedObjects:
             base = self.getlibbase(obname)
             if base != -1:
@@ -213,11 +222,9 @@ class BinaryLoader:
                     "you provided a shared object name which was not found in memory."
                 )
                 exit(-1)
-        log.info("executable segments:")
         for s, e, perm, label, c in self.mappings:
             if "x" not in perm:
                 continue
-            log.info(f"{hex(s)}-{hex(e)} {perm} {label}")
             labelIgnored = True
             if not self.sharedObjects and self.binPath.name in label:
                 self.executableCode.append((s, e))
@@ -359,15 +366,15 @@ class MemWatcher:
         self.QLEngine = Qiling(
             [str(self.binPath), *[str(a) for a in args]],
             str(self.rootfs),
-            console=False,
+            console=True,
             verbose=QL_VERBOSE.DISABLED,
             multithread=self.multithread,
-            libcache=True,
         )
         if asFile:
             self.QLEngine.add_fs_mapper(secretString, secretString)
         self.currenttrace = MemTrace(secret)
         self.QLEngine.hook_mem_read(self._trace_mem_read)
+
         if self.codeRanges:
             for (s, e) in self.codeRanges:
                 self.QLEngine.hook_code(self._hook_code, begin=s, end=e)
@@ -458,7 +465,7 @@ class CFWatcher:
         self.saveNext = False
 
     def _hook_code(self, ql: Qiling, address: int, size: int):
-        pass
+        a = ql.arch.regs.arch_pc
 
     def _trace_block(self, ql, address, size):
         buf = ql.mem.read(address, size)
@@ -492,11 +499,11 @@ class CFWatcher:
             console=False,
             verbose=QL_VERBOSE.DISABLED,
             multithread=self.multithread,
-            libcache=True,
         )
         if asFile:
             self.QLEngine.add_fs_mapper(secretString, secretString)
         self.currenttrace = PCTrace(secret)
+        self.QLEngine.hook_code(self._hook_code)
         for (s, e) in self.tracedObjects:
             self.QLEngine.hook_block(self._trace_block, begin=s, end=e)
         if self.deterministic:

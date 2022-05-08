@@ -10,6 +10,7 @@ binaries/secret-dep-cf-1/readme.md
 @author nicolas
 """
 import json
+import sys
 import tempfile
 from pathlib import Path, PurePath
 
@@ -28,29 +29,34 @@ targets = [
     for arch in ARCH_SUFIX
 ]
 
+rootfs = [PurePath(Path(__file__).parent, Path(f"root-arm64"))]
 
 @pytest.mark.parametrize("binPath", targets)
-def test_analyze_secret_simple(binPath, monkeypatch):
-    fd = tempfile.TemporaryFile()
-    monkeypatch.setattr("sys.stdin", fd)
+@pytest.mark.parametrize("rootfsPath", rootfs)
+def test_analyze_secret_simple(binPath, rootfsPath, monkeypatch):
+    fp = tempfile.TemporaryFile()
+    monkeypatch.setattr("sys.stdin", fp)
     with open(resFile) as f:
         data = json.load(f)
         tAddr = data[binPath.name]
-    bl = BinaryLoader(
-        path=binPath,
-        deterministic=True,
-        rootfs="/tmp",
-        rndGen=openssl_hex_key_generator(8),
-        args=["@"],
-    )
-    scd = SCDetector(modules=[CFLeakDetector(binaryLoader=bl)])
+    args = ['@']  # single secret arg
+
+    binLoader = BinaryLoader(path=binPath, args=args, rootfs='/tmp',
+                             rndGen=openssl_hex_key_generator(16),
+                             deterministic=False)
+
+    scd = SCDetector(modules=[
+        # DataLeakDetector(binaryLoader=binLoader),
+        CFLeakDetector(binaryLoader=binLoader)
+    ])
+
     scd.exec()
     df = scd.DF
     tAddr = [int(a, 16) for a in tAddr]
     leaking_symbols1 = {"main", "____strtoul_l_internal"}
     leaking_symbols2 = {"main", "____strtoull_l_internal"}
     observed = set(df["Symbol Name"].to_list())
-    fd.close()
+
     assert leaking_symbols1 == observed or leaking_symbols2 == observed
 
     for a in tAddr:

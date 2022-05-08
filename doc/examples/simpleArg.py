@@ -8,22 +8,22 @@ detects any secret dependent memory access made with the provided argument
 """
 
 from microsurf.microsurf import SCDetector
-from microsurf.pipeline.DetectionModules import DataLeakDetector
+from microsurf.pipeline.DetectionModules import DataLeakDetector, CFLeakDetector
 from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.utils.generators import openssl_hex_key_generator
 
 if __name__ == "__main__":
-    binpath = "/home/nicolas/Documents/msc-thesis-work/tests/binaries/secret-dep-mem-1/secret-dep-mem-1-x86-32.bin"
+    binpath = "/home/nicolas/Documents/msc-thesis-work/tests/binaries/secret-dep-mem-1/secret-dep-mem-1-arm.bin"
     # binpath = "/home/nicolas/Documents/msc-thesis-work/tests/binaries/secret0/secret-x86-32.bin"
 
     args = ['@']  # single secret arg
 
-    binLoader = BinaryLoader(path=binpath, args=args, rootfs='/tmp', rndGen=openssl_hex_key_generator(8),
+    binLoader = BinaryLoader(path=binpath, args=args, rootfs='/tmp', rndGen=openssl_hex_key_generator(10),
                              deterministic=False)
 
     scd = SCDetector(modules=[
         DataLeakDetector(binaryLoader=binLoader),
-        # CFLeakDetector(binaryLoader=binLoader)
-    ], addrList=[])
+        #CFLeakDetector(binaryLoader=binLoader)
+    ])
 
     scd.exec()

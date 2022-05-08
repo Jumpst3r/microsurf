@@ -48,14 +48,9 @@ class SCDetector:
         self.addrList = addrList
         if addrList is None:
             self.quickscan = True
-            log.info("mode: Quickscan (addrList=None).")
         elif len(addrList) == 0:
-            log.info("mode: Full scan (addrList=[])")
             self.quickscan = False
         elif len(addrList) > 0:
-            log.info(
-                f"mode: Selective scan (addrList={[hex(k) for k in self.addrList]})"
-            )
             self.quickscan = False
 
         if not modules:
@@ -72,15 +67,15 @@ class SCDetector:
         """
         self.starttime = time.time()
         for module in self.modules:
-            console.rule(f"module {str(module)}")
+            console.log(f"module {str(module)}")
             # first capture a small number of traces to identify possible leak locations.
-            collection, asm = module.recordTraces(5)
+            collection, asm = module.recordTraces(10)
             if not collection.possibleLeaks:
                 log.info(f"module {str(module)} returned no possible leaks")
                 continue
             if "mem" in str(module):
                 # for performance reasons we need to get the assembly on a separate run for the memwatcher
-                _, asm = module.recordTraces(1, pcList=collection.possibleLeaks)
+                _, asm = module.recordTraces(1, pcList=collection.possibleLeaks, getAssembly=True)
             self.results[str(module)] = (collection.results, asm)
             if self.addrList:
                 # check if the provided addresses were indeed found, if not, raise an error
@@ -109,7 +104,7 @@ class SCDetector:
             endtime = time.time()
             runtime = time.strftime("%H:%M:%S", time.gmtime(endtime - self.starttime))
             log.info(f"total runtime: {runtime}")
-            exit(0)
+            return
 
         if self.results:
             log.info("Generating report - this might take a while.")
@@ -193,13 +188,16 @@ class SCDetector:
                                     "Detection Module": str(module),
                                 }
                             )
+        from rich import print as pprint
         endtime = time.time()
         self.loader.runtime = time.strftime(
             "%H:%M:%S", time.gmtime(endtime - self.starttime)
         )
         log.info(f"total runtime: {self.loader.runtime}")
         self.DF = pd.DataFrame.from_dict(self.MDresults)
-
+        console.rule('Results', style="magenta")
+        pprint(self.DF.loc[:,['Runtime Addr', 'offset', 'Symbol Name', 'asm' ,'Detection Module']])
+        console.rule(style="magenta")
     def _generateReport(self):
         if "PYTEST_CURRENT_TEST" in os.environ:
             log.info("Testing, no report generated.")

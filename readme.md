@@ -1,7 +1,7 @@
-<img align="center" width="700" height="230" src="doc/figures/logo.png" alt="application project app icon">
+<img align="left" width="700" height="230" src="doc/figures/logo.png" alt="application project app icon" style="zoom: 67%;" >
 
 
-[![tests](https://github.com/Jumpst3r/msc-thesis-work/actions/workflows/pytest.yml/badge.svg?branch=main)](https://github.com/Jumpst3r/msc-thesis-work/actions/workflows/pytest.yml)
+[![Integration & Unit Tests](https://github.com/Jumpst3r/msc-thesis-work/actions/workflows/pytest.yml/badge.svg)](https://github.com/Jumpst3r/msc-thesis-work/actions/workflows/pytest.yml)
 
 
 ***Microsurf*** is a framework for finding side channel vulnerabilities in compiled binaries. It features:
