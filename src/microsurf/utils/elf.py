@@ -1,5 +1,6 @@
 import bisect
 import collections
+from functools import lru_cache
 from typing import List
 
 import magic
@@ -8,6 +9,8 @@ from elftools.elf.elffile import ELFFile, SymbolTableSection
 from ..utils.logger import getLogger
 
 ELFSYBOLS = {}
+DWARF = {}
+CODE = {}
 
 log = getLogger()
 
@@ -48,15 +51,33 @@ def getfnname(file: str, loc: int):
     return ELFSYBOLS[file][key]
 
 
-# PRIVATE
+@lru_cache(maxsize=None)
+def getEntries(lineprog):
+    return lineprog.get_entries()
+
+
+CU_CACHE = {}
+
+
+# modified snippet from official https://github.com/eliben/pyelftools repo example
+# https://github.com/eliben/pyelftools/blob/master/examples/dwarf_decode_address.py
 def _decode_file_line(dwarfinfo, address):
+    global CU_CACHE
     # Go over all the line programs in the DWARF information, looking for
     # one that describes the given address.
     for CU in dwarfinfo.iter_CUs():
         # First, look at line programs to find the file/line for the address
-        lineprog = dwarfinfo.line_program_for_CU(CU)
+        if CU in CU_CACHE:
+            lineprog = CU_CACHE[CU]
+        else:
+            try:
+                lineprog = dwarfinfo.line_program_for_CU(CU)
+            except KeyError:
+                log.warning("Could not retrieve debug symbols ! Only dwarf <= v4 is supported")
+                return None, None
+            CU_CACHE[CU] = lineprog
         prevstate = None
-        for entry in lineprog.get_entries():
+        for entry in getEntries(lineprog):
             # We're interested in those entries where a new state is assigned
             if entry.state is None:
                 continue
@@ -78,6 +99,9 @@ def _decode_file_line(dwarfinfo, address):
     return None, None
 
 
+# -- END SNIPPET
+
+
 def getCodeSnippet(file: str, loc: int) -> List[str]:
     """Returns a list of source code lines, 3 before
     and 3 after the given offset for a given ELF file.
@@ -93,15 +117,29 @@ def getCodeSnippet(file: str, loc: int) -> List[str]:
     Raises:
         FileNotFoundError: If the given ELF file does not exist
     """
-    with open(file, "rb") as f:
-        elf = ELFFile(f)
-        path, ln = _decode_file_line(elf.get_dwarf_info(), loc)
-        log.info(f"src path: {path}")
+    global CODE
+    global DWARF
+    if file in DWARF:
+        dwinfo = DWARF[file]
+    else:
         try:
-            with open(path, "r") as f2:
-                lines = f2.readlines()
-            # lines[ln - 1] = "!!! " + lines[ln - 1].strip('\n') + " !!!\n"
-            return lines[ln - 5 : ln + 5], path, ln
+            f = open(file, "rb")
+            elf = ELFFile(f)
+            DWARF[file] = elf.get_dwarf_info()
+            dwinfo = DWARF[file]
         except Exception as e:
             log.debug(f"source lines not available for PC {hex(loc)}")
             return [], None, None
+    path, ln = _decode_file_line(dwinfo, loc)
+    if path in CODE:
+        lines = CODE[path]
+    else:
+        try:
+            with open(path, "r") as f2:
+                lines = f2.readlines()
+                CODE[path] = lines
+            # lines[ln - 1] = "!!! " + lines[ln - 1].strip('\n') + " !!!\n"
+        except Exception as e:
+            log.debug(f"source lines not available for PC {hex(loc)}")
+            return [], None, None
+    return lines[ln - 5: ln + 5], path, ln

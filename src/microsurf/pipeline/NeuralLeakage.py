@@ -61,10 +61,8 @@ class NeuralLeakageModel(nn.Module):
             self.X = (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-5)
         self.keylen = keylen
         self.Y = self.binary(Y).reshape(Y.shape[0], self.keylen)
-        self.OriginalY = Y
         self.assetDir = assetDir
         self.HUnits = 50
-        self.LeakageModels = []
         self.leakAddr = leakAddr
 
     def train(self):
@@ -108,7 +106,9 @@ class NeuralLeakageModel(nn.Module):
                     loss_val = -mest_val.forward(lpred)
                     Y_val.append(loss_val.detach().numpy())
                     X_val.append(e)
-                    log.debug(f"pc-{self.leakAddr} idx-{idx}, e-{e}, score-{loss_val}")
+                    log.debug(
+                        f"pc-{self.leakAddr} idx-{idx}/{len(self.X.T)}, e-{e}/200"
+                    )
                     if len(Y_val) > 10:
                         new_val_mean = np.mean(Y_val[-5:])
                         old_val_mean = np.mean(Y_val[-10:-5])
@@ -135,21 +135,22 @@ class NeuralLeakageModel(nn.Module):
         if self.MIScore >= self.threshold:
             sns.set(font_scale=0.3)
             plt.tight_layout()
-            f, ax = plt.subplots()
             try:
                 dependencies = np.stack(heatmaps, axis=0).reshape(
                     -1, heatmaps[0].shape[1]
                 )
-            except Exception as e:
+            except Exception:
                 return
+            f, ax = plt.subplots(figsize=(8, 1.2 * len(heatmaps)))
             self.MIScores = np.array(self.MIScores[: len(heatmaps)])
             # add a column to the far right to include the MI score in the heatmap
             dependencies = np.c_[dependencies, self.MIScores]
-            dependencies[dependencies[:,-1] < self.threshold] = 0
+            dependencies[dependencies[:, -1] < self.threshold] = 0
             deps = dependencies.copy()
             mi = dependencies.copy()
             deps.T[-1] = np.nan
             mi.T[:-1] = np.nan
+            # plt.figure(figsize=(15, 2))
             ax = sns.heatmap(
                 deps,
                 ax=ax,
@@ -161,6 +162,7 @@ class NeuralLeakageModel(nn.Module):
                     "shrink": 0.5,
                 },
                 cmap="Blues",
+                square=True,
             )
             sns.heatmap(
                 mi,
@@ -174,13 +176,14 @@ class NeuralLeakageModel(nn.Module):
                     "shrink": 0.5,
                 },
                 xticklabels=[
-                    (self.keylen - i) if i % 2 == 0 else " " for i in range(self.keylen)
-                ]
-                + ["MI"],
+                                (self.keylen - i) if i % 2 == 0 else " " for i in range(self.keylen)
+                            ]
+                            + ["MI"],
                 yticklabels=[
                     f"inv-{i}" if i % 2 else " " for i in range(self.MIScores.shape[0])
                 ],  # MSB to LSB
                 linewidths=0.5,
+                square=True,
             )
             ax.xaxis.set_label_position("top")
             f.savefig(

@@ -12,8 +12,11 @@ __author__ = "Nicolas Dutly"
 __version__ = "0.0.0a"
 
 import glob
+import os
 import time
-from typing import List
+from typing import List, Union
+
+import pandas as pd
 
 from .pipeline.DetectionModules import Detector
 from .pipeline.Stages import LeakageClassification
@@ -26,47 +29,95 @@ log = getLogger()
 
 
 class SCDetector:
-    def __init__(self, modules: List[Detector], itercount=1000):
+    """
+    The SCDetector class is used to perform side channel detection analysis.
+
+    Args:
+        modules: List of detection modules to run.
+        itercount: Number of traces per module to collect when estimating key bit dependencies.
+        addrList: List of addresses for which to perform detailed key bit dependency estimates. If
+            None, no estimates will be performed. If an empty list is passed, estimates will be generated for
+            all leaks. To selectively perform estimates on given leaks, pass a list of runtime addresses as integers.
+            The runtime addresses can be taken from the generated reports (Run first with addrList=None and then
+            run a second time on addresses of interest as found in the report.)
+    """
+
+    def __init__(self, modules: List[Detector], itercount: int = 1000, addrList: Union[None, List[int]] = None):
         self.modules = modules
         self.ITER_COUNT = itercount
+        self.addrList = addrList
+        if addrList is None:
+            self.quickscan = True
+        elif len(addrList) == 0:
+            self.quickscan = False
+        elif len(addrList) > 0:
+            self.quickscan = False
+
         if not modules:
             log.error("module list must contain at least one module")
-            exit(1)
+            exit(0)
         self.loader = modules[0].loader
         self.results = {}
         self.starttime = None
         self.MDresults = []
 
     def exec(self):
+        """
+        Perform the side channel analysis using the provided modules, saving the results to 'results'.
+        """
         self.starttime = time.time()
-        # first capture a small number of traces to identify possible leak locations.
         for module in self.modules:
-            log.info(f"module {str(module)}")
-            # Find possible leaks
-            collection, _ = module.recordTraces(5)
-            # Collect one trace to get assembly code
-            _, asm = module.recordTraces(
-                1, pcList=collection.possibleLeaks, getAssembly=True
-            )
-            rndTraces, _ = module.recordTraces(
-                self.ITER_COUNT, pcList=collection.possibleLeaks
-            )
-            lc = LeakageClassification(rndTraces, module.loader, module.miThreshold)
-            self.KEYLEN = lc.KEYLEN
-            lc.analyze()
-            self.results[str(module)] = (lc.results, asm)
+            console.log(f"module {str(module)}")
+            # first capture a small number of traces to identify possible leak locations.
+            collection, asm = module.recordTraces(10)
+            if not collection.possibleLeaks:
+                log.info(f"module {str(module)} returned no possible leaks")
+                continue
+            if "mem" in str(module):
+                # for performance reasons we need to get the assembly on a separate run for the memwatcher
+                _, asm = module.recordTraces(1, pcList=collection.possibleLeaks, getAssembly=True)
+            self.results[str(module)] = (collection.results, asm)
+            if self.addrList:
+                # check if the provided addresses were indeed found, if not, raise an error
+                for addr in self.addrList[:]:
+                    if hex(addr) not in collection.results:
+                        log.warning(
+                            f"provided address {hex(addr)} was not detected as a possible leak - retry or "
+                            f"check address. Ignoring for now."
+                        )
+
+            log.info(f"Identified {len(collection.results)} possible leaks")
+            # If requested, analyze the leaks for MI estimates and key bit dependencies
+            if not self.quickscan:
+                log.info(
+                    f"performing in-depth analysis for {len(self.addrList) if self.addrList else len(collection.results)}/{len(collection.results)} leaks"
+                )
+                rndTraces, _ = module.recordTraces(
+                    self.ITER_COUNT,
+                    pcList=self.addrList if self.addrList else collection.possibleLeaks,
+                )
+                lc = LeakageClassification(rndTraces, module.loader, module.miThreshold)
+                self.KEYLEN = lc.KEYLEN
+                lc.analyze()
+                self.results[str(module)] = (lc.results, asm)
+        if not self.results:
+            endtime = time.time()
+            runtime = time.strftime("%H:%M:%S", time.gmtime(endtime - self.starttime))
+            log.info(f"total runtime: {runtime}")
+            return
 
         if self.results:
+            log.info("Generating report - this might take a while.")
             self._formatResults()
-            self.generateReport()
+            self._generateReport()
 
     def _formatResults(self):
         for (
-            lbound,
-            ubound,
-            _,
-            label,
-            container,
+                lbound,
+                ubound,
+                _,
+                label,
+                container,
         ) in self.loader.mappings:
             for (module, v) in self.results.items():
                 (dic, asm) = v
@@ -93,23 +144,22 @@ class SCDetector:
                                 else getCodeSnippet(path, k)
                             )
 
-                            mival, nhits, samples = dic[hex(k)]
-                            console.print(
-                                f'{offset:#08x} - [MI = {mival:.2f}] \t at {symbname if symbname else "??":<30} {label}'
-                            )
-                            asmsnippet = (
-                                f"[{hex(offset)}]" + asm[leakAddr].split("|")[1]
-                            )
+                            mival = dic[hex(k)]
+                            try:
+                                asmsnippet = (
+                                        f"[{hex(offset)}]" + asm[leakAddr].split("|")[1]
+                                )
+                            except KeyError:
+                                asmsnippet = "n/aj"
+                            # log.info(f'runtime Addr: {hex(k)}, offset: {offset:#08x}, symbol name: {symbname}')
                             self.MDresults.append(
                                 {
-                                    "runtime Addr": k,
+                                    "Runtime Addr": hex(k),
                                     "offset": f"{offset:#08x}",
                                     "MI score": mival,
                                     "Leakage model": "neural-learnt",
                                     "Symbol Name": f'{symbname if symbname else "??":}',
                                     "Object Name": f'{path.split("/")[-1]}',
-                                    "Num of hits per trace": nhits,
-                                    "Number of traces in which leak was observed": samples,
                                     "src": source,
                                     "asm": asmsnippet,
                                     "Source Path": f"{srcpath}:{ln}",
@@ -119,45 +169,49 @@ class SCDetector:
                         else:
                             symbname = getfnname(path, k)
                             source, srcpath, ln = getCodeSnippet(path, k)
-                            mival, nhits, samples = dic[hex(k)]
-                            console.print(
-                                f'{k:#08x} -[MI = {mival:.2f}]  \t at {symbname if symbname else "??":<30} {label}'
-                            )
-                            asmsnippet = f"[{hex(k)}]" + asm[leakAddr].split("|")[1]
+                            mival = dic[hex(k)]
+                            try:
+                                asmsnippet = f"[{hex(k)}]" + asm[leakAddr].split("|")[1]
+                            except KeyError:
+                                asmsnippet = "n/a"
                             self.MDresults.append(
                                 {
-                                    "runtime Addr": k,
+                                    "Runtime Addr": hex(k),
                                     "offset": f"{k:#08x}",
                                     "MI score": mival,
                                     "Leakage model": "neural-learnt",
                                     "Symbol Name": f'{symbname if symbname else "??":}',
                                     "Object Name": f'{path.split("/")[-1]}',
-                                    "Num of hits per trace": nhits,
-                                    "Number of traces in which leak was observed": samples,
                                     "src": source,
                                     "asm": asmsnippet,
                                     "Source Path": f"{srcpath}:{ln}",
                                     "Detection Module": str(module),
                                 }
                             )
+        from rich import print as pprint
         endtime = time.time()
         self.loader.runtime = time.strftime(
             "%H:%M:%S", time.gmtime(endtime - self.starttime)
         )
         log.info(f"total runtime: {self.loader.runtime}")
-
-    def generateReport(self):
+        self.DF = pd.DataFrame.from_dict(self.MDresults)
+        console.rule('Results', style="magenta")
+        pprint(self.DF.loc[:,['Runtime Addr', 'offset', 'Symbol Name', 'asm' ,'Detection Module']])
+        console.rule(style="magenta")
+    def _generateReport(self):
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            log.info("Testing, no report generated.")
+            return
         if not self.MDresults:
             log.info("no results - no file.")
             return
         else:
-            import pandas as pd
-
             rg = ReportGenerator(
-                results=pd.DataFrame.from_dict(self.MDresults),
+                results=self.DF,
                 loader=self.loader,
-                keylen=self.KEYLEN,
                 itercount=self.ITER_COUNT,
                 threshold=min([m.miThreshold for m in self.modules]),
+                quickscan=self.quickscan,
+                addrList=self.addrList,
             )
         rg.saveMD()

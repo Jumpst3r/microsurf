@@ -1,7 +1,9 @@
+import logging
 import os
+import sys
 import tempfile
-import time
 import traceback
+import uuid
 from asyncio import Event
 from datetime import datetime
 from functools import lru_cache
@@ -10,13 +12,24 @@ from typing import Dict, List, Tuple, Callable
 
 import magic
 import ray
-from capstone import CS_ARCH_ARM, CS_ARCH_X86, CS_MODE_32, CS_MODE_64
+from capstone import (
+    CS_ARCH_ARM,
+    CS_ARCH_X86,
+    CS_MODE_32,
+    CS_MODE_64,
+    Cs,
+    CS_ARCH_MIPS,
+    CS_ARCH_RISCV,
+    CS_MODE_ARM,
+    CS_MODE_RISCV64,
+)
 from qiling import Qiling
 from qiling.const import QL_VERBOSE
 from unicorn.unicorn_const import UC_MEM_READ
 
 from .NeuralLeakage import NeuralLeakageModel
 from .tracetools.Trace import MemTrace, PCTrace, TraceCollection
+from ..utils.generators import SecretGenerator
 from ..utils.hijack import (
     const_clock_gettime,
     const_clock_gettimeofday,
@@ -34,15 +47,29 @@ log = getLogger()
 
 
 class BinaryLoader:
+    """
+    The BinaryLoader class is used to tell the framwork where to located the target binary, shared libraries and to
+    specify emulation and general execution settings.
+
+    Args:
+        path: The path to the target executable (ELF-linux format, ARM/MIPS/X86/RISCV).
+        args: List of arguments to pass, '@' may be used to mark one argument as secret.
+        rootfs: The emulation root directory. Has to contain expected shared objects for dynamic binaries.
+        rndGen: The function which will be called to generate secret inputs.
+        sharedObjects: List of shared objects to trace, defaults to tracing everything.
+        deterministic: Force deterministic execution.
+        resultDir: Path to the results directory.
+    """
+
     def __init__(
-        self,
-        path: str,
-        args: List[str],
-        rootfs: str,
-        rndGen: Callable,
-        sharedObjects=[],
-        deterministic=False,
-        resultDir="results",
+            self,
+            path: Path,
+            args: List[str],
+            rootfs: str,
+            rndGen: SecretGenerator,
+            sharedObjects: List[str] = [],
+            deterministic: bool = False,
+            resultDir: str = "results",
     ) -> None:
         self.binPath = Path(path)
         self.args = args
@@ -53,26 +80,24 @@ class BinaryLoader:
         self.resultDir = resultDir
         self.ignoredObjects = []
         self.newArgs = self.args.copy()
-        self.asFile = False
         self.mappings = None
-        self.OLDVAL = None
         self.emulationruntime = None
         self.runtime = None
         self.QLEngine: Qiling = None
         self.executableCode = []
-
+        self.uuid = uuid.uuid4()
+        self.resultDir += f"/{self.uuid}"
+        from microsurf.utils.logger import banner
+        console.print(banner)
         os.makedirs(self.resultDir + "/" + "assets", exist_ok=True)
         os.makedirs(self.resultDir + "/" + "traces", exist_ok=True)
 
         try:
-            self.secretArgIndex: tuple[int, ...] = (args.index("@"),)
+            self.secretArgIndex: int = args.index("@")
         except ValueError:
-            for arg in self.args:
-                if "@" in arg:
-                    self.secretArgIndex: tuple[int, ...] = (
-                        args.index(arg),
-                        arg.find("@"),
-                    )
+            log.error('no argument marked as secret dependent - exiting.')
+            exit(0)
+
         if self.deterministic:
             log.info("hooking sources of randomness")
         if not os.path.exists(self.binPath):
@@ -82,14 +107,19 @@ class BinaryLoader:
         self.filemagic = fileinfo
         if "80386" in fileinfo:
             self.ARCH = "X86_32"
+            self.md = Cs(CS_ARCH_X86, CS_MODE_32)
         elif "x86" in fileinfo:
             self.ARCH = "X86_64"
+            self.md = Cs(CS_ARCH_X86, CS_MODE_64)
         elif "ARM" in fileinfo:
             self.ARCH = "ARM"
+            self.md = Cs(CS_ARCH_ARM, CS_MODE_ARM)
         elif "MIPS32" in fileinfo:
             self.ARCH = "MIPS32"
+            self.md = Cs(CS_ARCH_MIPS, CS_MODE_32)
         elif "RISC-V" in fileinfo:
             self.ARCH = "RISCV"
+            self.md = Cs(CS_ARCH_RISCV, CS_MODE_RISCV64)
         else:
             log.info(fileinfo)
             log.error("Target architecture not implemented")
@@ -112,18 +142,21 @@ class BinaryLoader:
                 )
         try:
             # initialize args;
-            val, _ = self.rndArg()
+            val = self.rndGen()
+            self.newArgs[self.secretArgIndex] = val
             self.multithreaded = False
             self.QLEngine = Qiling(
                 [str(self.binPath), *self.newArgs],
                 str(self.rootfs),
                 log_override=getQilingLogger(),
-                verbose=QL_VERBOSE.DEFAULT,
-                console=True,
+                verbose=QL_VERBOSE.DISABLED,
+                console=False,
                 multithread=self.multithreaded,
             )
             self.Cs = self.QLEngine.arch.disassembler
             self.fixSyscalls()
+            if self.rndGen.asFile:
+                self.QLEngine.add_fs_mapper(val, val)
         except FileNotFoundError as e:
             if ".so" in str(e):
                 log.error(
@@ -142,7 +175,8 @@ class BinaryLoader:
         except Exception as e:
             log.error(f"Emulation dry run failed: {str(e)}")
             tback = traceback.format_exc()
-            log.error(tback)
+            sys.stdout.fileno = lambda: False
+            sys.stderr.fileno = lambda: False
             if "cur_thread" in tback and "spawn" not in str(e):
                 log.info("re-running with threading support enabled")
                 try:
@@ -151,11 +185,13 @@ class BinaryLoader:
                         [str(self.binPath), *self.newArgs],
                         str(self.rootfs),
                         log_override=getQilingLogger(),
-                        verbose=QL_VERBOSE.DEFAULT,
-                        console=True,
+                        verbose=QL_VERBOSE.DISABLED,
+                        console=False,
                         multithread=self.multithreaded,
                     )
                     self.fixSyscalls()
+                    if self.rndGen.asFile:
+                        self.QLEngine.add_fs_mapper(val, val)
                     starttime = datetime.now()
                     self.exec()
                     endtime = datetime.now()
@@ -165,40 +201,18 @@ class BinaryLoader:
                     )
                 except Exception as e:
                     log.error(f"Emulation dry run failed: {str(e)}")
-                    tback = traceback.format_exc()
-                    log.error(tback)
+                    if log.level == logging.DEBUG:
+                        tback = traceback.format_exc()
+                        log.error(tback)
                     exit(1)
-
-    def _rand(self):
-        path = None
-        val = self.rndGen()
-        if self.asFile:
-            tmpfile, path = tempfile.mkstemp(dir=self.rootfs)
-            log.info(f"generated keyfile:{path}")
-            os.write(tmpfile, val.encode())
-            os.close(tmpfile)
-            # self.newArgs[self.secretArgIndex] = path.split("/")[-1]
-        else:
-            if len(self.secretArgIndex) == 1:
-                self.newArgs[self.secretArgIndex[0]] = val
             else:
-                self.newArgs[self.secretArgIndex[0]] = self.newArgs[
-                    self.secretArgIndex[0]
-                ].replace("@", val)
-        return val, path
-
-    def _fixed(self):
-        if not self.OLDVAL:
-            self.OLDVAL, self.OLDPATH = self.rndArg()
-        return self.OLDVAL, self.OLDPATH
-
-    def rndArg(self):
-        return self._rand()
-
-    def fixedArg(self):
-        return self._fixed()
+                log.error(tback)
+                exit(1)
 
     def validateObjects(self):
+        log.info("mappings:")
+        for s, e, perm, label, c in self.mappings:
+            log.info(f"{hex(s)}-{hex(e)} {perm} {label} {c if c is not None else ''}")
         for obname in self.sharedObjects:
             base = self.getlibbase(obname)
             if base != -1:
@@ -208,15 +222,12 @@ class BinaryLoader:
                     "you provided a shared object name which was not found in memory."
                 )
                 exit(-1)
-        log.info("executable segments:")
         for s, e, perm, label, c in self.mappings:
             if "x" not in perm:
                 continue
-            log.info(f"{hex(s)}-{hex(e)} {perm} {label}")
             labelIgnored = True
             if not self.sharedObjects and self.binPath.name in label:
                 self.executableCode.append((s, e))
-                log.info(f"Tracing code: {hex(s)}-{hex(e)}-{perm}-{label}")
             for obname in self.sharedObjects:
                 if obname in label:
                     labelIgnored = False
@@ -267,6 +278,20 @@ class BinaryLoader:
         self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
         self.QLEngine.os.set_syscall("newfstatat", ql_fixed_syscall_newfstatat)
         self.QLEngine.os.set_syscall("exit_group", syscall_exit_group)
+        if self.deterministic:
+            self.QLEngine.add_fs_mapper("/dev/urandom", device_random)
+            self.QLEngine.add_fs_mapper("/dev/random", device_random)
+            self.QLEngine.add_fs_mapper("/dev/arandom", device_random)
+            self.QLEngine.os.set_syscall('time', const_time)
+            self.QLEngine.os.set_syscall('getrandom', const_getrandom)
+            self.QLEngine.os.set_syscall('gettimeofday', const_clock_gettimeofday)
+            self.QLEngine.os.set_syscall('gettime', const_clock_gettime)
+            self.QLEngine.os.set_syscall('clock_gettime', const_clock_gettime)
+            self.QLEngine.os.set_syscall('clock_gettime64', const_clock_gettime)
+        else:
+            self.QLEngine.add_fs_mapper("/dev/urandom", "/dev/urandom")
+            self.QLEngine.add_fs_mapper("/dev/random", "/dev/random")
+            self.QLEngine.add_fs_mapper("/dev/arandom", "/dev/arandom")
 
 
 @ray.remote
@@ -276,21 +301,25 @@ class MemWatcher:
     """
 
     def __init__(
-        self,
-        binpath,
-        args,
-        rootfs,
-        ignoredObjects,
-        mappings,
-        locations=None,
-        getAssembly=False,
-        deterministic=False,
-        multithread=True,
-        codeRanges=[],
+            self,
+            binpath,
+            args,
+            rootfs,
+            ignoredObjects,
+            mappings,
+            arch,
+            mode,
+            locations=None,
+            getAssembly=False,
+            deterministic=False,
+            multithread=True,
+            codeRanges=[],
     ) -> None:
         self.tracetime = None
         self.traces: List[MemTrace] = []
         self.binPath = binpath
+        self.arch = arch
+        self.mode = mode
         self.args = args
         self.rootfs = rootfs
         self.locations = (
@@ -314,7 +343,7 @@ class MemWatcher:
 
     def _hook_code(self, ql: Qiling, address: int, size: int):
         pc = ql.arch.regs.arch_pc
-        if self.locations is None or not self.getAssembly:
+        if self.locations is None:
             return
         if pc in self.locations:
             buf = ql.mem.read(address, size)
@@ -329,17 +358,9 @@ class MemWatcher:
             -1,
         )
 
-    def exec(self, secret):
-        start_time = time.time()
+    def exec(self, secretString, asFile, secret):
         args = self.args.copy()
-        try:
-            args[args.index("@")] = secret
-        except ValueError as e:
-            for i in range(len(args)):
-                if "@" in args[i]:
-                    args[i] = args[i].replace("@", secret)
-        import sys
-
+        args[args.index("@")] = secretString
         sys.stdout.fileno = lambda: False
         sys.stderr.fileno = lambda: False
         self.QLEngine = Qiling(
@@ -348,10 +369,12 @@ class MemWatcher:
             console=True,
             verbose=QL_VERBOSE.DISABLED,
             multithread=self.multithread,
-            libcache=True,
         )
+        if asFile:
+            self.QLEngine.add_fs_mapper(secretString, secretString)
         self.currenttrace = MemTrace(secret)
         self.QLEngine.hook_mem_read(self._trace_mem_read)
+
         if self.codeRanges:
             for (s, e) in self.codeRanges:
                 self.QLEngine.hook_code(self._hook_code, begin=s, end=e)
@@ -363,16 +386,16 @@ class MemWatcher:
             self.QLEngine.add_fs_mapper("/dev/random", device_random)
             self.QLEngine.add_fs_mapper("/dev/arandom", device_random)
             # ref https://marcin.juszkiewicz.com.pl/download/tables/syscalls.html
-            if self.md.arch == CS_ARCH_ARM:
+            if self.arch == CS_ARCH_ARM:
                 self.QLEngine.os.set_syscall(403, const_time)
                 self.QLEngine.os.set_syscall(384, const_getrandom)
                 self.QLEngine.os.set_syscall(78, const_clock_gettimeofday)
                 self.QLEngine.os.set_syscall(263, const_clock_gettime)
-            if self.md.arch == CS_ARCH_X86 and self.md.mode == CS_MODE_64:
+            if self.arch == CS_ARCH_X86 and self.mode == CS_MODE_64:
                 self.QLEngine.os.set_syscall(318, const_getrandom)
                 self.QLEngine.os.set_syscall(96, const_clock_gettimeofday)
                 self.QLEngine.os.set_syscall(228, const_clock_gettime)
-            if self.md.arch == CS_ARCH_X86 and self.md.mode == CS_MODE_32:
+            if self.arch == CS_ARCH_X86 and self.mode == CS_MODE_32:
                 self.QLEngine.os.set_syscall(403, const_time)
                 self.QLEngine.os.set_syscall(13, const_time)
                 self.QLEngine.os.set_syscall(355, const_getrandom)
@@ -394,8 +417,6 @@ class MemWatcher:
             if self.getlibname(t) in self.ignoredObjects:
                 dropset.append(t)
         self.currenttrace.remove(dropset)
-        endtime = time.time()
-        self.tracetime = endtime - start_time
 
     def getResults(self):
         return self.currenttrace, self.asm
@@ -408,13 +429,17 @@ class CFWatcher:
     """
 
     def __init__(
-        self,
-        binpath,
-        args,
-        rootfs,
-        tracedObjects,
-        deterministic=False,
-        multithread=True,
+            self,
+            binpath,
+            args,
+            rootfs,
+            tracedObjects,
+            arch,
+            mode,
+            locations=None,
+            getAssembly=False,
+            deterministic=False,
+            multithread=True,
     ) -> None:
         self.QLEngine = None
         self.currenttrace = None
@@ -423,51 +448,79 @@ class CFWatcher:
         self.args = args
         self.rootfs = rootfs
         self.tracedObjects = tracedObjects
+        self.arch = arch
+        self.mode = mode
+        self.locations = (
+            {l: 1 for l in locations} if locations is not None else locations
+        )
+        self.getAssembly = getAssembly
         self.deterministic = deterministic
         self.multithread = multithread
+        self.asm = {}
+        """
+        if a list of location is given (possible leaks), then we need to record
+            a) the block at the leak location
+            b) the next block (target of jump, call, etc)
+        """
+        self.saveNext = False
 
-    def _trace_op(self, ql: Qiling, *args):
-        self.currenttrace.add(ql.arch.regs.arch_pc)
+    def _hook_code(self, ql: Qiling, address: int, size: int):
+        a = ql.arch.regs.arch_pc
 
-    def exec(self, secret):
-        start_time = time.time()
+    def _trace_block(self, ql, address, size):
+        buf = ql.mem.read(address, size)
+        ql.arch.disassembler.detail = True
+        addrs = []
+        asm = []
+        for insn in ql.arch.disassembler.disasm(buf, address):
+            addrs.append(insn.address)
+            asm.append(f"{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}")
+        loc = addrs[-1]
+        self.asm[hex(addrs[-1])] = asm[-1]
+        if not self.locations:
+            self.currenttrace.add(addrs[-1])
+            return
+        if loc in self.locations or self.saveNext:
+            if loc in self.locations:
+                self.saveNext = True
+            else:
+                self.saveNext = False
+            self.currenttrace.add(addrs[-1])
+
+    def exec(self, secretString, asFile, secret):
         args = self.args.copy()
-        try:
-            args[args.index("@")] = secret
-        except ValueError as e:
-            for i in range(len(args)):
-                if "@" in args[i]:
-                    args[i] = args[i].replace("@", secret)
-        import sys
-
+        args[args.index("@")] = secretString
         sys.stdout.fileno = lambda: False
         sys.stderr.fileno = lambda: False
+
         self.QLEngine = Qiling(
-            [str(self.binPath), *[str(a) for a in args]],
+            [str(self.binPath), *args],
             str(self.rootfs),
             console=False,
             verbose=QL_VERBOSE.DISABLED,
             multithread=self.multithread,
-            libcache=True,
         )
+        if asFile:
+            self.QLEngine.add_fs_mapper(secretString, secretString)
         self.currenttrace = PCTrace(secret)
+        self.QLEngine.hook_code(self._hook_code)
         for (s, e) in self.tracedObjects:
-            self.QLEngine.hook_code(self._trace_op, begin=s, end=e)
+            self.QLEngine.hook_block(self._trace_block, begin=s, end=e)
         if self.deterministic:
             self.QLEngine.add_fs_mapper("/dev/urandom", device_random)
             self.QLEngine.add_fs_mapper("/dev/random", device_random)
             self.QLEngine.add_fs_mapper("/dev/arandom", device_random)
             # ref https://marcin.juszkiewicz.com.pl/download/tables/syscalls.html
-            if self.md.arch == CS_ARCH_ARM:
+            if self.arch == CS_ARCH_ARM:
                 self.QLEngine.os.set_syscall(403, const_time)
                 self.QLEngine.os.set_syscall(384, const_getrandom)
                 self.QLEngine.os.set_syscall(78, const_clock_gettimeofday)
                 self.QLEngine.os.set_syscall(263, const_clock_gettime)
-            if self.md.arch == CS_ARCH_X86 and self.md.mode == CS_MODE_64:
+            if self.arch == CS_ARCH_X86 and self.mode == CS_MODE_64:
                 self.QLEngine.os.set_syscall(318, const_getrandom)
                 self.QLEngine.os.set_syscall(96, const_clock_gettimeofday)
                 self.QLEngine.os.set_syscall(228, const_clock_gettime)
-            if self.md.arch == CS_ARCH_X86 and self.md.mode == CS_MODE_32:
+            if self.arch == CS_ARCH_X86 and self.mode == CS_MODE_32:
                 self.QLEngine.os.set_syscall(403, const_time)
                 self.QLEngine.os.set_syscall(13, const_time)
                 self.QLEngine.os.set_syscall(355, const_getrandom)
@@ -484,11 +537,9 @@ class CFWatcher:
         self.QLEngine.os.set_syscall("exit_group", syscall_exit_group)
         self.QLEngine.run()
         self.QLEngine.stop()
-        endtime = time.time()
-        self.tracetime = endtime - start_time
 
     def getResults(self):
-        return self.currenttrace, self.tracetime
+        return self.currenttrace, self.asm
 
 
 @ray.remote(num_cpus=1)
@@ -499,7 +550,7 @@ def train(X, Y, leakAddr, keylen, reportDir, threshold, pba):
     try:
         nleakage.train()
     except Exception as e:
-        log.error("worked encountered exception:")
+        log.error("worker encountered exception:")
         log.error(str(e))
         log.error(traceback.format_exc())
         pba.update.remote(1)
@@ -508,7 +559,7 @@ def train(X, Y, leakAddr, keylen, reportDir, threshold, pba):
     return (nleakage.MIScore, leakAddr)
 
 
-## BEGIN RAY UTILS PROGRESS BAR (taken from https://docs.ray.io/en/latest/ray-core/examples/progress_bar.html)
+# BEGIN RAY UTILS PROGRESS BAR (taken from https://docs.ray.io/en/latest/ray-core/examples/progress_bar.html)
 from ray.actor import ActorHandle
 from tqdm.rich import tqdm
 
@@ -561,7 +612,10 @@ class ProgressBar:
 
 class LeakageClassification:
     def __init__(
-        self, rndTraceCollection: TraceCollection, binaryLoader: BinaryLoader, threshold
+            self,
+            rndTraceCollection: TraceCollection,
+            binaryLoader: BinaryLoader,
+            threshold,
     ):
         self.rndTraceCollection = rndTraceCollection
         self.possibleLeaks = rndTraceCollection.possibleLeaks
@@ -571,8 +625,11 @@ class LeakageClassification:
         self.threshold = threshold
 
     def analyze(self):
+        log.info("Estimating scores and key bit dependencies")
         futures = []
-        num_ticks = len(self.rndTraceCollection.possibleLeaks)
+        num_ticks = 0
+        for k, v in self.rndTraceCollection.DF.items():
+            num_ticks += 1
         if num_ticks == 0:
             return self.results
         pb = ProgressBar(num_ticks)
@@ -581,7 +638,7 @@ class LeakageClassification:
             futures.append(
                 train.remote(
                     v.loc[:, v.columns != "hits"].values,
-                    v.index.to_numpy(),
+                    v.loc[:, "secret"].to_numpy(),
                     k,
                     self.KEYLEN,
                     self.loader.resultDir,
@@ -594,8 +651,4 @@ class LeakageClassification:
         results = ray.get(futures)
         for r in results:
             (MIScore, leakAddr) = r
-            self.results[hex(leakAddr)] = (
-                MIScore,
-                self.rndTraceCollection.DF[leakAddr]["hits"].max(),
-                len(self.rndTraceCollection.DF[leakAddr]),
-            )
+            self.results[hex(leakAddr)] = MIScore

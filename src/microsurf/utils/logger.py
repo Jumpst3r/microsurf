@@ -8,6 +8,23 @@ warnings.filterwarnings("ignore")
 
 LOGGING_LEVEL = logging.INFO
 
+banner = '''
+
+                   &&                   
+                    &&&      &&&&&      
+                      /&&&&&& &&&&      
+                      &&&&&&&&&&            Microsurf:  The Cross-Architecture Side Channel Detection Framework              
+                   &&&&&&&&&&  (&&&     
+                   &&&&&&&        &&&&      v.0.0-dev
+                  &&&&  &&&&&           
+             &&&&&&&      &&&           
+         /&&&&,          *&&&           
+               ,.        &&&*           
+                  ..     &&&            
+                     ..  &&.    
+                         ..                                                    
+        '''
+
 logging.basicConfig(
     level="INFO",
     format="[%(name)s]  %(message)s",
@@ -15,6 +32,8 @@ logging.basicConfig(
     handlers=[
         RichHandler(
             rich_tracebacks=True,
+            show_path=False,
+            show_level=False
         )
     ],
 )
@@ -50,7 +69,7 @@ class RayFilter(object):
         return getattr(self.stream, attr_name)
 
     def write(self, data):
-        if ":actor_name:" in data:
+        if ":actor_name:" or "pid=" in data:
             return
         self.stream.write(data)
         self.stream.flush()

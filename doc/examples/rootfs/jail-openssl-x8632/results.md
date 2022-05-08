@@ -1,20 +1,26 @@
 # Microsurf Analysis Results (run: 03/14/2022, 16:59:25)
-## Metadata 
+
+## Metadata
+
 ### Binary
+
 `/home/nicolas/Documents/msc-thesis-work/doc/examples/rootfs/jail-openssl-x8632/openssl`
- >ELF 32-bit LSB pie executable, Intel 80386, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux.so.2, BuildID[sha1]=4b59a03925ae04b1b105a268685df59d7ed9bd1b, for GNU/Linux 3.2.0, not stripped 
+> ELF 32-bit LSB pie executable, Intel 80386, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux.so.2,
+> BuildID[sha1]=4b59a03925ae04b1b105a268685df59d7ed9bd1b, for GNU/Linux 3.2.0, not stripped
 
 __Args__
-`['camellia-128-ecb', '-e', '-in', 'input.bin', '-out', 'output.bin', '-nosalt', '-K', '4f2b82b5dfd57d053293b275fdc5ea75']` 
+`['camellia-128-ecb', '-e', '-in', 'input.bin', '-out', 'output.bin', '-nosalt', '-K', '4f2b82b5dfd57d053293b275fdc5ea75']`
 __Deterministic__
-`False` 
+`False`
 __Emulation root__
-`/home/nicolas/Documents/msc-thesis-work/doc/examples/rootfs/jail-openssl-x8632/` 
+`/home/nicolas/Documents/msc-thesis-work/doc/examples/rootfs/jail-openssl-x8632/`
 __Sample secret__
-`356231df9836f1a7186c37c7c0811bfd` 
+`356231df9836f1a7186c37c7c0811bfd`
 __Leakage model__
-`identity` 
-## Results 
+`identity`
+
+## Results
+
 | offset | MI score | Function | Object |
 |-----|-----|-----|-----|
 | 0x08f61e | 0.05 | Camellia_Ekeygen | libcrypto.so.1.1 |
