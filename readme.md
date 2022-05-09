@@ -1,8 +1,6 @@
-<img align="center" width="700" height="230" src="doc/figures/logo.png" alt="application project app icon" style="zoom: 67%;" >
+<img align="center" width="700" height="230" src="doc/figures/logo.png" alt="application project app icon" style="zoom: 50%;" >
 
 
-
-[![Integration & Unit Tests](https://github.com/Jumpst3r/msc-thesis-work/actions/workflows/pytest.yml/badge.svg)](https://github.com/Jumpst3r/msc-thesis-work/actions/workflows/pytest.yml)
 
 <p align="center">
     <img src="https://github.com/Jumpst3r/msc-thesis-work/actions/workflows/pytest.yml/badge.svg"
