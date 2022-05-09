@@ -1,4 +1,5 @@
 import logging
+import os
 import warnings
 
 from rich.console import Console
@@ -6,7 +7,10 @@ from rich.logging import RichHandler
 
 warnings.filterwarnings("ignore")
 
-LOGGING_LEVEL = logging.INFO
+if 'DEBUG' in os.environ:
+    LOGGING_LEVEL = logging.DEBUG
+else:
+    LOGGING_LEVEL = logging.INFO
 
 banner = '''
 

@@ -237,8 +237,4 @@ class PCTraceCollection(TraceCollection):
                     if b[: len(a)] == a:
                         if self.flagVariableHitCount:
                             MARK[k] = "SECRET DEP HIT COUNT"
-                    # else:
-                    #    MARK[k] = "SECRET DEP C2"
-        for k, v in MARK.items():
-            log.info(f"{hex(k)}, {v}")
         return
