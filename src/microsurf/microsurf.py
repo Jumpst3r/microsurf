@@ -12,6 +12,7 @@ __author__ = "Nicolas Dutly"
 __version__ = "0.0.0a"
 
 import glob
+import multiprocessing
 import os
 import time
 from typing import List, Union
@@ -60,6 +61,7 @@ class SCDetector:
         self.results = {}
         self.starttime = None
         self.MDresults = []
+        self.initTraceCount = max(multiprocessing.cpu_count() - 1, 2)
 
     def exec(self):
         """
@@ -69,7 +71,7 @@ class SCDetector:
         for module in self.modules:
             console.log(f"module {str(module)}")
             # first capture a small number of traces to identify possible leak locations.
-            collection, asm = module.recordTraces(10)
+            collection, asm = module.recordTraces(self.initTraceCount)
             if not collection.possibleLeaks:
                 log.info(f"module {str(module)} returned no possible leaks")
                 continue
@@ -196,8 +198,9 @@ class SCDetector:
         log.info(f"total runtime: {self.loader.runtime}")
         self.DF = pd.DataFrame.from_dict(self.MDresults)
         console.rule('Results', style="magenta")
-        pprint(self.DF.loc[:,['Runtime Addr', 'offset', 'Symbol Name', 'asm' ,'Detection Module']])
+        pprint(self.DF.loc[:, ['Runtime Addr', 'offset', 'Symbol Name', 'asm', 'Detection Module']])
         console.rule(style="magenta")
+
     def _generateReport(self):
         if "PYTEST_CURRENT_TEST" in os.environ:
             log.info("Testing, no report generated.")
