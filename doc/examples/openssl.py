@@ -32,6 +32,8 @@ if __name__ == "__main__":
 
     binpath = jailroot + "openssl"
 
+    # the arguments to pass to the binary.
+    # the secret is marked with a '@' placeholder
     opensslArgs = [
         "camellia-128-ecb",
         "-e",
@@ -44,18 +46,24 @@ if __name__ == "__main__":
         "@",
     ]
 
+    # list of objects to trace
     sharedObjects = ['libcrypto']
 
     binLoader = BinaryLoader(
         path=binpath,
         args=opensslArgs,
+        # emulation root directory
         rootfs=jailroot,
+        # openssl_hex_key_generator generates hex secrets, these will replace the
+        # @ symbol in the arg list during emulation.
         rndGen=openssl_hex_key_generator(128),
         sharedObjects=sharedObjects
     )
 
     scd = SCDetector(modules=[
+        # Secret dependent memory read detection
         DataLeakDetector(binaryLoader=binLoader),
+        # Secret dependent control flow detection
         CFLeakDetector(binaryLoader=binLoader),
     ])
 
