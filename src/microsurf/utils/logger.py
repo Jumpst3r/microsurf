@@ -12,9 +12,7 @@ if 'DEBUG' in os.environ:
 else:
     LOGGING_LEVEL = logging.INFO
 
-banner = '''
-
-                   &&                   
+banner = '''        &&                   
                     &&&      &&&&&      
                       /&&&&&& &&&&      
                       &&&&&&&&&&            Microsurf:  The Cross-Architecture Side Channel Detection Framework              
@@ -23,11 +21,10 @@ banner = '''
                   &&&&  &&&&&           
              &&&&&&&      &&&           
          /&&&&,          *&&&           
-               ,.        &&&*           
-                  ..     &&&            
-                     ..  &&.    
-                         ..                                                    
-        '''
+..             ,.        &&&*           
+         .....    ..     &&&            
+     ...     ...     ..  &&.    
+ .......              .. '''
 
 logging.basicConfig(
     level="INFO",

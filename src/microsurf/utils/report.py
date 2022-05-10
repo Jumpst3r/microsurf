@@ -155,4 +155,5 @@ class ReportGenerator:
         self.generateResults()
         with open(f"{self.loader.resultDir}/results-{uuid4()}.md", "w") as f:
             f.writelines(self.mdString)
-        log.info(f"Saved results to {f.name}")
+        from rich import print as pprint
+        pprint(f"Report saved: {f.name} !")

@@ -619,7 +619,7 @@ class LeakageClassification:
         for k, v in self.rndTraceCollection.DF.items():
             futures.append(
                 train.remote(
-                    v.loc[:, v.columns != "hits"].values,
+                    v.loc[:, v.columns != "secret"].values,
                     v.loc[:, "secret"].to_numpy(),
                     k,
                     self.KEYLEN,
