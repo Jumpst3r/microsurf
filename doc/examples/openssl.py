@@ -10,7 +10,7 @@ openssl camellia-128-ecb -e -in input.bin -out output.bin -nosalt -K hexdata
 import sys
 
 from microsurf.microsurf import SCDetector
-from microsurf.pipeline.DetectionModules import CFLeakDetector, DataLeakDetector
+from microsurf.pipeline.DetectionModules import CFLeakDetector
 from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.utils.generators import openssl_hex_key_generator
 
@@ -32,6 +32,9 @@ if __name__ == "__main__":
 
     binpath = jailroot + "openssl"
 
+    # the arguments to pass to the binary.
+    # the secret is marked with a '@' placeholder
+    opensslArgs = "camellia-128-ecb -e -in input.bin -out output.bin -nosalt -K @".split()
     opensslArgs = [
         "camellia-128-ecb",
         "-e",
@@ -44,19 +47,25 @@ if __name__ == "__main__":
         "@",
     ]
 
+    # list of objects to trace
     sharedObjects = ['libcrypto']
 
     binLoader = BinaryLoader(
         path=binpath,
         args=opensslArgs,
+        # emulation root directory
         rootfs=jailroot,
+        # openssl_hex_key_generator generates hex secrets, these will replace the
+        # @ symbol in the arg list during emulation.
         rndGen=openssl_hex_key_generator(128),
         sharedObjects=sharedObjects
     )
 
     scd = SCDetector(modules=[
-        DataLeakDetector(binaryLoader=binLoader),
+        # Secret dependent memory read detection
+        # DataLeakDetector(binaryLoader=binLoader),
+        # Secret dependent control flow detection
         CFLeakDetector(binaryLoader=binLoader),
-    ])
+    ], addrList=[0x7fffb8023aff], itercount=11)
 
     scd.exec()

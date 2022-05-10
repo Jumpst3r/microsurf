@@ -8,7 +8,7 @@ from asyncio import Event
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path, PurePath
-from typing import Dict, List, Tuple, Callable
+from typing import Dict, List, Tuple
 
 import magic
 import ray
@@ -40,7 +40,7 @@ from ..utils.hijack import (
     ql_fixed_syscall_newfstatat,
     syscall_exit_group,
 )
-from ..utils.logger import getConsole, getLogger, getQilingLogger
+from ..utils.logger import getConsole, getLogger, getQilingLogger, LOGGING_LEVEL
 
 console = getConsole()
 log = getLogger()
@@ -149,8 +149,8 @@ class BinaryLoader:
                 [str(self.binPath), *self.newArgs],
                 str(self.rootfs),
                 log_override=getQilingLogger(),
-                verbose=QL_VERBOSE.DISABLED,
-                console=False,
+                verbose=QL_VERBOSE.DISABLED if LOGGING_LEVEL == logging.INFO else QL_VERBOSE.DEBUG,
+                console=True,
                 multithread=self.multithreaded,
             )
             self.Cs = self.QLEngine.arch.disassembler
@@ -185,8 +185,8 @@ class BinaryLoader:
                         [str(self.binPath), *self.newArgs],
                         str(self.rootfs),
                         log_override=getQilingLogger(),
-                        verbose=QL_VERBOSE.DISABLED,
-                        console=False,
+                        verbose=QL_VERBOSE.DISABLED if LOGGING_LEVEL == logging.INFO else QL_VERBOSE.DEBUG,
+                        console=True,
                         multithread=self.multithreaded,
                     )
                     self.fixSyscalls()
@@ -386,21 +386,12 @@ class MemWatcher:
             self.QLEngine.add_fs_mapper("/dev/random", device_random)
             self.QLEngine.add_fs_mapper("/dev/arandom", device_random)
             # ref https://marcin.juszkiewicz.com.pl/download/tables/syscalls.html
-            if self.arch == CS_ARCH_ARM:
-                self.QLEngine.os.set_syscall(403, const_time)
-                self.QLEngine.os.set_syscall(384, const_getrandom)
-                self.QLEngine.os.set_syscall(78, const_clock_gettimeofday)
-                self.QLEngine.os.set_syscall(263, const_clock_gettime)
-            if self.arch == CS_ARCH_X86 and self.mode == CS_MODE_64:
-                self.QLEngine.os.set_syscall(318, const_getrandom)
-                self.QLEngine.os.set_syscall(96, const_clock_gettimeofday)
-                self.QLEngine.os.set_syscall(228, const_clock_gettime)
-            if self.arch == CS_ARCH_X86 and self.mode == CS_MODE_32:
-                self.QLEngine.os.set_syscall(403, const_time)
-                self.QLEngine.os.set_syscall(13, const_time)
-                self.QLEngine.os.set_syscall(355, const_getrandom)
-                self.QLEngine.os.set_syscall(78, const_clock_gettimeofday)
-                self.QLEngine.os.set_syscall(265, const_clock_gettime)
+            self.QLEngine.os.set_syscall('time', const_time)
+            self.QLEngine.os.set_syscall('getrandom', const_getrandom)
+            self.QLEngine.os.set_syscall('gettimeofday', const_clock_gettimeofday)
+            self.QLEngine.os.set_syscall('gettime', const_clock_gettime)
+            self.QLEngine.os.set_syscall('clock_gettime', const_clock_gettime)
+            self.QLEngine.os.set_syscall('clock_gettime64', const_clock_gettime)
         else:
             self.QLEngine.add_fs_mapper("/dev/urandom", "/dev/urandom")
             self.QLEngine.add_fs_mapper("/dev/random", "/dev/random")
@@ -511,21 +502,12 @@ class CFWatcher:
             self.QLEngine.add_fs_mapper("/dev/random", device_random)
             self.QLEngine.add_fs_mapper("/dev/arandom", device_random)
             # ref https://marcin.juszkiewicz.com.pl/download/tables/syscalls.html
-            if self.arch == CS_ARCH_ARM:
-                self.QLEngine.os.set_syscall(403, const_time)
-                self.QLEngine.os.set_syscall(384, const_getrandom)
-                self.QLEngine.os.set_syscall(78, const_clock_gettimeofday)
-                self.QLEngine.os.set_syscall(263, const_clock_gettime)
-            if self.arch == CS_ARCH_X86 and self.mode == CS_MODE_64:
-                self.QLEngine.os.set_syscall(318, const_getrandom)
-                self.QLEngine.os.set_syscall(96, const_clock_gettimeofday)
-                self.QLEngine.os.set_syscall(228, const_clock_gettime)
-            if self.arch == CS_ARCH_X86 and self.mode == CS_MODE_32:
-                self.QLEngine.os.set_syscall(403, const_time)
-                self.QLEngine.os.set_syscall(13, const_time)
-                self.QLEngine.os.set_syscall(355, const_getrandom)
-                self.QLEngine.os.set_syscall(78, const_clock_gettimeofday)
-                self.QLEngine.os.set_syscall(265, const_clock_gettime)
+            self.QLEngine.os.set_syscall('time', const_time)
+            self.QLEngine.os.set_syscall('getrandom', const_getrandom)
+            self.QLEngine.os.set_syscall('gettimeofday', const_clock_gettimeofday)
+            self.QLEngine.os.set_syscall('gettime', const_clock_gettime)
+            self.QLEngine.os.set_syscall('clock_gettime', const_clock_gettime)
+            self.QLEngine.os.set_syscall('clock_gettime64', const_clock_gettime)
         else:
             self.QLEngine.add_fs_mapper("/dev/urandom", "/dev/urandom")
             self.QLEngine.add_fs_mapper("/dev/random", "/dev/random")
@@ -637,7 +619,7 @@ class LeakageClassification:
         for k, v in self.rndTraceCollection.DF.items():
             futures.append(
                 train.remote(
-                    v.loc[:, v.columns != "hits"].values,
+                    v.loc[:, v.columns != "secret"].values,
                     v.loc[:, "secret"].to_numpy(),
                     k,
                     self.KEYLEN,

@@ -11,7 +11,7 @@ openssl rsautl -encrypt -inkey @ -in input.bin -out output.bin
 import sys
 
 from microsurf.microsurf import SCDetector
-from microsurf.pipeline.DetectionModules import CFLeakDetector, DataLeakDetector
+from microsurf.pipeline.DetectionModules import CFLeakDetector
 from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.utils.generators import RSAPrivKeyGenerator
 
@@ -55,8 +55,8 @@ if __name__ == "__main__":
     )
 
     scd = SCDetector(modules=[
-        DataLeakDetector(binaryLoader=binLoader),
-        # CFLeakDetector(binaryLoader=binLoader),
-    ])
+        # DataLeakDetector(binaryLoader=binLoader),
+        CFLeakDetector(binaryLoader=binLoader),
+    ], addrList=[0x7fffb7ff58b0])
 
     scd.exec()

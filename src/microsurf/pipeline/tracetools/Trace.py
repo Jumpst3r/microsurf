@@ -209,6 +209,8 @@ class PCTraceCollection(TraceCollection):
             if MARK[l] != "SECRET DEP C1":
                 # in the secret dependent hit count case, record the number of hits per secret.
                 f = f.count(axis=1).to_frame()
+            ffilter_stdev = f.loc[:, f.columns != 'secret'].std()
+            f.drop(ffilter_stdev[ffilter_stdev == 0].index, axis=1, inplace=True)
             f.dropna(axis=0, inplace=True)
             if len(f.columns) > 1 and len(f.index) > 1:
                 perLeakDict[l] = f
@@ -237,8 +239,4 @@ class PCTraceCollection(TraceCollection):
                     if b[: len(a)] == a:
                         if self.flagVariableHitCount:
                             MARK[k] = "SECRET DEP HIT COUNT"
-                    # else:
-                    #    MARK[k] = "SECRET DEP C2"
-        for k, v in MARK.items():
-            log.info(f"{hex(k)}, {v}")
         return

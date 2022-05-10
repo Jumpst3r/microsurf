@@ -10,7 +10,6 @@ binaries/secret-dep-cf-1/readme.md
 @author nicolas
 """
 import json
-import sys
 import tempfile
 from pathlib import Path, PurePath
 
@@ -43,7 +42,7 @@ def test_analyze_secret_simple(binPath, rootfsPath, monkeypatch):
 
     binLoader = BinaryLoader(path=binPath, args=args, rootfs='/tmp',
                              rndGen=openssl_hex_key_generator(16),
-                             deterministic=False)
+                             deterministic=True)
 
     scd = SCDetector(modules=[
         # DataLeakDetector(binaryLoader=binLoader),

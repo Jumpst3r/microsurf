@@ -118,7 +118,8 @@ def const_clock_gettimeofday(ql, gettimeofday_tv, gettimeofday_tz, *args, **kw):
     tv_sec = 0
     tv_nsec = 0
     tp: Union[timespec32, timespec]
-    if ql.arch.type == QL_ARCH.X8664:
+    archs64bits = [QL_ARCH.X8664, QL_ARCH.ARM64, QL_ARCH.RISCV64]
+    if ql.arch.type in archs64bits:
         tp = timespec(tv_sec=tv_sec, tv_nsec=tv_nsec)
     else:
         tp = timespec32(tv_sec=tv_sec, tv_nsec=tv_nsec)

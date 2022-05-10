@@ -50,7 +50,7 @@ class MIEstimator(nn.Module):
 class NeuralLeakageModel(nn.Module):
     def __init__(self, X, Y, leakAddr, keylen, assetDir, threshold) -> None:
         super().__init__()
-        self.X = X
+        self.X = np.array(X, dtype=np.uint64)
         self.threshold = threshold
         if len(self.X) <= 1:
             log.debug(f"sample count too low for {hex(leakAddr)}, returning MI = 0.0")
@@ -58,7 +58,7 @@ class NeuralLeakageModel(nn.Module):
             self.MIScore = 0
         else:
             self.abort = False
-            self.X = (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-5)
+            self.X = (self.X - self.X.mean(axis=0)) / (self.X.std(axis=0) + 1e-5)
         self.keylen = keylen
         self.Y = self.binary(Y).reshape(Y.shape[0], self.keylen)
         self.assetDir = assetDir
@@ -66,6 +66,7 @@ class NeuralLeakageModel(nn.Module):
         self.leakAddr = leakAddr
 
     def train(self):
+        log.debug("IN TRAIN")
         if self.abort:
             return
         self.MIScores = []
@@ -106,9 +107,7 @@ class NeuralLeakageModel(nn.Module):
                     loss_val = -mest_val.forward(lpred)
                     Y_val.append(loss_val.detach().numpy())
                     X_val.append(e)
-                    log.debug(
-                        f"pc-{self.leakAddr} idx-{idx}/{len(self.X.T)}, e-{e}/200"
-                    )
+                    log.info(f"- training model for pc-{hex(self.leakAddr)}: iter-{idx}/{len(self.X.T)}, epoch-{e}/200")
                     if len(Y_val) > 10:
                         new_val_mean = np.mean(Y_val[-5:])
                         old_val_mean = np.mean(Y_val[-10:-5])
@@ -123,6 +122,7 @@ class NeuralLeakageModel(nn.Module):
             mest_total.trainEstimator(lpred)
             score = mest_total.forward(lpred).detach().numpy()
             # TODO add sklearn call for comp.
+            # (maybe add this after the evalutation - )
             self.MIScores.append(score)
             input = torch.ones((1, self.keylen)) - 0.5
             lm.eval()
@@ -149,6 +149,7 @@ class NeuralLeakageModel(nn.Module):
             deps = dependencies.copy()
             mi = dependencies.copy()
             deps.T[-1] = np.nan
+            mi[mi < 0.05] = 0
             mi.T[:-1] = np.nan
             # plt.figure(figsize=(15, 2))
             ax = sns.heatmap(
