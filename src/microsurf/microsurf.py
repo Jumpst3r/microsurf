@@ -61,7 +61,7 @@ class SCDetector:
         self.results = {}
         self.starttime = None
         self.MDresults = []
-        self.initTraceCount = max(multiprocessing.cpu_count() - 1, 2)
+        self.initTraceCount = max(multiprocessing.cpu_count() - 1, 5)
 
     def exec(self):
         """
