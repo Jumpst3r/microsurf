@@ -50,6 +50,7 @@ class MIEstimator(nn.Module):
 class NeuralLeakageModel(nn.Module):
     def __init__(self, X, Y, leakAddr, keylen, assetDir, threshold) -> None:
         super().__init__()
+        # breakpoint()
         self.X = np.array(X, dtype=np.uint64)
         self.threshold = threshold
         if len(self.X) <= 1:
@@ -66,7 +67,6 @@ class NeuralLeakageModel(nn.Module):
         self.leakAddr = leakAddr
 
     def train(self):
-        log.debug("IN TRAIN")
         if self.abort:
             return
         self.MIScores = []
@@ -141,7 +141,7 @@ class NeuralLeakageModel(nn.Module):
                 )
             except Exception:
                 return
-            f, ax = plt.subplots(figsize=(8, 1.2 * len(heatmaps)))
+            f, ax = plt.subplots(figsize=(8, 2))
             self.MIScores = np.array(self.MIScores[: len(heatmaps)])
             # add a column to the far right to include the MI score in the heatmap
             dependencies = np.c_[dependencies, self.MIScores]
@@ -177,7 +177,7 @@ class NeuralLeakageModel(nn.Module):
                     "shrink": 0.5,
                 },
                 xticklabels=[
-                                (self.keylen - i) if i % 2 == 0 else " " for i in range(self.keylen)
+                                "" for _ in range(self.keylen)
                             ]
                             + ["MI"],
                 yticklabels=[

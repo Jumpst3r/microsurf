@@ -1,6 +1,5 @@
 from datetime import datetime
 from pathlib import Path
-from uuid import uuid4
 
 import numpy as np
 import pandas
@@ -153,7 +152,9 @@ class ReportGenerator:
     def saveMD(self):
         self.generateHeaders()
         self.generateResults()
-        with open(f"{self.loader.resultDir}/results-{uuid4()}.md", "w") as f:
+        with open(f"{self.loader.resultDir}/results.md", "w") as f:
             f.writelines(self.mdString)
-        from rich import print as pprint
-        pprint(f"Report saved: {f.name} !")
+            log.info(f"Markdown report saved: {f.name} !")
+        with open(f"{self.loader.resultDir}/results.json", "w") as f:
+            f.writelines(self.results.to_json())
+            log.info(f"json report saved: {f.name} !")

@@ -603,7 +603,7 @@ class LeakageClassification:
         self.possibleLeaks = rndTraceCollection.possibleLeaks
         self.loader = binaryLoader
         self.results: Dict[str, float] = {}
-        self.KEYLEN = int(len(self.loader.rndGen()) * 4)
+        self.KEYLEN = self.loader.rndGen.keylen
         self.threshold = threshold
 
     def analyze(self):

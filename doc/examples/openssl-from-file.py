@@ -57,6 +57,6 @@ if __name__ == "__main__":
     scd = SCDetector(modules=[
         # DataLeakDetector(binaryLoader=binLoader),
         CFLeakDetector(binaryLoader=binLoader),
-    ], addrList=[0x7fffb7ff58b0])
+    ], addrList=[0x7fffb7f4dd98], itercount=300)
 
     scd.exec()
