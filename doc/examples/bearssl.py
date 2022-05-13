@@ -12,9 +12,9 @@ from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.utils.generators import openssl_hex_key_generator
 
 if __name__ == "__main__":
-    jailroot = "doc/examples/rootfs/bearssl/jail-bearssl-x8664/"
+    jailroot = "doc/examples/rootfs/bearssl/jail-bearssl-riscv64/"
 
-    binpath = jailroot + "testcrypto"
+    binpath = jailroot + "test_aes_base"
 
     opensslArgs = ['@']
 
