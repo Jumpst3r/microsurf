@@ -1,7 +1,6 @@
 import bisect
 import collections
 from functools import lru_cache
-from typing import List
 
 import magic
 from elftools.elf.elffile import ELFFile, SymbolTableSection
@@ -102,7 +101,7 @@ def _decode_file_line(dwarfinfo, address):
 # -- END SNIPPET
 
 
-def getCodeSnippet(file: str, loc: int) -> List[str]:
+def getCodeSnippet(file: str, loc: int):
     """Returns a list of source code lines, 3 before
     and 3 after the given offset for a given ELF file.
 
@@ -128,7 +127,7 @@ def getCodeSnippet(file: str, loc: int) -> List[str]:
             DWARF[file] = elf.get_dwarf_info()
             dwinfo = DWARF[file]
         except Exception as e:
-            log.debug(f"source lines not available for PC {hex(loc)}")
+            log.debug(f"source lines not available for PC {hex(loc)} ({str(e)})")
             return [], None, None
     path, ln = _decode_file_line(dwinfo, loc)
     if path in CODE:
@@ -138,8 +137,7 @@ def getCodeSnippet(file: str, loc: int) -> List[str]:
             with open(path, "r") as f2:
                 lines = f2.readlines()
                 CODE[path] = lines
-            # lines[ln - 1] = "!!! " + lines[ln - 1].strip('\n') + " !!!\n"
         except Exception as e:
-            log.debug(f"source lines not available for PC {hex(loc)}")
+            log.debug(f"source lines not available for PC {hex(loc)} ({str(e)})")
             return [], None, None
     return lines[ln - 5: ln + 5], path, ln

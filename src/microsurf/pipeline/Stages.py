@@ -25,7 +25,6 @@ from capstone import (
 )
 from qiling import Qiling
 from qiling.const import QL_VERBOSE
-from unicorn.unicorn_const import UC_MEM_READ
 
 from .NeuralLeakage import NeuralLeakageModel
 from .tracetools.Trace import MemTrace, PCTrace, TraceCollection
@@ -68,7 +67,7 @@ class BinaryLoader:
             rootfs: str,
             rndGen: SecretGenerator,
             sharedObjects: List[str] = [],
-            deterministic: bool = False,
+            deterministic: bool = True,
             resultDir: str = "results",
     ) -> None:
         self.binPath = Path(path)
@@ -239,6 +238,8 @@ class BinaryLoader:
         self.ignoredObjects = list(set(self.ignoredObjects))
 
         log.info(f"The following objects are not traced {self.ignoredObjects}")
+        for (s, e) in self.executableCode:
+            log.info(f"Tracing {hex(s)}-{hex(e)}")
 
     def getlibname(self, addr):
         return next(
@@ -334,7 +335,6 @@ class MemWatcher:
         self.asm = {}
 
     def _trace_mem_read(self, ql: Qiling, access, addr, size, value):
-        assert access == UC_MEM_READ
         pc = ql.arch.regs.arch_pc
         if self.locations is None:
             self.currenttrace.add(pc, addr)
@@ -342,9 +342,9 @@ class MemWatcher:
             self.currenttrace.add(pc, addr)
 
     def _hook_code(self, ql: Qiling, address: int, size: int):
-        pc = ql.arch.regs.arch_pc
         if self.locations is None:
             return
+        pc = ql.arch.regs.arch_pc
         if pc in self.locations:
             buf = ql.mem.read(address, size)
             for insn in ql.arch.disassembler.disasm(buf, address):
@@ -366,7 +366,7 @@ class MemWatcher:
         self.QLEngine = Qiling(
             [str(self.binPath), *[str(a) for a in args]],
             str(self.rootfs),
-            console=True,
+            console=False,
             verbose=QL_VERBOSE.DISABLED,
             multithread=self.multithread,
         )
@@ -374,13 +374,9 @@ class MemWatcher:
             self.QLEngine.add_fs_mapper(secretString, secretString)
         self.currenttrace = MemTrace(secret)
         self.QLEngine.hook_mem_read(self._trace_mem_read)
+        for (s, e) in self.codeRanges:
+            self.QLEngine.hook_code(self._hook_code, begin=s, end=e)
 
-        if self.codeRanges:
-            for (s, e) in self.codeRanges:
-                self.QLEngine.hook_code(self._hook_code, begin=s, end=e)
-        else:
-            self.QLEngine.hook_code(self._hook_code)
-        # duplicate code. Ugly - fixme.
         if self.deterministic:
             self.QLEngine.add_fs_mapper("/dev/urandom", device_random)
             self.QLEngine.add_fs_mapper("/dev/random", device_random)

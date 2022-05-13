@@ -12,7 +12,6 @@ __author__ = "Nicolas Dutly"
 __version__ = "0.0.0a"
 
 import glob
-import multiprocessing
 import os
 import time
 from typing import List, Union
@@ -61,7 +60,7 @@ class SCDetector:
         self.results = {}
         self.starttime = None
         self.MDresults = []
-        self.initTraceCount = max(multiprocessing.cpu_count() - 1, 5)
+        self.initTraceCount = 4
 
     def exec(self):
         """
@@ -75,9 +74,6 @@ class SCDetector:
             if not collection.possibleLeaks:
                 log.info(f"module {str(module)} returned no possible leaks")
                 continue
-            if "mem" in str(module):
-                # for performance reasons we need to get the assembly on a separate run for the memwatcher
-                _, asm = module.recordTraces(1, pcList=collection.possibleLeaks, getAssembly=True)
             self.results[str(module)] = (collection.results, asm)
             if self.addrList:
                 # check if the provided addresses were indeed found, if not, raise an error
@@ -152,7 +148,7 @@ class SCDetector:
                                         f"[{hex(offset)}]" + asm[leakAddr].split("|")[1]
                                 )
                             except KeyError:
-                                asmsnippet = "n/aj"
+                                asmsnippet = "n/a"
                             # log.info(f'runtime Addr: {hex(k)}, offset: {offset:#08x}, symbol name: {symbname}')
                             self.MDresults.append(
                                 {

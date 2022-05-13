@@ -107,6 +107,7 @@ class MemTraceCollection(TraceCollection):
         perLeakDict = {}
         addrs = [list(a.trace.keys()) for a in self.traces]
         addrs = set([i for l in addrs for i in l])  # flatten
+        log.debug(f"recorded {len(addrs)} distinct IPs making memory reads")
         for l in track(addrs, description="analyzing memory read traces"):
             row = []
             numhits = 0
@@ -117,9 +118,11 @@ class MemTraceCollection(TraceCollection):
                 entry += trace.trace[l]
                 numhits = max(numhits, len(trace.trace[l]))
                 row.append(entry)
-            colnames = ["secret"] + [str(i) for i in range(numhits)]
+            cols = [str(i) for i in range(numhits)]
+            colnames = ["secret"] + cols
             f = pd.DataFrame(row, columns=colnames, dtype=object)
-            f.drop_duplicates(subset=[str(i) for i in range(numhits)], keep=False, inplace=True)
+            ffilter_stdev = f.loc[:, f.columns != 'secret'].std()
+            f.drop(ffilter_stdev[ffilter_stdev == 0].index, axis=1, inplace=True)
             f.dropna(axis=0, inplace=True)
             if len(f.columns) > 1 and len(f.index) > 1:
                 perLeakDict[l] = f

@@ -17,15 +17,15 @@ if __name__ == "__main__":
     # define lib / bin paths
 
     if len(sys.argv) > 1 and sys.argv[1] == 'arm64':
-        jailroot = "doc/examples/rootfs/jail-mbedtls-arm64/"
+        jailroot = "doc/examples/rootfs/mbedtls/jail-mbedtls-arm64/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'x8632':
-        jailroot = "doc/examples/rootfs/jail-mbedtls-x8632/"
+        jailroot = "doc/examples/rootfs/mbedtls/jail-mbedtls-x8632/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'x8664':
-        jailroot = "doc/examples/rootfs/jail-mbedtls-x8664-no-ni/"
+        jailroot = "doc/examples/rootfs/mbedtls/jail-mbedtls-x8664-no-ni/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'mipsel32':
-        jailroot = "doc/examples/rootfs/jail-openssl-mipsel32/"
+        jailroot = "doc/examples/rootfs/mbedtls/jail-openssl-mipsel32/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'riscv64':
-        jailroot = "doc/examples/rootfs/jail-openssl-riscv64/"
+        jailroot = "doc/examples/rootfs/mbedtls/jail-openssl-riscv64/"
     else:
         print("usage: openssl-camillia-128.py [arm64, x8632, x8664, mipsel32, riscv64]")
         exit(0)
@@ -52,7 +52,7 @@ if __name__ == "__main__":
 
     scd = SCDetector(modules=[
         CFLeakDetector(binaryLoader=binLoader),
-        #DataLeakDetector(binaryLoader=binLoader)
+        DataLeakDetector(binaryLoader=binLoader)
     ]
     )
     scd.exec()

@@ -10,22 +10,20 @@ openssl camellia-128-ecb -e -in input.bin -out output.bin -nosalt -K hexdata
 import sys
 
 from microsurf.microsurf import SCDetector
-from microsurf.pipeline.DetectionModules import CFLeakDetector
+from microsurf.pipeline.DetectionModules import DataLeakDetector
 from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.utils.generators import openssl_hex_key_generator
 
 if __name__ == "__main__":
     # define lib / bin paths
     if len(sys.argv) > 1 and sys.argv[1] == 'arm64':
-        jailroot = "doc/examples/rootfs/jail-openssl-arm64/"
-    elif len(sys.argv) > 1 and sys.argv[1] == 'x8632':
-        jailroot = "doc/examples/rootfs/jail-openssl-x8632/"
+        jailroot = "doc/examples/rootfs/openssl/jail-openssl-arm64/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'x8664':
-        jailroot = "doc/examples/rootfs/jail-openssl-x8664/"
+        jailroot = "doc/examples/rootfs/openssl/jail-openssl-x8664/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'mipsel32':
-        jailroot = "doc/examples/rootfs/jail-openssl-mipsel32/"
+        jailroot = "doc/examples/rootfs/openssl/jail-openssl-mipsel32/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'riscv64':
-        jailroot = "doc/examples/rootfs/jail-openssl-riscv64/"
+        jailroot = "doc/examples/rootfs/openssl/jail-openssl-riscv64/"
     else:
         print("usage: openssl.py [arm64, x8632, x8664, mipsel32, riscv64]")
         exit(0)
@@ -36,7 +34,7 @@ if __name__ == "__main__":
     # the secret is marked with a '@' placeholder
     opensslArgs = "camellia-128-ecb -e -in input.bin -out output.bin -nosalt -K @".split()
     opensslArgs = [
-        "camellia-128-ecb",
+        "aes-128-ecb",
         "-e",
         "-in",
         "input.bin",
@@ -45,6 +43,8 @@ if __name__ == "__main__":
         "-nosalt",
         "-K",
         "@",
+        "-iv",
+        "0"
     ]
 
     # list of objects to trace
@@ -63,9 +63,9 @@ if __name__ == "__main__":
 
     scd = SCDetector(modules=[
         # Secret dependent memory read detection
-        # DataLeakDetector(binaryLoader=binLoader),
+        DataLeakDetector(binaryLoader=binLoader),
         # Secret dependent control flow detection
-        CFLeakDetector(binaryLoader=binLoader),
-    ], addrList=[0x7fffb8023aff], itercount=11)
+        # CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True),
+    ])
 
     scd.exec()

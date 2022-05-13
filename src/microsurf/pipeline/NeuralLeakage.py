@@ -3,7 +3,6 @@ import numpy as np
 import seaborn as sns
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from mine.models.mine import Mine
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import minmax_scale
@@ -11,19 +10,6 @@ from sklearn.preprocessing import minmax_scale
 from microsurf.utils.logger import getLogger
 
 log = getLogger()
-
-
-class shiftedRELU(nn.Module):
-    __constants__ = ["inplace"]
-    inplace: bool
-
-    def __init__(self, weights=1, inplace: bool = False):
-        super().__init__()
-        self.inplace = inplace
-        self.weights = weights
-
-    def forward(self, input):
-        return F.relu(input - 0.5, inplace=self.inplace)
 
 
 class MIEstimator(nn.Module):
