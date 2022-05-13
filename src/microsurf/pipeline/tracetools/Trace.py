@@ -199,7 +199,10 @@ class PCTraceCollection(TraceCollection):
         for l in track(self.possibleLeaks, description="analyzing PC traces"):
             row = []
             numhits = 0
+            secrets = []
+            skipcolcheck = False
             for t in self.traces:
+                secrets.append(t.secret)
                 entry = [t.secret]
                 for idx, e in enumerate(t):
                     if e == l:
@@ -209,13 +212,15 @@ class PCTraceCollection(TraceCollection):
                 row.append(entry)
             colnames = ["secret"] + [str(i) for i in range(numhits)]
             f = pd.DataFrame(row, columns=colnames, dtype=object)
-            if MARK[l] != "SECRET DEP C1":
+            if MARK[l] != "secret dep. branch":
                 # in the secret dependent hit count case, record the number of hits per secret.
-                f = f.count(axis=1).to_frame()
+                f = f.loc[:, f.columns != 'secret'].count(axis=1).to_frame()
+                f.insert(0, "secret", secrets)
+                skipcolcheck = True
             ffilter_stdev = f.loc[:, f.columns != 'secret'].std()
             f.drop(ffilter_stdev[ffilter_stdev == 0].index, axis=1, inplace=True)
             f.dropna(axis=0, inplace=True)
-            if len(f.columns) > 1 and len(f.index) > 1:
+            if (len(f.columns) > 1 or skipcolcheck) and len(f.index) > 1:
                 perLeakDict[l] = f
         self.DF = perLeakDict
         self.possibleLeaks = self.DF.keys()
@@ -235,11 +240,11 @@ class PCTraceCollection(TraceCollection):
             for vec in v.values():
                 if len(vec) == len(normVec):
                     if normVec and vec != normVec:
-                        MARK[k] = "SECRET DEP C1"
+                        MARK[k] = "secret dep. branch"
                 else:
                     a = normVec if len(normVec) < len(vec) else vec
                     b = normVec if len(normVec) > len(vec) else vec
                     if b[: len(a)] == a:
                         if self.flagVariableHitCount:
-                            MARK[k] = "SECRET DEP HIT COUNT"
+                            MARK[k] = "secret dep. hit count"
         return

@@ -20,6 +20,7 @@ import pandas as pd
 
 from .pipeline.DetectionModules import Detector
 from .pipeline.Stages import LeakageClassification
+from .pipeline.tracetools.Trace import MARK
 from .utils.elf import getfnname, getCodeSnippet
 from .utils.logger import getConsole, getLogger
 from .utils.report import ReportGenerator
@@ -60,7 +61,7 @@ class SCDetector:
         self.results = {}
         self.starttime = None
         self.MDresults = []
-        self.initTraceCount = 4
+        self.initTraceCount = 11
 
     def exec(self):
         """
@@ -129,7 +130,7 @@ class SCDetector:
                                 f'{self.loader.rootfs}/**/*{label.split(" ")[-1]}'
                             )[0]
                         )
-                        if self.loader.dynamic:
+                        if self.loader.dynamic and label not in self.loader.binPath.name:
                             offset = k - self.loader.getlibbase(label)
                             symbname = (
                                 getfnname(path, offset)
@@ -155,7 +156,7 @@ class SCDetector:
                                     "Runtime Addr": hex(k),
                                     "offset": f"{offset:#08x}",
                                     "MI score": mival,
-                                    "Leakage model": "neural-learnt",
+                                    "Comment": MARK[k] if k in MARK else "none",
                                     "Symbol Name": f'{symbname if symbname else "??":}',
                                     "Object Name": f'{path.split("/")[-1]}',
                                     "src": source,
@@ -177,7 +178,7 @@ class SCDetector:
                                     "Runtime Addr": hex(k),
                                     "offset": f"{k:#08x}",
                                     "MI score": mival,
-                                    "Leakage model": "neural-learnt",
+                                    "Comment": MARK[k] if k in MARK else "none",
                                     "Symbol Name": f'{symbname if symbname else "??":}',
                                     "Object Name": f'{path.split("/")[-1]}',
                                     "src": source,
@@ -194,7 +195,7 @@ class SCDetector:
         log.info(f"total runtime: {self.loader.runtime}")
         self.DF = pd.DataFrame.from_dict(self.MDresults)
         console.rule('Results', style="magenta")
-        pprint(self.DF.loc[:, ['Runtime Addr', 'offset', 'Symbol Name', 'asm', 'Detection Module']])
+        pprint(self.DF.loc[:, ['Runtime Addr', "offset", 'Comment', 'Symbol Name', 'Detection Module']])
         console.rule(style="magenta")
 
     def _generateReport(self):

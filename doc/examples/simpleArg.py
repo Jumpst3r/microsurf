@@ -13,7 +13,7 @@ from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.utils.generators import openssl_hex_key_generator
 
 if __name__ == "__main__":
-    binpath = "/home/nicolas/Documents/msc-thesis-work/tests/binaries/secret-dep-cf-1/secret-dep-cf-1-x86-64.bin"
+    binpath = "/home/nicolas/secret.bin"
     # binpath = "/home/nicolas/Documents/msc-thesis-work/tests/binaries/secret0/secret-x86-32.bin"
 
     args = ['@']  # single secret arg
@@ -23,8 +23,8 @@ if __name__ == "__main__":
 
     scd = SCDetector(modules=[
         # DataLeakDetector(binaryLoader=binLoader),
-        CFLeakDetector(binaryLoader=binLoader)
-    ], addrList=[0x4017b6], itercount=300
+        CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True)
+    ],
     )
 
     scd.exec()
