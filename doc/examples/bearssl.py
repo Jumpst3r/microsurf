@@ -9,12 +9,12 @@ todo
 from microsurf.microsurf import SCDetector
 from microsurf.pipeline.DetectionModules import CFLeakDetector, DataLeakDetector
 from microsurf.pipeline.Stages import BinaryLoader
-from microsurf.utils.generators import openssl_hex_key_generator
+from microsurf.utils.generators import bearSSL_RSAPrivKeyGenerator
 
 if __name__ == "__main__":
-    jailroot = "doc/examples/rootfs/bearssl/jail-bearssl-riscv64/"
+    jailroot = "doc/examples/rootfs/bearssl/jail-bearssl-x8664/"
 
-    binpath = jailroot + "test_aes_base"
+    binpath = jailroot + "test_rsa"
 
     opensslArgs = ['@']
 
@@ -24,7 +24,7 @@ if __name__ == "__main__":
         path=binpath,
         args=opensslArgs,
         rootfs=jailroot,
-        rndGen=openssl_hex_key_generator(128),
+        rndGen=bearSSL_RSAPrivKeyGenerator(1024),
         sharedObjects=[]
     )
 

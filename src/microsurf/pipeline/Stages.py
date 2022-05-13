@@ -142,7 +142,18 @@ class BinaryLoader:
         try:
             # initialize args;
             val = self.rndGen()
-            self.newArgs[self.secretArgIndex] = val
+            nargs = []
+            if isinstance(val, list):
+                for idx, a in enumerate(self.newArgs):
+                    if idx == self.secretArgIndex:
+                        for k in val:
+                            nargs.append(k)
+                    else:
+                        nargs.append(a)
+                self.newArgs = nargs
+            else:
+                self.newArgs[self.secretArgIndex] = val
+
             self.multithreaded = False
             self.QLEngine = Qiling(
                 [str(self.binPath), *self.newArgs],
@@ -360,7 +371,18 @@ class MemWatcher:
 
     def exec(self, secretString, asFile, secret):
         args = self.args.copy()
-        args[args.index("@")] = secretString
+        nargs = []
+        if isinstance(secretString, list):
+            for idx, a in enumerate(args):
+                if idx == args.index("@"):
+                    for k in secretString:
+                        nargs.append(k)
+                else:
+                    nargs.append(a)
+            args = nargs
+        else:
+            args[args.index("@")] = secretString
+        log.info(args)
         sys.stdout.fileno = lambda: False
         sys.stderr.fileno = lambda: False
         self.QLEngine = Qiling(
@@ -476,7 +498,18 @@ class CFWatcher:
 
     def exec(self, secretString, asFile, secret):
         args = self.args.copy()
-        args[args.index("@")] = secretString
+        nargs = []
+        if isinstance(secretString, list):
+            for idx, a in enumerate(args):
+                if idx == args.index("@"):
+                    for k in secretString:
+                        nargs.append(k)
+                else:
+                    nargs.append(a)
+            args = nargs
+        else:
+            args[args.index("@")] = secretString
+        log.info(args)
         sys.stdout.fileno = lambda: False
         sys.stderr.fileno = lambda: False
 

@@ -1,8 +1,6 @@
 import os
 import tempfile
-from typing import Union
 
-import qiling
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
@@ -43,6 +41,31 @@ class RSAPrivKeyGenerator(SecretGenerator):
         with open(keyfile, 'wb') as f:
             f.write(kbytes)
         return keyfile
+
+    def getSecret(self) -> int:
+        return self.pkey.private_numbers().dmq1
+
+
+class bearSSL_RSAPrivKeyGenerator(SecretGenerator):
+
+    def __init__(self, keylen):
+        # the beartls driver expects 1024 bit keys, passed as hex arguments:
+        # ./test_rsa p q dp dq iq
+        assert keylen == 1024
+        super().__init__(keylen, asFile=False)
+
+    def __call__(self, *args, **kwargs):
+        self.pkey = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=self.keylen
+        )
+        args = f"{hex(self.pkey.private_numbers().p)[2:]} " \
+               f"{hex(self.pkey.private_numbers().q)[2:]} " \
+               f"{hex(self.pkey.private_numbers().dmp1)[2:]} " \
+               f"{hex(self.pkey.private_numbers().dmq1)[2:]} " \
+               f"{hex(self.pkey.private_numbers().iqmp)[2:]}".split(' ')
+
+        return args
 
     def getSecret(self) -> int:
         return self.pkey.private_numbers().d
