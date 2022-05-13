@@ -42,7 +42,7 @@ def test_analyze_secret_simple(binPath, monkeypatch):
                              rndGen=openssl_hex_key_generator(8),
                              deterministic=False)
     scd = SCDetector(modules=[DataLeakDetector(binaryLoader=binLoader)], addrList=[int(a, 16) for a in tAddr],
-                     itercount=200)
+                     itercount=20)
     scd.exec()
     df = scd.DF
     tAddr = [int(a, 16) for a in tAddr]

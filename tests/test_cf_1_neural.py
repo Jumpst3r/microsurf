@@ -48,7 +48,7 @@ def test_analyze_secret_simple(binPath, rootfsPath, monkeypatch):
     scd = SCDetector(modules=[
         # DataLeakDetector(binaryLoader=binLoader),
         CFLeakDetector(binaryLoader=binLoader)
-    ], addrList=[int(a, 16) for a in tAddr], itercount=200)
+    ], addrList=[int(a, 16) for a in tAddr], itercount=20)
 
     scd.exec()
     df = scd.DF
