@@ -18,7 +18,7 @@ from microsurf.utils.generators import RSAPrivKeyGenerator
 if __name__ == "__main__":
     # define lib / bin paths
     if len(sys.argv) > 1 and sys.argv[1] == 'arm64':
-        jailroot = "doc/examples/rootfs/jail-openssl-arm64/"
+        jailroot = "doc/examples/rootfs/openssl/jail-openssl-arm64/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'x8632':
         jailroot = "doc/examples/rootfs/jail-openssl-x8632/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'x8664':

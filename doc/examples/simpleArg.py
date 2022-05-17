@@ -14,7 +14,7 @@ from microsurf.utils.generators import openssl_hex_key_generator
 
 if __name__ == "__main__":
     binpath = "/home/nicolas/secret.bin"
-    # binpath = "/home/nicolas/Documents/msc-thesis-work/tests/binaries/secret0/secret-x86-32.bin"
+    binpath = "/home/nicolas/Documents/msc-thesis-work/tests/binaries/secret-dep-cf-1/secret-dep-cf-1-arm.bin"
 
     args = ['@']  # single secret arg
 

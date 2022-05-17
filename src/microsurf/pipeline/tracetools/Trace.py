@@ -110,17 +110,20 @@ class MemTraceCollection(TraceCollection):
         log.debug(f"recorded {len(addrs)} distinct IPs making memory reads")
         for l in track(addrs, description="analyzing memory read traces"):
             row = []
+            secrets = []
             numhits = 0
             for trace in self.traces:
                 if l not in trace.trace:
                     continue
-                entry = [trace.secret]
+                entry = []
+                secrets.append(trace.secret)
                 entry += trace.trace[l]
                 numhits = max(numhits, len(trace.trace[l]))
                 row.append(entry)
             cols = [str(i) for i in range(numhits)]
-            colnames = ["secret"] + cols
-            f = pd.DataFrame(row, columns=colnames, dtype=object)
+            colnames = cols
+            f = pd.DataFrame(row, columns=colnames, dtype=int)
+            f.insert(0, 'secret', secrets)
             ffilter_stdev = f.loc[:, f.columns != 'secret'].std()
             f.drop(ffilter_stdev[ffilter_stdev == 0].index, axis=1, inplace=True)
             f.dropna(axis=0, inplace=True)
@@ -203,20 +206,20 @@ class PCTraceCollection(TraceCollection):
             skipcolcheck = False
             for t in self.traces:
                 secrets.append(t.secret)
-                entry = [t.secret]
+                entry = []
                 for idx, e in enumerate(t):
                     if e == l:
                         if idx + 1 < len(t):
                             entry.append(t[idx + 1])
-                numhits = max(numhits, len(entry) - 1)
+                numhits = max(numhits, len(entry))
                 row.append(entry)
-            colnames = ["secret"] + [str(i) for i in range(numhits)]
+            colnames = [str(i) for i in range(numhits)]
             f = pd.DataFrame(row, columns=colnames, dtype=object)
             if MARK[l] != "secret dep. branch":
                 # in the secret dependent hit count case, record the number of hits per secret.
-                f = f.loc[:, f.columns != 'secret'].count(axis=1).to_frame()
-                f.insert(0, "secret", secrets)
+                f = f.count(axis=1).to_frame()
                 skipcolcheck = True
+            f.insert(0, "secret", secrets)
             ffilter_stdev = f.loc[:, f.columns != 'secret'].std()
             f.drop(ffilter_stdev[ffilter_stdev == 0].index, axis=1, inplace=True)
             f.dropna(axis=0, inplace=True)

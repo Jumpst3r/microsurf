@@ -35,6 +35,8 @@ Possible sources of randomness in on most unix like systems:
 
 class device_random(QlFsMappedObject):
     def read(self, size):
+        data = bytes("A" * size, "utf-8")
+        log.debug(f'/dev/random() CONTENT: {data.hex(" ")}')
         return b"\xAA"
 
     def fstat(self):
@@ -245,3 +247,7 @@ def syscall_exit_group(ql, code: int):
         exit(0)
     else:
         return 0
+
+
+def syscall_futex(ql, uaddr: int, op: int, val: int, timeout: int, uaddr2: int, val3: int) -> int:
+    return 0

@@ -38,6 +38,7 @@ from ..utils.hijack import (
     ql_fixed_syscall_faccessat,
     ql_fixed_syscall_newfstatat,
     syscall_exit_group,
+    syscall_futex
 )
 from ..utils.logger import getConsole, getLogger, getQilingLogger, LOGGING_LEVEL
 
@@ -85,6 +86,7 @@ class BinaryLoader:
         self.QLEngine: Qiling = None
         self.executableCode = []
         self.uuid = uuid.uuid4()
+        self.dryRun = False
         self.resultDir += f"/{self.uuid}"
         from microsurf.utils.logger import banner
         console.print(banner)
@@ -94,8 +96,8 @@ class BinaryLoader:
         try:
             self.secretArgIndex: int = args.index("@")
         except ValueError:
-            log.error('no argument marked as secret dependent - exiting.')
-            exit(0)
+            log.warning('no argument marked as secret dependent - executing as is and exiting (dry run)')
+            self.dryRun = True
 
         if self.deterministic:
             log.info("hooking sources of randomness")
@@ -140,19 +142,20 @@ class BinaryLoader:
                     "You provided a list of shared objects - but the target binary is static. Ignoring objects."
                 )
         try:
-            # initialize args;
             val = self.rndGen()
-            nargs = []
-            if isinstance(val, list):
-                for idx, a in enumerate(self.newArgs):
-                    if idx == self.secretArgIndex:
-                        for k in val:
-                            nargs.append(k)
-                    else:
-                        nargs.append(a)
-                self.newArgs = nargs
-            else:
-                self.newArgs[self.secretArgIndex] = val
+            if not self.dryRun:
+                # initialize args;
+                nargs = []
+                if isinstance(val, list):
+                    for idx, a in enumerate(self.newArgs):
+                        if idx == self.secretArgIndex:
+                            for k in val:
+                                nargs.append(k)
+                        else:
+                            nargs.append(a)
+                    self.newArgs = nargs
+                else:
+                    self.newArgs[self.secretArgIndex] = val
 
             self.multithreaded = False
             self.QLEngine = Qiling(
@@ -195,7 +198,7 @@ class BinaryLoader:
                         [str(self.binPath), *self.newArgs],
                         str(self.rootfs),
                         log_override=getQilingLogger(),
-                        verbose=QL_VERBOSE.DISABLED if LOGGING_LEVEL == logging.INFO else QL_VERBOSE.DEBUG,
+                        verbose=QL_VERBOSE.DEFAULT if LOGGING_LEVEL == logging.INFO else QL_VERBOSE.DEBUG,
                         console=True,
                         multithread=self.multithreaded,
                     )
@@ -218,6 +221,9 @@ class BinaryLoader:
             else:
                 log.error(tback)
                 exit(1)
+        if self.dryRun:
+            log.warn("no arg marked as secret, exiting (emulation successful).")
+            exit(0)
 
     def validateObjects(self):
         log.info("mappings:")
@@ -290,6 +296,8 @@ class BinaryLoader:
         self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
         self.QLEngine.os.set_syscall("newfstatat", ql_fixed_syscall_newfstatat)
         self.QLEngine.os.set_syscall("exit_group", syscall_exit_group)
+        if not self.multithreaded:
+            self.QLEngine.os.set_syscall("futex", syscall_futex)
         if self.deterministic:
             self.QLEngine.add_fs_mapper("/dev/urandom", device_random)
             self.QLEngine.add_fs_mapper("/dev/random", device_random)
@@ -353,15 +361,14 @@ class MemWatcher:
             self.currenttrace.add(pc, addr)
 
     def _hook_code(self, ql: Qiling, address: int, size: int):
-        if self.locations is None:
+        if not self.getAssembly:
             return
         pc = ql.arch.regs.arch_pc
-        if pc in self.locations:
-            buf = ql.mem.read(address, size)
-            for insn in ql.arch.disassembler.disasm(buf, address):
-                self.asm[
-                    hex(pc)
-                ] = f"{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}"
+        buf = ql.mem.read(address, size)
+        for insn in ql.arch.disassembler.disasm(buf, address):
+            self.asm[
+                hex(pc)
+            ] = f"{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}"
 
     def getlibname(self, addr):
         return next(
@@ -382,7 +389,6 @@ class MemWatcher:
             args = nargs
         else:
             args[args.index("@")] = secretString
-        log.info(args)
         sys.stdout.fileno = lambda: False
         sys.stderr.fileno = lambda: False
         self.QLEngine = Qiling(
@@ -396,6 +402,7 @@ class MemWatcher:
             self.QLEngine.add_fs_mapper(secretString, secretString)
         self.currenttrace = MemTrace(secret)
         self.QLEngine.hook_mem_read(self._trace_mem_read)
+
         for (s, e) in self.codeRanges:
             self.QLEngine.hook_code(self._hook_code, begin=s, end=e)
 
@@ -419,6 +426,8 @@ class MemWatcher:
         self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
         self.QLEngine.os.set_syscall("newfstatat", ql_fixed_syscall_newfstatat)
         self.QLEngine.os.set_syscall("exit_group", syscall_exit_group)
+        if not self.multithread:
+            self.QLEngine.os.set_syscall("futex", syscall_futex)
         self.QLEngine.run()
         self.QLEngine.stop()
         dropset = []
@@ -474,7 +483,7 @@ class CFWatcher:
         self.saveNext = False
 
     def _hook_code(self, ql: Qiling, address: int, size: int):
-        a = ql.arch.regs.arch_pc
+        pass
 
     def _trace_block(self, ql, address, size):
         buf = ql.mem.read(address, size)
@@ -509,7 +518,6 @@ class CFWatcher:
             args = nargs
         else:
             args[args.index("@")] = secretString
-        log.info(args)
         sys.stdout.fileno = lambda: False
         sys.stderr.fileno = lambda: False
 
@@ -546,6 +554,8 @@ class CFWatcher:
         self.QLEngine.os.set_syscall("faccessat", ql_fixed_syscall_faccessat)
         self.QLEngine.os.set_syscall("newfstatat", ql_fixed_syscall_newfstatat)
         self.QLEngine.os.set_syscall("exit_group", syscall_exit_group)
+        if not self.multithread:
+            self.QLEngine.os.set_syscall("futex", syscall_futex)
         self.QLEngine.run()
         self.QLEngine.stop()
 

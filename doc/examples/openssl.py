@@ -10,14 +10,14 @@ openssl camellia-128-ecb -e -in input.bin -out output.bin -nosalt -K hexdata
 import sys
 
 from microsurf.microsurf import SCDetector
-from microsurf.pipeline.DetectionModules import DataLeakDetector
+from microsurf.pipeline.DetectionModules import DataLeakDetector, CFLeakDetector
 from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.utils.generators import openssl_hex_key_generator
 
 if __name__ == "__main__":
     # define lib / bin paths
     if len(sys.argv) > 1 and sys.argv[1] == 'arm64':
-        jailroot = "doc/examples/rootfs/openssl/jail-openssl-arm64/"
+        jailroot = "doc/examples/rootfs/openssl/jail-openssl-arm32/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'x8664':
         jailroot = "doc/examples/rootfs/openssl/jail-openssl-x8664/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'mipsel32':
@@ -32,20 +32,7 @@ if __name__ == "__main__":
 
     # the arguments to pass to the binary.
     # the secret is marked with a '@' placeholder
-    opensslArgs = "camellia-128-ecb -e -in input.bin -out output.bin -nosalt -K @".split()
-    opensslArgs = [
-        "aes-128-ecb",
-        "-e",
-        "-in",
-        "input.bin",
-        "-out",
-        "output.bin",
-        "-nosalt",
-        "-K",
-        "@",
-        "-iv",
-        "0"
-    ]
+    opensslArgs = "aes-128-cbc -e -in input.bin -out output.bin -iv 0 -K @".split()
 
     # list of objects to trace
     sharedObjects = ['libcrypto']
@@ -65,7 +52,7 @@ if __name__ == "__main__":
         # Secret dependent memory read detection
         DataLeakDetector(binaryLoader=binLoader),
         # Secret dependent control flow detection
-        # CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True),
+        CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True),
     ])
 
     scd.exec()

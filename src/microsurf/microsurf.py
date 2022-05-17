@@ -61,7 +61,7 @@ class SCDetector:
         self.results = {}
         self.starttime = None
         self.MDresults = []
-        self.initTraceCount = 11
+        self.initTraceCount = 3
 
     def exec(self):
         """
@@ -71,7 +71,7 @@ class SCDetector:
         for module in self.modules:
             console.log(f"module {str(module)}")
             # first capture a small number of traces to identify possible leak locations.
-            collection, asm = module.recordTraces(self.initTraceCount)
+            collection, asm = module.recordTraces(self.initTraceCount, getAssembly=True)
             if not collection.possibleLeaks:
                 log.info(f"module {str(module)} returned no possible leaks")
                 continue

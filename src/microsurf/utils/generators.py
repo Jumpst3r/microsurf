@@ -33,7 +33,7 @@ class RSAPrivKeyGenerator(SecretGenerator):
         )
         kbytes = self.pkey.private_bytes(
             encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption()
         )
         tempfile.tempdir = '/tmp'
@@ -68,7 +68,7 @@ class bearSSL_RSAPrivKeyGenerator(SecretGenerator):
         return args
 
     def getSecret(self) -> int:
-        return self.pkey.private_numbers().d
+        return self.pkey.private_numbers().q
 
 
 class mbedTLS_hex_key_generator(SecretGenerator):
