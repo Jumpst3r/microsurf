@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 import sys
 import tempfile
 import traceback
@@ -143,6 +144,9 @@ class BinaryLoader:
                 )
         try:
             val = self.rndGen()
+            os.makedirs(self.rootfs + "/" + "tmp", exist_ok=True)
+            dst = self.rootfs.rstrip('/') + val
+            shutil.copy(val, dst)
             if not self.dryRun:
                 # initialize args;
                 nargs = []
@@ -175,6 +179,9 @@ class BinaryLoader:
                 log.error(
                     f"Shared object {str(e.filename)} not found in emulation root {self.rootfs}"
                 )
+                log.debug(e)
+                exit(1)
+            else:
                 log.debug(e)
                 exit(1)
         try:
@@ -400,6 +407,10 @@ class MemWatcher:
         )
         if asFile:
             self.QLEngine.add_fs_mapper(secretString, secretString)
+
+        dst = self.rootfs.rstrip('/') + secretString
+        shutil.copy(secretString, dst)
+
         self.currenttrace = MemTrace(secret)
         self.QLEngine.hook_mem_read(self._trace_mem_read)
 
@@ -523,6 +534,10 @@ class CFWatcher:
             args = nargs
         else:
             args[args.index("@")] = secretString
+
+        dst = self.rootfs.rstrip('/') + secretString
+        shutil.copy(secretString, dst)
+
         sys.stdout.fileno = lambda: False
         sys.stderr.fileno = lambda: False
 

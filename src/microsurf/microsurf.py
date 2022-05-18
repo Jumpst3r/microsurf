@@ -13,6 +13,7 @@ __version__ = "0.0.0a"
 
 import glob
 import os
+import shutil
 import time
 from typing import List, Union
 
@@ -197,6 +198,9 @@ class SCDetector:
         console.rule('Results', style="magenta")
         pprint(self.DF.loc[:, ['Runtime Addr', "offset", 'Comment', 'Symbol Name', 'Detection Module']])
         console.rule(style="magenta")
+        log.info("Cleaning temp files")
+        shutil.rmtree(self.loader.rootfs.rstrip('/') + '/tmp')
+        log.info("all done.")
 
     def _generateReport(self):
         if "PYTEST_CURRENT_TEST" in os.environ:

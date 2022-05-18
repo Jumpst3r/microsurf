@@ -43,7 +43,7 @@ class RSAPrivKeyGenerator(SecretGenerator):
         return keyfile
 
     def getSecret(self) -> int:
-        return self.pkey.private_numbers().dmq1
+        return self.pkey.private_numbers().d
 
 
 class bearSSL_RSAPrivKeyGenerator(SecretGenerator):
