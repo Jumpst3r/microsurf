@@ -1,5 +1,7 @@
 Build with OpenSSL commit 524bac570702a79366b85ff1f66e07d3e002370c (May 2022)
 
+the 1.1.1dev folder is mainly for comparative evaluations with other tools and corresponds to commit 7477c83e15
+
 toolchains:
 
 jail-openssl-armv4: armv5-eabi--glibc--stable-2020.02-1

@@ -403,8 +403,13 @@ class MemWatcher:
         self.currenttrace = MemTrace(secret)
         self.QLEngine.hook_mem_read(self._trace_mem_read)
 
-        for (s, e) in self.codeRanges:
-            self.QLEngine.hook_code(self._hook_code, begin=s, end=e)
+        # no code hooks on x86, as the PC is always correct in the memread hook (not given on other archs)
+        if self.arch != CS_ARCH_X86 and not self.getAssembly:
+            for (s, e) in self.codeRanges:
+                self.QLEngine.hook_code(self._hook_code, begin=s, end=e)
+        elif self.getAssembly:
+            for (s, e) in self.codeRanges:
+                self.QLEngine.hook_code(self._hook_code, begin=s, end=e)
 
         if self.deterministic:
             self.QLEngine.add_fs_mapper("/dev/urandom", device_random)

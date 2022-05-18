@@ -16,6 +16,9 @@ from microsurf.utils.generators import hex_file
 
 if __name__ == "__main__":
     # define lib / bin paths
+    # comparative evalutation mode, older OpenSSL version - only x86
+    if len(sys.argv) > 1 and sys.argv[1] == 'eval':
+        jailroot = "doc/examples/rootfs/openssl/jail-openssl-1.1.1dev-x8664/"
     if len(sys.argv) > 1 and sys.argv[1] == 'arm64':
         jailroot = "doc/examples/rootfs/openssl/jail-openssl-arm32/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'x8664':
