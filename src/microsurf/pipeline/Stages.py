@@ -531,8 +531,9 @@ class CFWatcher:
         if asFile:
             self.QLEngine.add_fs_mapper(secretString, secretString)
         self.currenttrace = PCTrace(secret)
-        self.QLEngine.hook_code(self._hook_code)
         for (s, e) in self.tracedObjects:
+            if self.arch != CS_ARCH_X86:
+                self.QLEngine.hook_code(self._hook_code)
             self.QLEngine.hook_block(self._trace_block, begin=s, end=e)
         if self.deterministic:
             self.QLEngine.add_fs_mapper("/dev/urandom", device_random)
