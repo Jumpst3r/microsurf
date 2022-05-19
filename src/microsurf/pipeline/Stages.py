@@ -144,9 +144,10 @@ class BinaryLoader:
                 )
         try:
             val = self.rndGen()
-            os.makedirs(self.rootfs + "/" + "tmp", exist_ok=True)
-            dst = self.rootfs.rstrip('/') + val
-            shutil.copy(val, dst)
+            if rndGen.asFile:
+                os.makedirs(self.rootfs + "/" + "tmp", exist_ok=True)
+                dst = self.rootfs.rstrip('/') + val
+                shutil.copy(val, dst)
             if not self.dryRun:
                 # initialize args;
                 nargs = []
@@ -407,9 +408,8 @@ class MemWatcher:
         )
         if asFile:
             self.QLEngine.add_fs_mapper(secretString, secretString)
-
-        dst = self.rootfs.rstrip('/') + secretString
-        shutil.copy(secretString, dst)
+            dst = self.rootfs.rstrip('/') + secretString
+            shutil.copy(secretString, dst)
 
         self.currenttrace = MemTrace(secret)
         self.QLEngine.hook_mem_read(self._trace_mem_read)
@@ -535,8 +535,10 @@ class CFWatcher:
         else:
             args[args.index("@")] = secretString
 
-        dst = self.rootfs.rstrip('/') + secretString
-        shutil.copy(secretString, dst)
+        if asFile:
+            self.QLEngine.add_fs_mapper(secretString, secretString)
+            dst = self.rootfs.rstrip('/') + secretString
+            shutil.copy(secretString, dst)
 
         sys.stdout.fileno = lambda: False
         sys.stderr.fileno = lambda: False
@@ -548,8 +550,7 @@ class CFWatcher:
             verbose=QL_VERBOSE.DISABLED,
             multithread=self.multithread,
         )
-        if asFile:
-            self.QLEngine.add_fs_mapper(secretString, secretString)
+
         self.currenttrace = PCTrace(secret)
         for (s, e) in self.tracedObjects:
             if self.arch != CS_ARCH_X86:

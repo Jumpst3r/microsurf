@@ -62,7 +62,7 @@ class SCDetector:
         self.results = {}
         self.starttime = None
         self.MDresults = []
-        self.initTraceCount = 3
+        self.initTraceCount = 5
 
     def exec(self):
         """
@@ -199,7 +199,7 @@ class SCDetector:
         pprint(self.DF.loc[:, ['Runtime Addr', "offset", 'Comment', 'Symbol Name', 'Detection Module']])
         console.rule(style="magenta")
         log.info("Cleaning temp files")
-        shutil.rmtree(self.loader.rootfs.rstrip('/') + '/tmp')
+        shutil.rmtree(self.loader.rootfs.rstrip('/') + '/tmp', ignore_errors=True)
         log.info("all done.")
 
     def _generateReport(self):

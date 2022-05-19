@@ -49,7 +49,7 @@ class NeuralLeakageModel(nn.Module):
         self.keylen = keylen
         self.Y = self.binary(Y).reshape(Y.shape[0], self.keylen)
         self.assetDir = assetDir
-        self.HUnits = 50
+        self.HUnits = 100
         self.leakAddr = leakAddr
 
     def train(self):
@@ -78,7 +78,7 @@ class NeuralLeakageModel(nn.Module):
             Y_val = []
             mest_val = MIEstimator(x_val)
             mest_train = MIEstimator(x_train)
-            for e in range(1, 200):
+            for e in range(1, 400):
                 lpred = lm(y_train)
                 mest_train.trainEstimator(lpred)
                 loss = -mest_train.forward(lpred)
@@ -99,7 +99,7 @@ class NeuralLeakageModel(nn.Module):
                         old_val_mean = np.mean(Y_val[-10:-5])
                         eps = new_val_mean - old_val_mean
                         if eps > 0:
-                            break
+                            pass
                     lm.train()
                 Y.append(loss.detach().numpy())
             lm.eval()
