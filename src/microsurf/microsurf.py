@@ -62,7 +62,7 @@ class SCDetector:
         self.results = {}
         self.starttime = None
         self.MDresults = []
-        self.initTraceCount = 5
+        self.initTraceCount = 11
 
     def exec(self):
         """

@@ -10,7 +10,7 @@ openssl camellia-128-ecb -e -in input.bin -out output.bin -nosalt -K hexdata
 import sys
 
 from microsurf.microsurf import SCDetector
-from microsurf.pipeline.DetectionModules import CFLeakDetector
+from microsurf.pipeline.DetectionModules import CFLeakDetector, DataLeakDetector
 from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.utils.generators import RSAPrivKeyGenerator
 
@@ -61,7 +61,7 @@ if __name__ == "__main__":
 
     scd = SCDetector(modules=[
         # Secret dependent memory read detection
-        # DataLeakDetector(binaryLoader=binLoader),
+        DataLeakDetector(binaryLoader=binLoader),
         # Secret dependent control flow detection
         CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True),
     ], )  # addrList=[0x7fffb7fddbc9], itercount=1000)
