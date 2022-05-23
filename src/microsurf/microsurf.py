@@ -76,6 +76,8 @@ class SCDetector:
             if not collection.possibleLeaks:
                 log.info(f"module {str(module)} returned no possible leaks")
                 continue
+            else:
+                log.info(f"module {str(module)} detected {len(collection.possibleLeaks)} possible leaks")
             self.results[str(module)] = (collection.results, asm)
             if self.addrList:
                 # check if the provided addresses were indeed found, if not, raise an error

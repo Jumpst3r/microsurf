@@ -126,7 +126,7 @@ class MemTraceCollection(TraceCollection):
             f.insert(0, 'secret', secrets)
             ffilter_stdev = f.loc[:, f.columns != 'secret'].std()
             f.drop(ffilter_stdev[ffilter_stdev == 0].index, axis=1, inplace=True)
-            f.dropna(axis=0, inplace=True)
+            # f.dropna(axis=0, inplace=True)
             if len(f.columns) > 1 and len(f.index) > 1:
                 perLeakDict[l] = f
         self.DF = perLeakDict

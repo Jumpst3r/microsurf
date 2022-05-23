@@ -535,11 +535,6 @@ class CFWatcher:
         else:
             args[args.index("@")] = secretString
 
-        if asFile:
-            self.QLEngine.add_fs_mapper(secretString, secretString)
-            dst = self.rootfs.rstrip('/') + secretString
-            shutil.copy(secretString, dst)
-
         sys.stdout.fileno = lambda: False
         sys.stderr.fileno = lambda: False
 
@@ -550,6 +545,11 @@ class CFWatcher:
             verbose=QL_VERBOSE.DISABLED,
             multithread=self.multithread,
         )
+
+        if asFile:
+            self.QLEngine.add_fs_mapper(secretString, secretString)
+            dst = self.rootfs.rstrip('/') + secretString
+            shutil.copy(secretString, dst)
 
         self.currenttrace = PCTrace(secret)
         for (s, e) in self.tracedObjects:
