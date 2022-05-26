@@ -14,18 +14,10 @@ from typing import Dict, List, Tuple
 import magic
 import ray
 from capstone import (
-    CS_ARCH_ARM,
     CS_ARCH_X86,
-    CS_MODE_32,
-    CS_MODE_64,
-    Cs,
-    CS_ARCH_MIPS,
-    CS_ARCH_RISCV,
-    CS_MODE_ARM,
-    CS_MODE_RISCV64,
 )
 from qiling import Qiling
-from qiling.const import QL_VERBOSE
+from qiling.const import QL_VERBOSE, QL_ARCH, QL_OS
 
 from .NeuralLeakage import NeuralLeakageModel
 from .tracetools.Trace import MemTrace, PCTrace, TraceCollection
@@ -109,19 +101,16 @@ class BinaryLoader:
         self.filemagic = fileinfo
         if "80386" in fileinfo:
             self.ARCH = "X86_32"
-            self.md = Cs(CS_ARCH_X86, CS_MODE_32)
         elif "x86" in fileinfo:
             self.ARCH = "X86_64"
-            self.md = Cs(CS_ARCH_X86, CS_MODE_64)
         elif "ARM" in fileinfo:
             self.ARCH = "ARM"
-            self.md = Cs(CS_ARCH_ARM, CS_MODE_ARM)
         elif "MIPS32" in fileinfo:
             self.ARCH = "MIPS32"
-            self.md = Cs(CS_ARCH_MIPS, CS_MODE_32)
         elif "RISC-V" in fileinfo:
             self.ARCH = "RISCV"
-            self.md = Cs(CS_ARCH_RISCV, CS_MODE_RISCV64)
+        elif "PowerPC" in fileinfo:
+            self.ARCH = "PPC"
         else:
             log.info(fileinfo)
             log.error("Target architecture not implemented")
@@ -169,6 +158,8 @@ class BinaryLoader:
                 log_override=getQilingLogger(),
                 verbose=QL_VERBOSE.DISABLED if LOGGING_LEVEL == logging.INFO else QL_VERBOSE.DEBUG,
                 console=True,
+                archtype=QL_ARCH.PPC,
+                ostype=QL_OS.LINUX,
                 multithread=self.multithreaded,
             )
             self.Cs = self.QLEngine.arch.disassembler
@@ -180,10 +171,10 @@ class BinaryLoader:
                 log.error(
                     f"Shared object {str(e.filename)} not found in emulation root {self.rootfs}"
                 )
-                log.debug(e)
+                log.error(e)
                 exit(1)
             else:
-                log.debug(e)
+                log.error(e)
                 exit(1)
         try:
             starttime = datetime.now()
@@ -208,6 +199,8 @@ class BinaryLoader:
                         log_override=getQilingLogger(),
                         verbose=QL_VERBOSE.DEFAULT if LOGGING_LEVEL == logging.INFO else QL_VERBOSE.DEBUG,
                         console=True,
+                        archtype=QL_ARCH.PPC,
+                        ostype=QL_OS.LINUX,
                         multithread=self.multithreaded,
                     )
                     self.fixSyscalls()

@@ -4,6 +4,10 @@ import tempfile
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, dsa
 
+from microsurf.utils.logger import getLogger
+
+log = getLogger()
+
 
 class SecretGenerator:
     def __init__(self, keylen, asFile):
@@ -18,7 +22,6 @@ class SecretGenerator:
 
     def __str__(self):
         return f"generated secret key (secret={hex(self.getSecret())})"
-
 
 class RSAPrivKeyGenerator(SecretGenerator):
 
@@ -37,7 +40,7 @@ class RSAPrivKeyGenerator(SecretGenerator):
             encryption_algorithm=serialization.NoEncryption()
         )
         tempfile.tempdir = '/tmp'
-        keyfile = tempfile.NamedTemporaryFile(prefix="microsurf_key_gen", suffix=".tmpkey").name
+        keyfile = tempfile.NamedTemporaryFile(prefix="microsurf_key_gen", suffix=".der").name
         with open(keyfile, 'wb') as f:
             f.write(kbytes)
         return keyfile
