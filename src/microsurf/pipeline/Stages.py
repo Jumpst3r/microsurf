@@ -13,11 +13,10 @@ from typing import Dict, List, Tuple
 
 import magic
 import ray
-from capstone import (
-    CS_ARCH_X86,
-)
+from capstone import CS_ARCH_RISCV, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_ARCH_ARM64, CS_MODE_ARM, CS_MODE_MIPS32, \
+    CS_ARCH_MIPS, CS_MODE_RISCV64, Cs
 from qiling import Qiling
-from qiling.const import QL_VERBOSE, QL_ARCH, QL_OS
+from qiling.const import QL_VERBOSE
 
 from .NeuralLeakage import NeuralLeakageModel
 from .tracetools.Trace import MemTrace, PCTrace, TraceCollection
@@ -78,13 +77,9 @@ class BinaryLoader:
         self.runtime = None
         self.QLEngine: Qiling = None
         self.executableCode = []
-        self.uuid = uuid.uuid4()
         self.dryRun = False
-        self.resultDir += f"/{self.uuid}"
         from microsurf.utils.logger import banner
         console.print(banner)
-        os.makedirs(self.resultDir + "/" + "assets", exist_ok=True)
-        os.makedirs(self.resultDir + "/" + "traces", exist_ok=True)
 
         try:
             self.secretArgIndex: int = args.index("@")
@@ -101,20 +96,27 @@ class BinaryLoader:
         self.filemagic = fileinfo
         if "80386" in fileinfo:
             self.ARCH = "X86_32"
+            self.md = Cs(CS_ARCH_X86, CS_MODE_32)
         elif "x86" in fileinfo:
             self.ARCH = "X86_64"
+            self.md = Cs(CS_ARCH_X86, CS_MODE_64)
         elif "ARM" in fileinfo:
             self.ARCH = "ARM"
+            self.md = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
         elif "MIPS32" in fileinfo:
             self.ARCH = "MIPS32"
+            self.md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS32)
         elif "RISC-V" in fileinfo:
             self.ARCH = "RISCV"
-        elif "PowerPC" in fileinfo:
-            self.ARCH = "PPC"
+            self.md = Cs(CS_ARCH_RISCV, CS_MODE_RISCV64)
         else:
             log.info(fileinfo)
             log.error("Target architecture not implemented")
             exit(-1)
+        self.uuid = f"{str(uuid.uuid4())[:6]}-{self.binPath.name}-{self.ARCH}"
+        self.resultDir += f"/{self.uuid}"
+        os.makedirs(self.resultDir + "/" + "assets", exist_ok=True)
+        os.makedirs(self.resultDir + "/" + "traces", exist_ok=True)
         if "dynamic" in fileinfo:
             log.warn(
                 f"Detected dynamically linked binary, ensure that the appropriate shared objects are available under "
@@ -158,8 +160,6 @@ class BinaryLoader:
                 log_override=getQilingLogger(),
                 verbose=QL_VERBOSE.DISABLED if LOGGING_LEVEL == logging.INFO else QL_VERBOSE.DEBUG,
                 console=True,
-                archtype=QL_ARCH.PPC,
-                ostype=QL_OS.LINUX,
                 multithread=self.multithreaded,
             )
             self.Cs = self.QLEngine.arch.disassembler
@@ -199,8 +199,6 @@ class BinaryLoader:
                         log_override=getQilingLogger(),
                         verbose=QL_VERBOSE.DEFAULT if LOGGING_LEVEL == logging.INFO else QL_VERBOSE.DEBUG,
                         console=True,
-                        archtype=QL_ARCH.PPC,
-                        ostype=QL_OS.LINUX,
                         multithread=self.multithreaded,
                     )
                     self.fixSyscalls()

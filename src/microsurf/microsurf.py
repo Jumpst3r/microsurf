@@ -44,10 +44,11 @@ class SCDetector:
             run a second time on addresses of interest as found in the report.)
     """
 
-    def __init__(self, modules: List[Detector], itercount: int = 1000, addrList: Union[None, List[int]] = None):
+    def __init__(self, modules: List[Detector], itercount: int = 1000, addrList: Union[None, List[int]] = None, getAssembly=False):
         self.modules = modules
         self.ITER_COUNT = itercount
         self.addrList = addrList
+        self.getAssembly = getAssembly
         if addrList is None:
             self.quickscan = True
         elif len(addrList) == 0:
@@ -62,7 +63,7 @@ class SCDetector:
         self.results = {}
         self.starttime = None
         self.MDresults = []
-        self.initTraceCount = 11
+        self.initTraceCount = 5
 
     def exec(self):
         """
@@ -72,7 +73,7 @@ class SCDetector:
         for module in self.modules:
             console.log(f"module {str(module)}")
             # first capture a small number of traces to identify possible leak locations.
-            collection, asm = module.recordTraces(self.initTraceCount, getAssembly=False)
+            collection, asm = module.recordTraces(self.initTraceCount, getAssembly=self.getAssembly)
             if not collection.possibleLeaks:
                 log.info(f"module {str(module)} returned no possible leaks")
                 continue

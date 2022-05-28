@@ -13,7 +13,7 @@ import sys
 from microsurf.microsurf import SCDetector
 from microsurf.pipeline.DetectionModules import CFLeakDetector, DataLeakDetector
 from microsurf.pipeline.Stages import BinaryLoader
-from microsurf.utils.generators import SecretGenerator, openssl_hex_key_generator
+from microsurf.utils.generators import SecretGenerator, hex_key_generator
 
 
 # define a secret generator which produces "--key=<HEX KEY>".
@@ -37,6 +37,8 @@ if __name__ == "__main__":
     # define lib / bin paths
     if len(sys.argv) > 1 and sys.argv[1] == 'armv4':
         jailroot = "doc/examples/rootfs/botan/jail-botan-armv4/"
+    elif len(sys.argv) > 1 and sys.argv[1] == 'armv7':
+        jailroot = "doc/examples/rootfs/botan/jail-botan-armv7/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'arm64':
         jailroot = "doc/examples/rootfs/botan/jail-botan-arm64/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'x8664':
@@ -46,15 +48,15 @@ if __name__ == "__main__":
     elif len(sys.argv) > 1 and sys.argv[1] == 'riscv64':
         jailroot = "doc/examples/rootfs/botan/jail-botan-riscv64/"
     else:
-        print("usage: openssl.py [armv4, arm64, x8632, x8664, mipsel32, riscv64]")
+        print("usage: botan.py [armv4, armv64, x8664, mipsel32, riscv64]")
         exit(0)
 
-    binpath = jailroot + "gcm.bin"
+    binpath = jailroot + "botan"
 
-    args = "hash --algo=MD5 @".split(' ')
+    # args = "hash --algo=MD5 @".split(' ')
     # args = "sign --der-format --hash=SHA-256 @ input.bin".split(' ')
-    # args = "cipher --cipher=AES-256/GCM  @ input.bin".split(' ')
-    args = "@".split(' ')
+    args = "cipher --cipher=AES-128/CBC @ input.bin".split(' ')
+    # args = "@".split(' ')
 
     sharedObjects = ['libbotan']
 
@@ -62,7 +64,7 @@ if __name__ == "__main__":
         path=binpath,
         args=args,
         rootfs=jailroot,
-        rndGen=openssl_hex_key_generator(128),
+        rndGen=botan_hex_key(128),
         sharedObjects=sharedObjects,
         deterministic=True
     )

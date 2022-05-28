@@ -1,7 +1,7 @@
 
 Command line (with current working directory = .):
 
-    /usr/bin/perl ./Configure linux64-riscv64 --cross-compile-prefix=/home/nicolas/Downloads/riscv64-lp64d--glibc--stable-2021.11-1/bin/riscv64-linux- --debug -gdwarf-4 -shared -no-threads
+    /usr/bin/perl ./Configure linux64-riscv64 --cross-compile-prefix=/home/nicolas/Downloads/riscv64-lp64d--glibc--stable-2021.11-1/bin/riscv64-linux- -gdwarf-4 -shared
 
 Perl information:
 
@@ -86,6 +86,7 @@ Enabled features:
     static-engine
     stdio
     tests
+    threads
     tls
     ts
     ui-console
@@ -122,7 +123,6 @@ Disabled features:
     rc5                 [default]        OPENSSL_NO_RC5 (skip crypto/rc5)
     sctp                [default]        OPENSSL_NO_SCTP
     tfo                 [default]        OPENSSL_NO_TFO
-    threads             [option]         
     trace               [default]        OPENSSL_NO_TRACE
     ubsan               [default]        OPENSSL_NO_UBSAN
     unit-test           [default]        OPENSSL_NO_UNIT_TEST
@@ -138,9 +138,9 @@ Config target attributes:
     AR => "ar",
     ARFLAGS => "qc",
     CC => "gcc",
-    CFLAGS => "-Wall -O0 -g",
+    CFLAGS => "-Wall -O3",
     CXX => "g++",
-    CXXFLAGS => "-Wall -O0 -g",
+    CXXFLAGS => "-Wall -O3",
     HASHBANGPERL => "/usr/bin/env perl",
     RANLIB => "ranlib",
     RC => "windres",
@@ -148,15 +148,15 @@ Config target attributes:
     bn_ops => "SIXTY_FOUR_BIT_LONG RC4_CHAR",
     build_file => "Makefile",
     build_scheme => [ "unified", "unix" ],
-    cflags => "",
+    cflags => "-pthread",
     cppflags => "",
-    cxxflags => "-std=c++11",
+    cxxflags => "-std=c++11 -pthread",
     defines => [ "OPENSSL_BUILDING_OPENSSL" ],
     disable => [  ],
     dso_ldflags => "-Wl,-z,defs",
     dso_scheme => "dlfcn",
     enable => [ "afalgeng" ],
-    ex_libs => "-ldl",
+    ex_libs => "-ldl -pthread",
     includes => [  ],
     lflags => "",
     lib_cflags => "",
@@ -210,13 +210,13 @@ Makevars:
     AR              = /home/nicolas/Downloads/riscv64-lp64d--glibc--stable-2021.11-1/bin/riscv64-linux-ar
     ARFLAGS         = qc
     CC              = /home/nicolas/Downloads/riscv64-lp64d--glibc--stable-2021.11-1/bin/riscv64-linux-gcc
-    CFLAGS          = -Wall -O0 -g -gdwarf-4
+    CFLAGS          = -Wall -O3 -gdwarf-4
     CPPDEFINES      = 
     CPPFLAGS        = 
     CPPINCLUDES     = 
     CROSS_COMPILE   = /home/nicolas/Downloads/riscv64-lp64d--glibc--stable-2021.11-1/bin/riscv64-linux-
     CXX             = /home/nicolas/Downloads/riscv64-lp64d--glibc--stable-2021.11-1/bin/riscv64-linux-g++
-    CXXFLAGS        = -Wall -O0 -g -gdwarf-4
+    CXXFLAGS        = -Wall -O3 -gdwarf-4
     HASHBANGPERL    = /usr/bin/env perl
     LDFLAGS         = 
     LDLIBS          = 
