@@ -3,6 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas
+import pandas as pd
 
 from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.utils.logger import getLogger
@@ -85,10 +86,26 @@ class ReportGenerator:
         ax = countByFunc.set_index("Symbol Name").plot.pie(
             y="Leak Count", figsize=(6, 4), colormap="Blues_r", legend=False
         )
+        memdf = (
+            self.results.where(self.results['Detection Module'] == 'Secret dep. mem. read detector').groupby(
+                "Symbol Name")
+                .size()
+                .reset_index(name="Memory Leak Count")
+                .sort_values(by=["Memory Leak Count"], ascending=False)
+        )
+        cfdf = (
+            self.results.where(self.results['Detection Module'] == 'Secret dep. CF detector').groupby(
+                "Symbol Name")
+                .size()
+                .reset_index(name="CF Leak Count")
+                .sort_values(by=["CF Leak Count"], ascending=False)
+        )
+        mergedDF = pd.merge(memdf, cfdf, how='outer')
+        mergedDF.fillna(0, inplace=True)
         fig = ax.get_figure()
-        fig.savefig(f"{self.loader.resultDir}/assets/functions.png")
+        fig.savefig(f"{self.loader.resultDir}/assets/functions.png", dpi=300)
         self.mdString += f'\n\n <img align="right" src="assets/functions.png" /> \n\n'
-        self.mdString += countByFunc.to_markdown(index=False)
+        self.mdString += mergedDF.to_markdown(index=False)
         self.mdString += "\n\n\n\n\n\n\n\n\n"
         significant = self.results[
             self.results["MI score"] > self.threshold
