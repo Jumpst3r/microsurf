@@ -82,7 +82,7 @@ class MemTrace(Trace):
     def __getitem__(self, item):
         return self.trace[item]
 
-
+import numpy as np
 class MemTraceCollection(TraceCollection):
     """Creates a Memory trace collection object.
     The secrets of the individual traces must be random.
@@ -122,6 +122,12 @@ class MemTraceCollection(TraceCollection):
                 row.append(entry)
             cols = [str(i) for i in range(numhits)]
             colnames = cols
+            # building dataframes is expensive. So do some prelim checks with np.
+            # skip df creation in it fails
+            nparr = np.array(row)
+            uniqueRows = np.unique(nparr, axis=0)
+            if uniqueRows.shape[0] < 2:
+                continue
             f = pd.DataFrame(row, columns=colnames, dtype=int)
             f.insert(0, 'secret', secrets)
             if len(colnames) < 10:
