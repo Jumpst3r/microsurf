@@ -19,6 +19,8 @@ if __name__ == "__main__":
     # comparative evalutation mode, older OpenSSL version - only x86
     if len(sys.argv) > 1 and sys.argv[1] == 'eval':
         jailroot = "doc/examples/rootfs/openssl/jail-openssl-1.1.1dev-x8664/"
+    elif len(sys.argv) > 1 and sys.argv[1] == 'noopt':
+        jailroot = "doc/examples/rootfs/openssl/jail-openssl-x8664-noopt/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'armv4':
         jailroot = "doc/examples/rootfs/openssl/jail-openssl-armv4/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'armv7':
@@ -40,12 +42,13 @@ if __name__ == "__main__":
 
     # the arguments to pass to the binary.
     # the secret is marked with a '@' placeholder
-    #opensslArgs = "dgst -sha256 -sign @ -out output.bin input.bin".split()
-    opensslArgs = "aes-128-cbc -in input.bin -out output.bin -iv 0 -nosalt -K @".split()
+    opensslArgs = "dgst -sha256 -sign @ -out output.bin input.bin".split()
+    # opensslArgs = "des3 -in input.bin -out output.bin -nosalt -K @ -iv 0".split()
+    # opensslArgs = "aria128 -list".split()
     # opensslArgs = "rand -hex 8".split()
-    # opensslArgs = "des3 -in input.bin -out output.bin -iv 0 -nosalt -K @".split()
-    #opensslArgs = "version -a".split()
-    # opensslArgs = "dgst -SM3 @".split()
+    # opensslArgs = "camellia-128-ecb -in input.bin -out output.bin -iv 0 -nosalt -K @".split()
+    # opensslArgs = "version -a".split()
+    # opensslArgs = "dgst -whirlpool @".split()
 
     # list of objects to trace
     sharedObjects = ['libcrypto']
@@ -57,7 +60,7 @@ if __name__ == "__main__":
         rootfs=jailroot,
         # openssl_hex_key_generator generates hex secrets, these will replace the
         # @ symbol in the arg list during emulation.
-        rndGen=hex_key_generator(128),
+        rndGen=RSAPrivKeyGenerator(2048),
         sharedObjects=sharedObjects,
         deterministic=True
     )
@@ -65,7 +68,7 @@ if __name__ == "__main__":
         # Secret dependent memory read detection
         DataLeakDetector(binaryLoader=binLoader),
         # Secret dependent control flow detection
-        CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True),
+        # CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True),
     ], getAssembly=False)  # addrList=[0x7fffb7fddbc9], itercount=1000)
     scd.exec()
     exit(0)
@@ -86,9 +89,9 @@ if __name__ == "__main__":
             )
             scd = SCDetector(modules=[
                 # Secret dependent memory read detection
-                DataLeakDetector(binaryLoader=binLoader),
+                DataLeakDetector(binaryLoader=binLoader, flagInducedLeaks=False),
                 # Secret dependent control flow detection
-                # CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True),
+                CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True),
             ], getAssembly=False)  # addrList=[0x7fffb7fddbc9], itercount=1000)
             scd.initTraceCount = i
             scd.exec()

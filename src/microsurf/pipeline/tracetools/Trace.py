@@ -141,6 +141,7 @@ class MemTraceCollection(TraceCollection):
             nanmask = ~np.isnan(uniqueRows).any(axis=1)
             uniqueRows = uniqueRows[nanmask]
             secrets = secrets[nanmask]
+            log.info(f"tracelen {len(self.traces)}")
             if uniqueRows.shape[0] < 3 or uniqueRows.shape[1] < 1:
                 continue
             f = pd.DataFrame(uniqueRows)
@@ -235,6 +236,7 @@ class PCTraceCollection(TraceCollection):
                 f = pd.DataFrame(row, dtype=object)
                 # in the secret dependent hit count case, record the number of hits per secret.
                 f = f.count(axis=1).to_frame()
+                f.insert(0, "secret", secrets)
             else:
                 # building dataframes is expensive. So do some prelim checks with np.
                 # skip df creation in it fails
@@ -243,16 +245,17 @@ class PCTraceCollection(TraceCollection):
                     nparr[i, :len(row[i])] = row[i]
                     # building dataframes is expensive. So do some prelim checks with np.
                     # skip df creation in it fails
-                uniqueRows, indices = np.unique(nparr, axis=0, return_index=True)
-                secrets = np.array(secrets)[indices]
+                # uniqueRows, indices = np.unique(nparr, axis=0, return_index=True)
+                secrets = np.array(secrets)  # [indices]
                 # remove columns with zero variance
+                uniqueRows = nparr
                 mask = np.std(uniqueRows, axis=0) > 0
                 uniqueRows = uniqueRows.T[mask].T
                 uniqueRows = np.where(uniqueRows == 0, np.nan, uniqueRows)
                 nanmask = ~np.isnan(uniqueRows).any(axis=1)
                 uniqueRows = uniqueRows[nanmask]
                 secrets = secrets[nanmask]
-                if uniqueRows.shape[0] < 3 or uniqueRows.shape[1] < 1:
+                if uniqueRows.shape[0] < 2 or uniqueRows.shape[1] < 1:
                     continue
                 else:
                     f = pd.DataFrame(uniqueRows)

@@ -10,15 +10,15 @@ detects any secret dependent memory access made with the provided argument
 from microsurf.microsurf import SCDetector
 from microsurf.pipeline.DetectionModules import CFLeakDetector
 from microsurf.pipeline.Stages import BinaryLoader
-from microsurf.utils.generators import openssl_hex_key_generator
+from microsurf.utils.generators import hex_key_generator
 
 if __name__ == "__main__":
     binpath = "/home/nicolas/secret.bin"
-    binpath = "/home/nicolas/Documents/msc-thesis-work/tests/binaries/secret-dep-cf-1/secret-dep-cf-1-arm.bin"
+    binpath = "/home/nicolas/Documents/msc-thesis-work/tests/binaries/secret-dep-cf-1/secret-dep-cf-1-x86-64.bin"
 
     args = ['@']  # single secret arg
 
-    binLoader = BinaryLoader(path=binpath, args=args, rootfs='/tmp', rndGen=openssl_hex_key_generator(10),
+    binLoader = BinaryLoader(path=binpath, args=args, rootfs='/tmp', rndGen=hex_key_generator(10),
                              deterministic=True)
 
     scd = SCDetector(modules=[

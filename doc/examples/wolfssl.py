@@ -6,13 +6,12 @@ to gather PC traces on the openssl camellia-128-ecbb 128 implementation
 
 openssl camellia-128-ecb -e -in input.bin -out output.bin -nosalt -K hexdata
 """
-import pickle
 import sys
 
 from microsurf.microsurf import SCDetector
 from microsurf.pipeline.DetectionModules import CFLeakDetector, DataLeakDetector
 from microsurf.pipeline.Stages import BinaryLoader
-from microsurf.utils.generators import hex_key_generator, RSAPrivKeyGenerator
+from microsurf.utils.generators import hex_key_generator
 
 if __name__ == "__main__":
     # define lib / bin paths
@@ -47,7 +46,7 @@ if __name__ == "__main__":
         sharedObjects=sharedObjects,
         deterministic=True
     )
-
+    exit(0)
     scd = SCDetector(modules=[
         CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True),
         DataLeakDetector(binaryLoader=binLoader)

@@ -29,7 +29,6 @@ from .utils.report import ReportGenerator
 console = getConsole()
 log = getLogger()
 
-
 class SCDetector:
     """
     The SCDetector class is used to perform side channel detection analysis.

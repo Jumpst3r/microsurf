@@ -67,7 +67,7 @@ class DataLeakDetector(Detector):
             res = ray.get(futures)
             resList += [r for r in res]
         asm = [r[1] for r in resList]
-        mt = MemTraceCollection([r[0] for r in resList], possibleLeaks=pcList)
+        mt = MemTraceCollection([r[0] for r in resList[:n]], possibleLeaks=pcList)
         return mt, dict(ChainMap(*asm))
 
     def __str__(self):
