@@ -11,7 +11,6 @@ from microsurf.pipeline.tracetools.Trace import (
     MemTraceCollection,
     PCTraceCollection,
 )
-from microsurf.utils.generators import RSAPrivKeyGenerator
 
 
 class Detector:
@@ -36,7 +35,6 @@ class DataLeakDetector(Detector):
 
     def __init__(self, *, binaryLoader: BinaryLoader, miThreshold: float = 0.2):
         super().__init__(binaryLoader, miThreshold)
-        self.save = False
 
     def recordTraces(
             self, n: int, pcList: List[int] = None, getAssembly=False) -> MemTraceCollection:

@@ -82,7 +82,12 @@ class MemTrace(Trace):
     def __getitem__(self, item):
         return self.trace[item]
 
+
 import numpy as np
+
+MARKMEM = dict()
+
+
 class MemTraceCollection(TraceCollection):
     """Creates a Memory trace collection object.
     The secrets of the individual traces must be random.
@@ -121,23 +126,28 @@ class MemTraceCollection(TraceCollection):
                 numhits = max(numhits, len(trace.trace[l]))
                 row.append(entry)
             cols = [str(i) for i in range(numhits)]
-            colnames = cols
+            maxlen = max([len(i) for i in row])
+            nparr = np.zeros((len(row), maxlen), dtype=int)
+
+            for i in range(nparr.shape[0]):
+                nparr[i, :len(row[i])] = row[i]
             # building dataframes is expensive. So do some prelim checks with np.
             # skip df creation in it fails
-            nparr = np.array(row)
-            uniqueRows = np.unique(nparr, axis=0)
-            if uniqueRows.shape[0] < 2:
+            uniqueRows, indices = np.unique(nparr, axis=0, return_index=True)
+            secrets = np.array(secrets)[indices]
+            # remove columns with zero variance
+            mask = np.std(uniqueRows, axis=0) > 0
+            uniqueRows = uniqueRows.T[mask].T
+            uniqueRows = np.where(uniqueRows == 0, np.nan, uniqueRows)
+            nanmask = ~np.isnan(uniqueRows).any(axis=1)
+            uniqueRows = uniqueRows[nanmask]
+            secrets = secrets[nanmask]
+            if uniqueRows.shape[0] < 3 or uniqueRows.shape[1] < 1:
                 continue
-            f = pd.DataFrame(row, columns=colnames, dtype=int)
+            f = pd.DataFrame(uniqueRows)
             f.insert(0, 'secret', secrets)
-            if len(colnames) < 10:
-                f.drop_duplicates(subset=colnames, keep=False, inplace=True)
-            ffilter_stdev = f.loc[:, f.columns != 'secret'].std()
-            f.drop(ffilter_stdev[ffilter_stdev == 0].index, axis=1, inplace=True)
-            f.dropna(axis=0, inplace=True)
-            # f.dropna(axis=0, inplace=True)
-            if len(f.columns) > 1 and len(f.index) > 1:
-                perLeakDict[l] = f
+            log.info('created')
+            perLeakDict[l] = f
         self.DF = perLeakDict
         for k in self.DF.keys():
             self.results[hex(k)] = -1
@@ -222,18 +232,35 @@ class PCTraceCollection(TraceCollection):
                             entry.append(t[idx + 1])
                 numhits = max(numhits, len(entry))
                 row.append(entry)
-            colnames = [str(i) for i in range(numhits)]
-            f = pd.DataFrame(row, columns=colnames, dtype=object)
+            maxlen = max(len(r) for r in row)
+
             if MARK[l] != "secret dep. branch":
+                f = pd.DataFrame(row, dtype=object)
                 # in the secret dependent hit count case, record the number of hits per secret.
                 f = f.count(axis=1).to_frame()
-                skipcolcheck = True
-            f.insert(0, "secret", secrets)
-            ffilter_stdev = f.loc[:, f.columns != 'secret'].std()
-            f.drop(ffilter_stdev[ffilter_stdev == 0].index, axis=1, inplace=True)
-            f.dropna(axis=0, inplace=True)
-            if (len(f.columns) > 1 or skipcolcheck) and len(f.index) > 1:
-                perLeakDict[l] = f
+            else:
+                # building dataframes is expensive. So do some prelim checks with np.
+                # skip df creation in it fails
+                nparr = np.zeros((len(row), maxlen), dtype=int)
+                for i in range(nparr.shape[0]):
+                    nparr[i, :len(row[i])] = row[i]
+                    # building dataframes is expensive. So do some prelim checks with np.
+                    # skip df creation in it fails
+                uniqueRows, indices = np.unique(nparr, axis=0, return_index=True)
+                secrets = np.array(secrets)[indices]
+                # remove columns with zero variance
+                mask = np.std(uniqueRows, axis=0) > 0
+                uniqueRows = uniqueRows.T[mask].T
+                uniqueRows = np.where(uniqueRows == 0, np.nan, uniqueRows)
+                nanmask = ~np.isnan(uniqueRows).any(axis=1)
+                uniqueRows = uniqueRows[nanmask]
+                secrets = secrets[nanmask]
+                if uniqueRows.shape[0] < 3 or uniqueRows.shape[1] < 1:
+                    continue
+                else:
+                    f = pd.DataFrame(uniqueRows)
+                    f.insert(0, "secret", secrets)
+            perLeakDict[l] = f
         self.DF = perLeakDict
         self.possibleLeaks = self.DF.keys()
         for k in self.possibleLeaks:

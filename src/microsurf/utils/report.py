@@ -104,7 +104,7 @@ class ReportGenerator:
         mergedDF.fillna(0, inplace=True)
         fig = ax.get_figure()
         fig.savefig(f"{self.loader.resultDir}/assets/functions.png", dpi=300)
-        self.mdString += f'\n\n <img align="right" src="assets/functions.png" /> \n\n'
+        self.mdString += f'\n\n <img align="right" src="assets/functions.png" width=300 /> \n\n'
         self.mdString += mergedDF.to_markdown(index=False)
         self.mdString += "\n\n\n\n\n\n\n\n\n"
         significant = self.results[

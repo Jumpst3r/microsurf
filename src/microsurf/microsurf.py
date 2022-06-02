@@ -21,7 +21,7 @@ import pandas as pd
 
 from .pipeline.DetectionModules import Detector
 from .pipeline.Stages import LeakageClassification
-from .pipeline.tracetools.Trace import MARK
+from .pipeline.tracetools.Trace import MARK, MARKMEM
 from .utils.elf import getfnname, getCodeSnippet
 from .utils.logger import getConsole, getLogger
 from .utils.report import ReportGenerator
@@ -63,7 +63,7 @@ class SCDetector:
         self.results = {}
         self.starttime = None
         self.MDresults = []
-        self.initTraceCount = 5
+        self.initTraceCount = 16
 
     def exec(self):
         """
@@ -155,12 +155,13 @@ class SCDetector:
                             except KeyError:
                                 asmsnippet = "n/a"
                             # log.info(f'runtime Addr: {hex(k)}, offset: {offset:#08x}, symbol name: {symbname}')
+                            commentDict = MARK if 'CF' in str(module) else MARKMEM
                             self.MDresults.append(
                                 {
                                     "Runtime Addr": hex(k),
                                     "offset": f"{offset:#08x}",
                                     "MI score": mival,
-                                    "Comment": MARK[k] if k in MARK else "none",
+                                    "Comment": commentDict[k] if k in commentDict else "none",
                                     "Symbol Name": f'{symbname if symbname else "??":}',
                                     "Object Name": f'{path.split("/")[-1]}',
                                     "src": source,
