@@ -125,7 +125,6 @@ class MemTraceCollection(TraceCollection):
                 entry += trace.trace[l]
                 numhits = max(numhits, len(trace.trace[l]))
                 row.append(entry)
-            cols = [str(i) for i in range(numhits)]
             maxlen = max([len(i) for i in row])
             nparr = np.zeros((len(row), maxlen), dtype=int)
 
@@ -146,7 +145,6 @@ class MemTraceCollection(TraceCollection):
                 continue
             f = pd.DataFrame(uniqueRows)
             f.insert(0, 'secret', secrets)
-            log.info('created')
             perLeakDict[l] = f
         self.DF = perLeakDict
         for k in self.DF.keys():
@@ -222,7 +220,6 @@ class PCTraceCollection(TraceCollection):
             row = []
             numhits = 0
             secrets = []
-            skipcolcheck = False
             for t in self.traces:
                 secrets.append(t.secret)
                 entry = []
