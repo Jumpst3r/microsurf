@@ -96,12 +96,17 @@ class MemTraceCollection(TraceCollection):
         traces: List of memory traces
     """
 
-    def __init__(self, traces: list[MemTrace], possibleLeaks=None):
+    def __init__(self, traces: list[MemTrace], possibleLeaks=None, granularity=1):
         super().__init__(traces)
         self.secretDepCF = None
         self.possibleLeaks = possibleLeaks
+        self.granularity = granularity
         self.results = {}
         self.DF = None
+        # if the granularity is coarser than one byte, mask the lower bytes acordingly
+        if self.granularity > 1:
+            self.maskAddresses()
+
         self.buildDataFrames()
 
     def buildDataFrames(self):
@@ -141,7 +146,6 @@ class MemTraceCollection(TraceCollection):
             nanmask = ~np.isnan(uniqueRows).any(axis=1)
             uniqueRows = uniqueRows[nanmask]
             secrets = secrets[nanmask]
-            log.info(f"tracelen {len(self.traces)}")
             if uniqueRows.shape[0] < 3 or uniqueRows.shape[1] < 1:
                 continue
             f = pd.DataFrame(uniqueRows)
@@ -152,6 +156,12 @@ class MemTraceCollection(TraceCollection):
             self.results[hex(k)] = -1
         self.possibleLeaks = set(self.DF.keys())
 
+    def maskAddresses(self):
+        mask = 2 ** (4 * (self.granularity - 1)) - 1
+        for t in self.traces:
+            trace = t.trace
+            for k in trace.keys():
+                trace[k] = [e ^ (e & mask) for e in trace[k]]
 
 class PCTrace(Trace):
     """Represents a single Program Counter (PC) Trace object.
