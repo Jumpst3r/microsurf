@@ -66,9 +66,9 @@ if __name__ == "__main__":
     )
     scd = SCDetector(modules=[
         # Secret dependent memory read detection
-        DataLeakDetector(binaryLoader=binLoader, granularity=4),
+        # DataLeakDetector(binaryLoader=binLoader, granularity=4),
         # Secret dependent control flow detection
-        # CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True),
+        CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True),
     ], getAssembly=False)  # addrList=[0x7fffb7fddbc9], itercount=1000)
     scd.exec()
     exit(0)

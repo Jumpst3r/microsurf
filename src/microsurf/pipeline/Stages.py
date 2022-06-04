@@ -494,14 +494,15 @@ class CFWatcher:
 
     def _trace_block(self, ql, address, size):
         buf = ql.mem.read(address, size)
-        ql.arch.disassembler.detail = True
         addrs = []
         asm = []
         for insn in ql.arch.disassembler.disasm(buf, address):
             addrs.append(insn.address)
-            asm.append(f"{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}")
+            if self.getAssembly:
+                asm.append(f"{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}")
         loc = addrs[-1]
-        self.asm[hex(addrs[-1])] = asm[-1]
+        if self.getAssembly:
+            self.asm[hex(addrs[-1])] = asm[-1]
         if not self.locations:
             self.currenttrace.add(addrs[-1])
             return
@@ -573,6 +574,7 @@ class CFWatcher:
         self.QLEngine.stop()
 
     def getResults(self):
+        self.currenttrace.finalize()
         return self.currenttrace, self.asm
 
 

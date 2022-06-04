@@ -1,6 +1,6 @@
 import pickle
 from collections import defaultdict
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set
 
 import pandas as pd
 from rich.progress import track
@@ -176,7 +176,7 @@ class PCTrace(Trace):
 
     def __init__(self, secret) -> None:
         super().__init__(secret)
-        self.trace: List[Tuple[int, int]] = []
+        self.trace: List[int] = []
 
     def add(self, range):
         """Adds an element to the current trace.
@@ -188,6 +188,11 @@ class PCTrace(Trace):
             range: the start / end PC of the instruction block (as a tuple)
         """
         self.trace.append(range)
+
+    def finalize(self):
+        self.indexDict = defaultdict(set)
+        for idx, e in enumerate(self.trace):
+            self.indexDict[e].add(idx)
 
     def __len__(self):
         return len(self.trace)
@@ -232,12 +237,16 @@ class PCTraceCollection(TraceCollection):
             numhits = 0
             secrets = []
             for t in self.traces:
-                secrets.append(t.secret)
                 entry = []
-                for idx, e in enumerate(t):
-                    if e == l:
-                        if idx + 1 < len(t):
-                            entry.append(t[idx + 1])
+                if l not in t.indexDict:
+                    continue
+                else:
+                    secrets.append(t.secret)
+                indices = t.indexDict[l]
+
+                for i in indices:
+                    if i + 1 < len(t):
+                        entry.append(t[i + 1])
                 numhits = max(numhits, len(entry))
                 row.append(entry)
             maxlen = max(len(r) for r in row)
