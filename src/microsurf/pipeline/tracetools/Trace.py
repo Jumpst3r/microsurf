@@ -190,9 +190,9 @@ class PCTrace(Trace):
         self.trace.append(range)
 
     def finalize(self):
-        self.indexDict = defaultdict(set)
+        self.indexDict = defaultdict(list)
         for idx, e in enumerate(self.trace):
-            self.indexDict[e].add(idx)
+            self.indexDict[e].append(idx)
 
     def __len__(self):
         return len(self.trace)
