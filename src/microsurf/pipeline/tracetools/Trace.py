@@ -130,6 +130,8 @@ class MemTraceCollection(TraceCollection):
                 entry += trace.trace[l]
                 numhits = max(numhits, len(trace.trace[l]))
                 row.append(entry)
+            if not row:
+                continue
             maxlen = max([len(i) for i in row])
             nparr = np.zeros((len(row), maxlen), dtype=int)
 
@@ -249,6 +251,8 @@ class PCTraceCollection(TraceCollection):
                         entry.append(t[i + 1])
                 numhits = max(numhits, len(entry))
                 row.append(entry)
+            if not row:
+                continue
             maxlen = max(len(r) for r in row)
 
             if MARK[l] != "secret dep. branch":
