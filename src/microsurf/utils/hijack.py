@@ -8,7 +8,6 @@ Original hooks taken from
 - qiling/os/linux/syscalls.py
 - qiling/os/posix/time.py
 
-TODO Add tests to check how well this works on different platforms !
 """
 
 import ctypes

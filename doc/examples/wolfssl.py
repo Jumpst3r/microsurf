@@ -46,7 +46,6 @@ if __name__ == "__main__":
         sharedObjects=sharedObjects,
         deterministic=True
     )
-    exit(0)
     scd = SCDetector(modules=[
         CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True),
         DataLeakDetector(binaryLoader=binLoader)
