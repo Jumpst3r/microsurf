@@ -48,7 +48,7 @@ class BinaryLoader:
         args: List of arguments to pass, '@' may be used to mark one argument as secret.
         rootfs: The emulation root directory. Has to contain expected shared objects for dynamic binaries.
         rndGen: The function which will be called to generate secret inputs.
-        sharedObjects: List of shared objects to trace, defaults to tracing everything.
+        sharedObjects: List of shared objects to trace, defaults to tracing everything. Include binary name to also trace the binary.
         deterministic: Force deterministic execution.
         resultDir: Path to the results directory.
     """
@@ -241,12 +241,12 @@ class BinaryLoader:
             if "x" not in perm:
                 continue
             labelIgnored = True
-            if not self.sharedObjects and self.binPath.name in label:
+            if not self.sharedObjects:
                 self.executableCode.append((s, e))
             for obname in self.sharedObjects:
                 if obname in label:
                     labelIgnored = False
-            if labelIgnored and self.binPath.name not in label:
+            if labelIgnored:
                 self.ignoredObjects.append(label)
             else:
                 self.executableCode.append((s, e))

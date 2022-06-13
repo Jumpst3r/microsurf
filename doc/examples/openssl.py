@@ -46,7 +46,7 @@ if __name__ == "__main__":
     # opensslArgs = "dgst -sha1 -sign @ -out output.bin input.bin".split()
     # opensslArgs = "aria128 -list".split()
     # opensslArgs = "rand -hex 8".split()
-    opensslArgs = "camellia-128-ecb -in input.bin -out output.bin -nosalt -K @".split()
+    opensslArgs = "aes-128-cbc -in input.bin -iv 0 -out output.bin -nosalt -K @".split()
     # opensslArgs = "version -a".split()
     # opensslArgs = "dgst -whirlpool @".split()
 
@@ -65,7 +65,7 @@ if __name__ == "__main__":
     )
     scd = SCDetector(modules=[
         # Secret dependent memory read detection
-        DataLeakDetector(binaryLoader=binLoader),
+        # DataLeakDetector(binaryLoader=binLoader),
         # Secret dependent control flow detection
         CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True)
     ])

@@ -102,6 +102,9 @@ class ReportGenerator:
         )
         mergedDF = pd.merge(memdf, cfdf, how='outer')
         mergedDF.fillna(0, inplace=True)
+        with open(f"/tmp/summary.json", "w") as f:
+            f.writelines(mergedDF.loc[:,["CF Leak Count", "Memory Leak Count"]].sum().to_json())
+       
         fig = ax.get_figure()
         fig.savefig(f"{self.loader.resultDir}/assets/functions.png", dpi=300)
         self.mdString += f'\n\n <img align="right" src="assets/functions.png" width=300 /> \n\n'
@@ -175,5 +178,5 @@ class ReportGenerator:
             f.writelines(self.mdString)
             log.info(f"Markdown report saved: {f.name} !")
         with open(f"{self.loader.resultDir}/results.json", "w") as f:
-            f.writelines(self.results.to_json())
+            f.writelines(self.results.loc[:, ['Runtime Addr', "offset", 'Comment', 'Symbol Name', 'Detection Module', 'Object Name']].to_json())
             log.info(f"json report saved: {f.name} !")

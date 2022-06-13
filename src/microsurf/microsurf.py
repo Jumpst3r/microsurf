@@ -106,7 +106,10 @@ class SCDetector:
             endtime = time.time()
             runtime = time.strftime("%H:%M:%S", time.gmtime(endtime - self.starttime))
             log.info(f"total runtime: {runtime}")
-            return
+            log.info("no leaks detected")
+            js = '{"CF Leak Count":0.0,"Memory Leak Count":0.0}'
+            with open('/tmp/summary.json', 'w') as f:
+                f.writelines([js])
 
         if self.results:
             log.info("Generating report - this might take a while.")
@@ -198,7 +201,7 @@ class SCDetector:
         )
         log.info(f"total runtime: {self.loader.runtime}")
         self.DF = pd.DataFrame.from_dict(self.MDresults)
-        console.rule('Results', style="magenta")
+        console.rule('Results', style="magenta"),
         pprint(self.DF.loc[:, ['Runtime Addr', "offset", 'Comment', 'Symbol Name', 'Detection Module']])
         console.rule(style="magenta")
         log.info("Cleaning temp files")
@@ -208,9 +211,6 @@ class SCDetector:
     def _generateReport(self):
         if "PYTEST_CURRENT_TEST" in os.environ:
             log.info("Testing, no report generated.")
-            return
-        if not self.MDresults:
-            log.info("no results - no file.")
             return
         else:
             rg = ReportGenerator(
