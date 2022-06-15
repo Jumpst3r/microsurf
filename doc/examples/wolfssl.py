@@ -36,7 +36,7 @@ if __name__ == "__main__":
 
     args = "@ input.bin output.bin".split(" ")
 
-    sharedObjects = []
+    sharedObjects = ['aes-file-encrypt']
 
     binLoader = BinaryLoader(
         path=binpath,

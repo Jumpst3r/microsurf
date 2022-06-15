@@ -174,6 +174,9 @@ class SCDetector:
                             )
                         else:
                             symbname = getfnname(path, k)
+                            # for riscv symbols are messed up for some reason, ugly fix:
+                            if self.loader.dynamic and label in self.loader.binPath.name and self.loader.ARCH == 'RISCV':
+                                symbname = getfnname(path, k - self.loader.getlibbase(label))
                             source, srcpath, ln = getCodeSnippet(path, k)
                             mival = dic[hex(k)]
                             try:
