@@ -46,6 +46,10 @@ if __name__ == "__main__":
         sharedObjects=sharedObjects,
         deterministic=True
     )
+    errno = binLoader.configure()
+    if errno:
+        print("erro")
+        exit(1)
     scd = SCDetector(modules=[
         CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True),
         DataLeakDetector(binaryLoader=binLoader)

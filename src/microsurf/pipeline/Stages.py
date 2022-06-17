@@ -112,7 +112,7 @@ class BinaryLoader:
         else:
             log.info(fileinfo)
             log.error("Target architecture not implemented")
-            exit(-1)
+            exit(1)
         self.uuid = f"{str(uuid.uuid4())[:6]}-{self.binPath.name}-{self.ARCH}"
         self.resultDir += f"/{self.uuid}"
         os.makedirs(self.resultDir + "/" + "assets", exist_ok=True)
@@ -133,9 +133,11 @@ class BinaryLoader:
                 log.warn(
                     "You provided a list of shared objects - but the target binary is static. Ignoring objects."
                 )
+
+    def configure(self) -> int:
         try:
             val = self.rndGen()
-            if rndGen.asFile:
+            if self.rndGen.asFile:
                 os.makedirs(self.rootfs + "/" + "tmp", exist_ok=True)
                 dst = self.rootfs.rstrip('/') + val
                 shutil.copy(val, dst)
@@ -172,10 +174,10 @@ class BinaryLoader:
                     f"Shared object {str(e.filename)} not found in emulation root {self.rootfs}"
                 )
                 log.error(e)
-                exit(1)
+                return 1
             else:
                 log.error(e)
-                exit(1)
+                return 1
         try:
             starttime = datetime.now()
             self.exec()
@@ -216,13 +218,13 @@ class BinaryLoader:
                     if log.level == logging.DEBUG:
                         tback = traceback.format_exc()
                         log.error(tback)
-                    exit(1)
+                    return 1
             else:
                 log.error(tback)
-                exit(1)
+                return 1
         if self.dryRun:
             log.warn("no arg marked as secret, exiting (emulation successful).")
-            exit(0)
+            return 0
 
     def validateObjects(self):
         log.info("mappings:")
@@ -236,7 +238,7 @@ class BinaryLoader:
                 log.error(
                     "you provided a shared object name which was not found in memory."
                 )
-                exit(-1)
+                return 1
         for s, e, perm, label, c in self.mappings:
             if "x" not in perm:
                 continue

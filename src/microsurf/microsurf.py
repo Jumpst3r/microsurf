@@ -57,7 +57,7 @@ class SCDetector:
 
         if not modules:
             log.error("module list must contain at least one module")
-            exit(0)
+            return 1
         self.loader = modules[0].loader
         self.results = {}
         self.starttime = None
