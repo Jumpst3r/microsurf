@@ -31,7 +31,7 @@
 - Leverages **machine learning** to learn optimal leakage model
 - Estimates **dependency of every secret bit** on the leakage
 - Provides a **convenient visualization** of said dependencies
-- Generates concise **markdown reports**, summarizing all results
+- Human-readable **markdown reports**, parsable **json reports** or directly as pandas **dataframes**
 - Forced deterministic execution by hooking sources of randomness (**less false positives**)
 - **Easy to use**. Provides a high level API for developers and users alike
 - **Fast.** Optimized for parallel execution
@@ -45,16 +45,17 @@
 
 
 |                                        | Microsurf | [DATA](https://github.com/Fraunhofer-AISEC/DATA) | [Microwalk](https://github.com/UzL-ITS/Microwalk) | [Timecop](https://www.post-apocalyptic-crypto.org/timecop/) | [ct-grind](https://github.com/agl/ctgrind) |
-| -------------------------------------- | :-------: | :----------------------------------------------: | :-----------------------------------------------: | :---------------------------------------------------------: | :----------------------------------------: |
-| Memory side channel detection          |     ✔️     |                        ✔️                         |                         ✔️                         |                              ✔️                              |                     ✔️                      |
-| Control Flow side channel detection    |     ✔️     |                        ✔️                         |                         ✔️                         |                              ✔️                              |                     ✔️                      |
+|----------------------------------------| :-------: | :----------------------------------------------: | :-----------------------------------------------: |:-----------------------------------------------------------:|:------------------------------------------:|
+| Memory side channel detection          |     ✔️     |                        ✔️                         |                         ✔️                         |                             ✔️                              |                     ✔️                     |
+| Control Flow side channel detection    |     ✔️     |                        ✔️                         |                         ✔️                         |                             ✔️                              |                     ✔️                     |
 | Support for custom leakage models      |     ✔️     |                        ✔️                         |                         ❌                         |                              ❌                              |                     ❌                      |
 | Works without source or recompilation  |     ✔️     |                        ✔️                         |                         ✔️                         |                              ❌                              |                     ❌                      |
 | Forced deterministic execution         |     ✔️     |                        ✔️                         |                         ✔️                         |                              ❌                              |                     ❌                      |
 | Ability to learn optimal leakage model |     ✔️     |                        ❌                         |                         ❌                         |                              ❌                              |                     ❌                      |
-| Cross-architecture support             |     ✔️     |                        ❌                         |                         ❌                         |                              ✔️                              |                     ✔️                      |
+| Cross-architecture support             |     ✔️     |                        ❌                         |                         ❌                         |                             ✔️                              |                     ✔️                     |
 | Actively Maintained [1]                |     ✔️     |                        ✔️                         |                         ❌                         |                              ❌                              |                     ❌                      |
-| High level API and easy to use         |     ✔️     |                        ❌                         |                         ❌                         |                              ✔️                              |                     ✔️                      |
+| High level API and easy to use         |     ✔️     |                        ❌                         |                         ❌                         |                             ✔️                              |                     ✔️                     |
+| Customizable leakage granularity       |     ✔️     |                        ❌                         |                          ✔                        |                             ? ️                             |                     ?️                     |
 
 [1]: Active contributions in the last 3 months
 
@@ -105,7 +106,8 @@ scd = SCDetector(modules=[
 scd.exec()
 ```
 
-The results will be saved to disk in markdown format. Advanced usage such key bit dependency and MI estimation are described in the documentation.
+The results will be saved to disk in Markdown format. Advanced usage such key bit dependency and MI estimation are
+described in the documentation.
 
 ### Documentation
 
@@ -128,8 +130,9 @@ pip install -e .
 
 ### Contributing
 
-todo
+Contributions are very welcome and actively encouraged. The goal is that microsurf is actively maintained and
+continously improved.
 
 ### License
 
-todo
+This is free software distributed under the [MIT License](LICENSE).

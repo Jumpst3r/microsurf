@@ -1,9 +1,9 @@
 from datetime import datetime
 from pathlib import Path
-from uuid import uuid4
 
 import numpy as np
 import pandas
+import pandas as pd
 
 from microsurf.pipeline.Stages import BinaryLoader
 from microsurf.utils.logger import getLogger
@@ -56,6 +56,7 @@ class ReportGenerator:
                 "Runtime Addr",
                 "offset",
                 "Detection Module",
+                "Comment",
                 "Symbol Name",
                 "Object Name",
                 "Source Path",
@@ -66,6 +67,7 @@ class ReportGenerator:
                 "offset",
                 "MI score",
                 "Detection Module",
+                "Comment",
                 "Symbol Name",
                 "Object Name",
                 "Source Path",
@@ -84,10 +86,29 @@ class ReportGenerator:
         ax = countByFunc.set_index("Symbol Name").plot.pie(
             y="Leak Count", figsize=(6, 4), colormap="Blues_r", legend=False
         )
+        memdf = (
+            self.results.where(self.results['Detection Module'] == 'Secret dep. mem. read detector').groupby(
+                "Symbol Name")
+                .size()
+                .reset_index(name="Memory Leak Count")
+                .sort_values(by=["Memory Leak Count"], ascending=False)
+        )
+        cfdf = (
+            self.results.where(self.results['Detection Module'] == 'Secret dep. CF detector').groupby(
+                "Symbol Name")
+                .size()
+                .reset_index(name="CF Leak Count")
+                .sort_values(by=["CF Leak Count"], ascending=False)
+        )
+        mergedDF = pd.merge(memdf, cfdf, how='outer')
+        mergedDF.fillna(0, inplace=True)
+        with open(f"/tmp/summary.json", "w") as f:
+            f.writelines(mergedDF.loc[:,["CF Leak Count", "Memory Leak Count"]].sum().to_json())
+       
         fig = ax.get_figure()
-        fig.savefig(f"{self.loader.resultDir}/assets/functions.png")
-        self.mdString += f'\n\n <img align="right" src="assets/functions.png" /> \n\n'
-        self.mdString += countByFunc.to_markdown(index=False)
+        fig.savefig(f"{self.loader.resultDir}/assets/functions.png", dpi=300)
+        self.mdString += f'\n\n <img align="right" src="assets/functions.png" width=300 /> \n\n'
+        self.mdString += mergedDF.to_markdown(index=False)
         self.mdString += "\n\n\n\n\n\n\n\n\n"
         significant = self.results[
             self.results["MI score"] > self.threshold
@@ -153,7 +174,9 @@ class ReportGenerator:
     def saveMD(self):
         self.generateHeaders()
         self.generateResults()
-        with open(f"{self.loader.resultDir}/results-{uuid4()}.md", "w") as f:
+        with open(f"{self.loader.resultDir}/results.md", "w") as f:
             f.writelines(self.mdString)
-        from rich import print as pprint
-        pprint(f"Report saved: {f.name} !")
+            log.info(f"Markdown report saved: {f.name} !")
+        with open(f"{self.loader.resultDir}/results.json", "w") as f:
+            f.writelines(self.results.loc[:, ['Runtime Addr', "offset", 'Comment', 'Symbol Name', 'Detection Module', 'Object Name']].to_json())
+            log.info(f"json report saved: {f.name} !")

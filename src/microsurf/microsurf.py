@@ -12,8 +12,8 @@ __author__ = "Nicolas Dutly"
 __version__ = "0.0.0a"
 
 import glob
-import multiprocessing
 import os
+import shutil
 import time
 from typing import List, Union
 
@@ -21,13 +21,13 @@ import pandas as pd
 
 from .pipeline.DetectionModules import Detector
 from .pipeline.Stages import LeakageClassification
+from .pipeline.tracetools.Trace import MARK, MARKMEM
 from .utils.elf import getfnname, getCodeSnippet
 from .utils.logger import getConsole, getLogger
 from .utils.report import ReportGenerator
 
 console = getConsole()
 log = getLogger()
-
 
 class SCDetector:
     """
@@ -43,10 +43,11 @@ class SCDetector:
             run a second time on addresses of interest as found in the report.)
     """
 
-    def __init__(self, modules: List[Detector], itercount: int = 1000, addrList: Union[None, List[int]] = None):
+    def __init__(self, modules: List[Detector], itercount: int = 20, addrList: Union[None, List[int]] = None, getAssembly=False):
         self.modules = modules
         self.ITER_COUNT = itercount
         self.addrList = addrList
+        self.getAssembly = getAssembly
         if addrList is None:
             self.quickscan = True
         elif len(addrList) == 0:
@@ -56,12 +57,12 @@ class SCDetector:
 
         if not modules:
             log.error("module list must contain at least one module")
-            exit(0)
+            return 1
         self.loader = modules[0].loader
         self.results = {}
         self.starttime = None
         self.MDresults = []
-        self.initTraceCount = max(multiprocessing.cpu_count() - 1, 5)
+        self.initTraceCount = 8
 
     def exec(self):
         """
@@ -71,13 +72,12 @@ class SCDetector:
         for module in self.modules:
             console.log(f"module {str(module)}")
             # first capture a small number of traces to identify possible leak locations.
-            collection, asm = module.recordTraces(self.initTraceCount)
+            collection, asm = module.recordTraces(self.initTraceCount, getAssembly=self.getAssembly)
             if not collection.possibleLeaks:
                 log.info(f"module {str(module)} returned no possible leaks")
                 continue
-            if "mem" in str(module):
-                # for performance reasons we need to get the assembly on a separate run for the memwatcher
-                _, asm = module.recordTraces(1, pcList=collection.possibleLeaks, getAssembly=True)
+            else:
+                log.info(f"module {str(module)} detected {len(collection.possibleLeaks)} possible leaks")
             self.results[str(module)] = (collection.results, asm)
             if self.addrList:
                 # check if the provided addresses were indeed found, if not, raise an error
@@ -106,7 +106,10 @@ class SCDetector:
             endtime = time.time()
             runtime = time.strftime("%H:%M:%S", time.gmtime(endtime - self.starttime))
             log.info(f"total runtime: {runtime}")
-            return
+            log.info("no leaks detected")
+            js = '{"CF Leak Count":0.0,"Memory Leak Count":0.0}'
+            with open('/tmp/summary.json', 'w') as f:
+                f.writelines([js])
 
         if self.results:
             log.info("Generating report - this might take a while.")
@@ -133,7 +136,7 @@ class SCDetector:
                                 f'{self.loader.rootfs}/**/*{label.split(" ")[-1]}'
                             )[0]
                         )
-                        if self.loader.dynamic:
+                        if self.loader.dynamic and label not in self.loader.binPath.name:
                             offset = k - self.loader.getlibbase(label)
                             symbname = (
                                 getfnname(path, offset)
@@ -152,14 +155,15 @@ class SCDetector:
                                         f"[{hex(offset)}]" + asm[leakAddr].split("|")[1]
                                 )
                             except KeyError:
-                                asmsnippet = "n/aj"
+                                asmsnippet = "n/a"
                             # log.info(f'runtime Addr: {hex(k)}, offset: {offset:#08x}, symbol name: {symbname}')
+                            commentDict = MARK if 'CF' in str(module) else MARKMEM
                             self.MDresults.append(
                                 {
                                     "Runtime Addr": hex(k),
                                     "offset": f"{offset:#08x}",
                                     "MI score": mival,
-                                    "Leakage model": "neural-learnt",
+                                    "Comment": commentDict[k] if k in commentDict else "none",
                                     "Symbol Name": f'{symbname if symbname else "??":}',
                                     "Object Name": f'{path.split("/")[-1]}',
                                     "src": source,
@@ -170,6 +174,9 @@ class SCDetector:
                             )
                         else:
                             symbname = getfnname(path, k)
+                            # sometimes the symbols are retrieved with k-offset or with k, depends how the binary was compiled, so include both in the results.
+                            if self.loader.dynamic and label in self.loader.binPath.name:
+                                symbname = getfnname(path, k) + ' (or) ' +  getfnname(path, k - self.loader.getlibbase(label))
                             source, srcpath, ln = getCodeSnippet(path, k)
                             mival = dic[hex(k)]
                             try:
@@ -181,7 +188,7 @@ class SCDetector:
                                     "Runtime Addr": hex(k),
                                     "offset": f"{k:#08x}",
                                     "MI score": mival,
-                                    "Leakage model": "neural-learnt",
+                                    "Comment": MARK[k] if k in MARK else "none",
                                     "Symbol Name": f'{symbname if symbname else "??":}',
                                     "Object Name": f'{path.split("/")[-1]}',
                                     "src": source,
@@ -197,16 +204,16 @@ class SCDetector:
         )
         log.info(f"total runtime: {self.loader.runtime}")
         self.DF = pd.DataFrame.from_dict(self.MDresults)
-        console.rule('Results', style="magenta")
-        pprint(self.DF.loc[:, ['Runtime Addr', 'offset', 'Symbol Name', 'asm', 'Detection Module']])
+        console.rule('Results', style="magenta"),
+        pprint(self.DF.loc[:, ['Runtime Addr', "offset", 'Comment', 'Symbol Name', 'Detection Module']])
         console.rule(style="magenta")
+        log.info("Cleaning temp files")
+        shutil.rmtree(self.loader.rootfs.rstrip('/') + '/tmp', ignore_errors=True)
+        log.info("all done.")
 
     def _generateReport(self):
         if "PYTEST_CURRENT_TEST" in os.environ:
             log.info("Testing, no report generated.")
-            return
-        if not self.MDresults:
-            log.info("no results - no file.")
             return
         else:
             rg = ReportGenerator(

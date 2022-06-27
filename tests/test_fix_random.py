@@ -9,7 +9,7 @@ from pathlib import Path, PurePath
 import pytest
 
 from microsurf.pipeline.Stages import BinaryLoader
-from microsurf.utils.generators import openssl_hex_key_generator
+from microsurf.utils.generators import hex_key_generator
 
 armPath = PurePath(Path(__file__).parent, Path("binaries/random/checkrandom-arm.bin"))
 
@@ -36,13 +36,14 @@ targets = [armPath, x8632Path, x8664Path, mips32Path, riscv64Path]
 def test_norandom(capfd, binPath, monkeypatch):
     fd = tempfile.TemporaryFile()
     monkeypatch.setattr("sys.stdin", fd)
-    BinaryLoader(
+    binLoader = BinaryLoader(
         binPath,
         ["@"],
         deterministic=True,
-        rndGen=openssl_hex_key_generator(3),
+        rndGen=hex_key_generator(3),
         rootfs="/tmp",
     )
+    binLoader.configure()
     out, _ = capfd.readouterr()
     fd.close()
     assert "FAIL" not in out

@@ -3,7 +3,6 @@ import numpy as np
 import seaborn as sns
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from mine.models.mine import Mine
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import minmax_scale
@@ -11,19 +10,6 @@ from sklearn.preprocessing import minmax_scale
 from microsurf.utils.logger import getLogger
 
 log = getLogger()
-
-
-class shiftedRELU(nn.Module):
-    __constants__ = ["inplace"]
-    inplace: bool
-
-    def __init__(self, weights=1, inplace: bool = False):
-        super().__init__()
-        self.inplace = inplace
-        self.weights = weights
-
-    def forward(self, input):
-        return F.relu(input - 0.5, inplace=self.inplace)
 
 
 class MIEstimator(nn.Module):
@@ -50,6 +36,7 @@ class MIEstimator(nn.Module):
 class NeuralLeakageModel(nn.Module):
     def __init__(self, X, Y, leakAddr, keylen, assetDir, threshold) -> None:
         super().__init__()
+        # breakpoint()
         self.X = np.array(X, dtype=np.uint64)
         self.threshold = threshold
         if len(self.X) <= 1:
@@ -62,11 +49,10 @@ class NeuralLeakageModel(nn.Module):
         self.keylen = keylen
         self.Y = self.binary(Y).reshape(Y.shape[0], self.keylen)
         self.assetDir = assetDir
-        self.HUnits = 50
+        self.HUnits = 25
         self.leakAddr = leakAddr
 
     def train(self):
-        log.debug("IN TRAIN")
         if self.abort:
             return
         self.MIScores = []
@@ -113,7 +99,7 @@ class NeuralLeakageModel(nn.Module):
                         old_val_mean = np.mean(Y_val[-10:-5])
                         eps = new_val_mean - old_val_mean
                         if eps > 0:
-                            break
+                            pass
                     lm.train()
                 Y.append(loss.detach().numpy())
             lm.eval()
@@ -141,16 +127,11 @@ class NeuralLeakageModel(nn.Module):
                 )
             except Exception:
                 return
-            f, ax = plt.subplots(figsize=(8, 1.2 * len(heatmaps)))
-            self.MIScores = np.array(self.MIScores[: len(heatmaps)])
+            f, ax = plt.subplots(figsize=(8, 2))
+           # self.MIScores = np.array(self.MIScores[: len(heatmaps)])
             # add a column to the far right to include the MI score in the heatmap
-            dependencies = np.c_[dependencies, self.MIScores]
             dependencies[dependencies[:, -1] < self.threshold] = 0
             deps = dependencies.copy()
-            mi = dependencies.copy()
-            deps.T[-1] = np.nan
-            mi[mi < 0.05] = 0
-            mi.T[:-1] = np.nan
             # plt.figure(figsize=(15, 2))
             ax = sns.heatmap(
                 deps,
@@ -160,31 +141,15 @@ class NeuralLeakageModel(nn.Module):
                 cbar_kws={
                     "orientation": "horizontal",
                     "label": "Estimated key bit dependency",
-                    "shrink": 0.5,
+                    "shrink": 0.25,
                 },
                 cmap="Blues",
                 square=True,
-            )
-            sns.heatmap(
-                mi,
-                cmap="Reds",
-                ax=ax,
-                vmin=0,
-                vmax=1,
-                cbar_kws={
-                    "label": "Estimated MI score per call",
-                    "location": "top",
-                    "shrink": 0.5,
-                },
                 xticklabels=[
-                                (self.keylen - i) if i % 2 == 0 else " " for i in range(self.keylen)
-                            ]
-                            + ["MI"],
+                                "" for _ in range(self.keylen)
+                            ],
                 yticklabels=[
-                    f"inv-{i}" if i % 2 else " " for i in range(self.MIScores.shape[0])
-                ],  # MSB to LSB
-                linewidths=0.5,
-                square=True,
+                    f"inv-{i}" if i % 2 else " " for i in range(len(self.MIScores))]
             )
             ax.xaxis.set_label_position("top")
             f.savefig(

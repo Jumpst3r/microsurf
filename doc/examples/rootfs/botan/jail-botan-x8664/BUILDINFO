@@ -1,0 +1,19 @@
+   INFO: configure.py invoked with options "--cc=gcc --cc-bin=/opt/x86_64/x86-64-core-i7--glibc--stable-2020.02-1/bin/x86_64-linux-g++ --ar-command=/opt/x86_64/x86-64-core-i7--glibc--stable-2020.02-1/bin/x86_64-linux-ar"
+   INFO: Configuring to build Botan 3.0.0-alpha0 (revision git:2fb7ba81b0304f0864a557e3f3a010f4c2ce08d3)
+   INFO: Running under 3.10.4 (main, Apr  2 2022, 09:04:19) [GCC 11.2.0]
+   INFO: Autodetected platform information: OS="Linux" machine="x86_64" proc="x86_64"
+   INFO: Guessing target OS is linux (use --os to set)
+   INFO: Guessing target processor is a x86_64 (use --cpu to set)
+   INFO: Using /etc/ssl/certs/ca-certificates.crt as system certificate store
+   INFO: Auto-detected compiler version 8.4
+   INFO: Auto-detected compiler arch x86_64
+   INFO: Target is gcc:8.4-linux-x86_64
+   INFO: Assuming target x86_64 is little endian
+   INFO: Skipping (dependency failure): asio certstor_sqlite3 sessions_sqlite3
+   INFO: Skipping (incompatible CPU): aes_armv8 aes_power8 sha1_armv8 sha2_32_armv8 shacal2_armv8 sm4_armv8
+   INFO: Skipping (incompatible OS): certstor_system_macos certstor_system_windows commoncrypto getentropy win32_stats
+   INFO: Skipping (no enabled compression schemes): compression
+   INFO: Skipping (requires external dependency): boost bzip2 lzma sqlite3 tpm zlib
+   INFO: Loading modules: adler32 aead aes aes_ni aes_vperm argon2 argon2_ssse3 argon2fmt aria asn1 auto_rng base base32 base58 base64 bcrypt bcrypt_pbkdf bigint blake2 blake2mac block blowfish camellia cascade cast128 cbc ccm cecpq1 certstor_flatfile certstor_sql certstor_system cfb chacha chacha20poly1305 chacha_avx2 chacha_rng chacha_simd32 checksum cmac comb4p cpuid crc24 crc32 cryptobox ctr curve25519 des dh dl_algo dl_group dlies dsa dyn_load eax ec_group ec_h2c ecc_key ecdh ecdsa ecgdsa ecies eckcdsa ed25519 elgamal eme_oaep eme_pkcs1 eme_raw emsa1 emsa_pkcs1 emsa_pssr emsa_raw emsa_x931 entropy fd_unix ffi filters fpe_fe1 gcm ghash ghash_cpu ghash_vperm gmac gost_28147 gost_3410 gost_3411 hash hash_id hex hkdf hmac hmac_drbg hotp http_util idea idea_sse2 iso9796 kdf kdf1 kdf1_iso18033 kdf2 keccak keypair kyber kyber_90s kyber_common lion locking_allocator mac mce md4 md5 mdx_hash mem_pool mgf1 mode_pad modes mp newhope nist_keywrap noekeon noekeon_simd numbertheory ocb ofb par_hash passhash9 pbes2 pbkdf pbkdf2 pem pgp_s2k pk_pad pkcs11 poly1305 poly_dbl prf_tls prf_x942 processor_rng psk_db pubkey rc4 rdseed rfc3394 rfc6979 rmd160 rng roughtime rsa salsa20 scrypt seed serpent serpent_avx2 serpent_simd sessions_sql sha1 sha1_sse2 sha1_x86 sha2_32 sha2_32_bmi2 sha2_32_x86 sha2_64 sha2_64_bmi2 sha3 sha3_bmi2 shacal2 shacal2_avx2 shacal2_simd shacal2_x86 shake shake_cipher simd simd_avx2 siphash siv skein sm2 sm3 sm4 socket sodium sp800_108 sp800_56a sp800_56c srp6 stateful_rng stream streebog system_rng thread_utils threefish_512 threefish_512_avx2 tls tls12 tls_cbc tss twofish utils uuid whirlpool x509 x919_mac xmss xts zfec zfec_sse2 zfec_vperm
+   INFO: Using symlink to link files into build dir (use --link-method to change)
+   INFO: Botan 3.0.0-alpha0 (revision git:2fb7ba81b0304f0864a557e3f3a010f4c2ce08d3) (unreleased undated) build setup is complete

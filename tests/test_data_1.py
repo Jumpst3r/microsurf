@@ -18,7 +18,7 @@ import pytest
 from microsurf import SCDetector
 from microsurf.pipeline.DetectionModules import DataLeakDetector
 from microsurf.pipeline.Stages import BinaryLoader
-from microsurf.utils.generators import openssl_hex_key_generator
+from microsurf.utils.generators import hex_key_generator
 
 PREFIX = "secret-dep-mem-1"
 ARCH_SUFIX = ["-arm.bin", "-x86-32.bin", "-x86-64.bin", "-mipsel32.bin", "-riscv64.bin"]
@@ -39,8 +39,10 @@ def test_analyze_secret_simple(binPath, monkeypatch):
     args = ['@']  # single secret arg
 
     binLoader = BinaryLoader(path=binPath, args=args, rootfs='/tmp',
-                             rndGen=openssl_hex_key_generator(8),
-                             deterministic=False)
+                             rndGen=hex_key_generator(8),
+                             deterministic=False, sharedObjects=['secret-dep-mem'])
+    binLoader.configure()
+
     scd = SCDetector(modules=[DataLeakDetector(binaryLoader=binLoader)])
     scd.exec()
     df = scd.DF

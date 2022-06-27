@@ -1,0 +1,241 @@
+
+Command line (with current working directory = .):
+
+    /usr/bin/perl ./Configure linux-x86_64 --cross-compile-prefix=/opt/x86_64/x86-64-core-i7--glibc--stable-2020.02-1/bin/x86_64-linux- -gdwarf-4
+
+Perl information:
+
+    /usr/bin/perl
+    5.34.0 for x86_64-linux-gnu-thread-multi
+
+Enabled features:
+
+    afalgeng
+    aria
+    asm
+    async
+    autoalginit
+    autoerrinit
+    autoload-config
+    bf
+    blake2
+    bulk
+    cached-fetch
+    camellia
+    capieng
+    cast
+    chacha
+    cmac
+    cmp
+    cms
+    comp
+    ct
+    deprecated
+    des
+    dgram
+    dh
+    dsa
+    dso
+    dtls
+    dynamic-engine
+    ec
+    ec2m
+    ecdh
+    ecdsa
+    engine
+    err
+    filenames
+    gost
+    idea
+    legacy
+    loadereng
+    makedepend
+    md4
+    mdc2
+    module
+    multiblock
+    nextprotoneg
+    ocb
+    ocsp
+    padlockeng
+    pic
+    pinshared
+    poly1305
+    posix-io
+    psk
+    rc2
+    rc4
+    rdrand
+    rfc3779
+    rmd160
+    scrypt
+    secure-memory
+    seed
+    shared
+    siphash
+    siv
+    sm2
+    sm3
+    sm4
+    sock
+    srp
+    srtp
+    sse2
+    ssl
+    ssl-trace
+    static-engine
+    stdio
+    tests
+    threads
+    tls
+    ts
+    ui-console
+    whirlpool
+    tls1
+    tls1-method
+    tls1_1
+    tls1_1-method
+    tls1_2
+    tls1_2-method
+    tls1_3
+    dtls1
+    dtls1-method
+    dtls1_2
+    dtls1_2-method
+
+Disabled features:
+
+    acvp-tests          [cascade]        OPENSSL_NO_ACVP_TESTS
+    asan                [default]        OPENSSL_NO_ASAN
+    buildtest-c++       [default]        
+    crypto-mdebug       [default]        OPENSSL_NO_CRYPTO_MDEBUG
+    devcryptoeng        [default]        OPENSSL_NO_DEVCRYPTOENG
+    ec_nistp_64_gcc_128 [default]        OPENSSL_NO_EC_NISTP_64_GCC_128
+    egd                 [default]        OPENSSL_NO_EGD
+    external-tests      [default]        OPENSSL_NO_EXTERNAL_TESTS
+    fips                [default]        
+    fips-securitychecks [cascade]        OPENSSL_NO_FIPS_SECURITYCHECKS
+    fuzz-afl            [default]        OPENSSL_NO_FUZZ_AFL
+    fuzz-libfuzzer      [default]        OPENSSL_NO_FUZZ_LIBFUZZER
+    ktls                [default]        OPENSSL_NO_KTLS
+    md2                 [default]        OPENSSL_NO_MD2 (skip crypto/md2)
+    msan                [default]        OPENSSL_NO_MSAN
+    rc5                 [default]        OPENSSL_NO_RC5 (skip crypto/rc5)
+    sctp                [default]        OPENSSL_NO_SCTP
+    tfo                 [default]        OPENSSL_NO_TFO
+    trace               [default]        OPENSSL_NO_TRACE
+    ubsan               [default]        OPENSSL_NO_UBSAN
+    unit-test           [default]        OPENSSL_NO_UNIT_TEST
+    uplink              [no uplink_arch] OPENSSL_NO_UPLINK
+    weak-ssl-ciphers    [default]        OPENSSL_NO_WEAK_SSL_CIPHERS
+    zlib                [default]        
+    zlib-dynamic        [default]        
+    ssl3                [default]        OPENSSL_NO_SSL3
+    ssl3-method         [default]        OPENSSL_NO_SSL3_METHOD
+
+Config target attributes:
+
+    AR => "ar",
+    ARFLAGS => "qc",
+    CC => "gcc",
+    CFLAGS => "-Wall -O3",
+    CXX => "g++",
+    CXXFLAGS => "-Wall -O3",
+    HASHBANGPERL => "/usr/bin/env perl",
+    RANLIB => "ranlib",
+    RC => "windres",
+    asm_arch => "x86_64",
+    bn_ops => "SIXTY_FOUR_BIT_LONG",
+    build_file => "Makefile",
+    build_scheme => [ "unified", "unix" ],
+    cflags => "-pthread -m64",
+    cppflags => "",
+    cxxflags => "-std=c++11 -pthread -m64",
+    defines => [ "OPENSSL_BUILDING_OPENSSL" ],
+    disable => [  ],
+    dso_ldflags => "-Wl,-z,defs",
+    dso_scheme => "dlfcn",
+    enable => [ "afalgeng" ],
+    ex_libs => "-ldl -pthread",
+    includes => [  ],
+    lflags => "",
+    lib_cflags => "",
+    lib_cppflags => "-DOPENSSL_USE_NODELETE -DL_ENDIAN",
+    lib_defines => [  ],
+    module_cflags => "-fPIC",
+    module_cxxflags => undef,
+    module_ldflags => "-Wl,-znodelete -shared -Wl,-Bsymbolic",
+    multilib => "64",
+    perl_platform => "Unix",
+    perlasm_scheme => "elf",
+    shared_cflag => "-fPIC",
+    shared_defflag => "-Wl,--version-script=",
+    shared_defines => [  ],
+    shared_ldflag => "-Wl,-znodelete -shared -Wl,-Bsymbolic",
+    shared_rcflag => "",
+    shared_sonameflag => "-Wl,-soname=",
+    shared_target => "linux-shared",
+    thread_defines => [  ],
+    thread_scheme => "pthreads",
+    unistd => "<unistd.h>",
+
+Recorded environment:
+
+    AR = 
+    BUILDFILE = 
+    CC = 
+    CFLAGS = 
+    CPPFLAGS = 
+    CROSS_COMPILE = 
+    CXX = 
+    CXXFLAGS = 
+    HASHBANGPERL = 
+    LDFLAGS = 
+    LDLIBS = 
+    OPENSSL_LOCAL_CONFIG_DIR = 
+    PERL = 
+    RANLIB = 
+    RC = 
+    RCFLAGS = 
+    WINDRES = 
+    __CNF_CFLAGS = 
+    __CNF_CPPDEFINES = 
+    __CNF_CPPFLAGS = 
+    __CNF_CPPINCLUDES = 
+    __CNF_CXXFLAGS = 
+    __CNF_LDFLAGS = 
+    __CNF_LDLIBS = 
+
+Makevars:
+
+    AR              = /opt/x86_64/x86-64-core-i7--glibc--stable-2020.02-1/bin/x86_64-linux-ar
+    ARFLAGS         = qc
+    CC              = /opt/x86_64/x86-64-core-i7--glibc--stable-2020.02-1/bin/x86_64-linux-gcc
+    CFLAGS          = -Wall -O3 -gdwarf-4
+    CPPDEFINES      = 
+    CPPFLAGS        = 
+    CPPINCLUDES     = 
+    CROSS_COMPILE   = /opt/x86_64/x86-64-core-i7--glibc--stable-2020.02-1/bin/x86_64-linux-
+    CXX             = /opt/x86_64/x86-64-core-i7--glibc--stable-2020.02-1/bin/x86_64-linux-g++
+    CXXFLAGS        = -Wall -O3 -gdwarf-4
+    HASHBANGPERL    = /usr/bin/env perl
+    LDFLAGS         = 
+    LDLIBS          = 
+    PERL            = /usr/bin/perl
+    RANLIB          = /opt/x86_64/x86-64-core-i7--glibc--stable-2020.02-1/bin/x86_64-linux-ranlib
+    RC              = /opt/x86_64/x86-64-core-i7--glibc--stable-2020.02-1/bin/x86_64-linux-windres
+    RCFLAGS         = 
+
+NOTE: These variables only represent the configuration view.  The build file
+template may have processed these variables further, please have a look at the
+build file for more exact data:
+    Makefile
+
+build file:
+
+    Makefile
+
+build file templates:
+
+    Configurations/common0.tmpl
+    Configurations/unix-Makefile.tmpl

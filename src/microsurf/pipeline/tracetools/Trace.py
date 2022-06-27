@@ -1,6 +1,6 @@
 import pickle
 from collections import defaultdict
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set
 
 import pandas as pd
 from rich.progress import track
@@ -83,6 +83,11 @@ class MemTrace(Trace):
         return self.trace[item]
 
 
+import numpy as np
+
+MARKMEM = dict()
+
+
 class MemTraceCollection(TraceCollection):
     """Creates a Memory trace collection object.
     The secrets of the individual traces must be random.
@@ -91,12 +96,17 @@ class MemTraceCollection(TraceCollection):
         traces: List of memory traces
     """
 
-    def __init__(self, traces: list[MemTrace], possibleLeaks=None):
+    def __init__(self, traces: list[MemTrace], possibleLeaks=None, granularity=1):
         super().__init__(traces)
         self.secretDepCF = None
         self.possibleLeaks = possibleLeaks
+        self.granularity = granularity
         self.results = {}
         self.DF = None
+        # if the granularity is coarser than one byte, mask the lower bytes acordingly
+        if self.granularity > 1:
+            self.maskAddresses()
+
         self.buildDataFrames()
 
     def buildDataFrames(self):
@@ -107,27 +117,53 @@ class MemTraceCollection(TraceCollection):
         perLeakDict = {}
         addrs = [list(a.trace.keys()) for a in self.traces]
         addrs = set([i for l in addrs for i in l])  # flatten
+        log.debug(f"recorded {len(addrs)} distinct IPs making memory reads")
         for l in track(addrs, description="analyzing memory read traces"):
             row = []
+            secrets = []
             numhits = 0
             for trace in self.traces:
                 if l not in trace.trace:
                     continue
-                entry = [trace.secret]
+                entry = []
+                secrets.append(trace.secret)
                 entry += trace.trace[l]
                 numhits = max(numhits, len(trace.trace[l]))
                 row.append(entry)
-            colnames = ["secret"] + [str(i) for i in range(numhits)]
-            f = pd.DataFrame(row, columns=colnames, dtype=object)
-            f.drop_duplicates(subset=[str(i) for i in range(numhits)], keep=False, inplace=True)
-            f.dropna(axis=0, inplace=True)
-            if len(f.columns) > 1 and len(f.index) > 1:
-                perLeakDict[l] = f
+            if not row:
+                continue
+            maxlen = max([len(i) for i in row])
+            nparr = np.zeros((len(row), maxlen), dtype=int)
+
+            for i in range(nparr.shape[0]):
+                nparr[i, :len(row[i])] = row[i]
+            # building dataframes is expensive. So do some prelim checks with np.
+            # skip df creation in it fails
+            uniqueRows, indices = np.unique(nparr, axis=0, return_index=True)
+            secrets = np.array(secrets)[indices]
+            # remove columns with zero variance
+            mask = np.std(uniqueRows, axis=0) > 0
+            uniqueRows = uniqueRows.T[mask].T
+            uniqueRows = np.where(uniqueRows == 0, np.nan, uniqueRows)
+            nanmask = ~np.isnan(uniqueRows).any(axis=1)
+            uniqueRows = uniqueRows[nanmask]
+            secrets = secrets[nanmask]
+            if uniqueRows.shape[0] < 3 or uniqueRows.shape[1] < 1:
+                continue
+            f = pd.DataFrame(uniqueRows)
+            f.insert(0, 'secret', secrets)
+            perLeakDict[l] = f
         self.DF = perLeakDict
         for k in self.DF.keys():
             self.results[hex(k)] = -1
         self.possibleLeaks = set(self.DF.keys())
 
+    def maskAddresses(self):
+        mask = 2 ** (4 * (self.granularity - 1)) - 1
+        for t in self.traces:
+            trace = t.trace
+            for k in trace.keys():
+                trace[k] = [e ^ (e & mask) for e in trace[k]]
 
 class PCTrace(Trace):
     """Represents a single Program Counter (PC) Trace object.
@@ -142,7 +178,7 @@ class PCTrace(Trace):
 
     def __init__(self, secret) -> None:
         super().__init__(secret)
-        self.trace: List[Tuple[int, int]] = []
+        self.trace: List[int] = []
 
     def add(self, range):
         """Adds an element to the current trace.
@@ -154,6 +190,11 @@ class PCTrace(Trace):
             range: the start / end PC of the instruction block (as a tuple)
         """
         self.trace.append(range)
+
+    def finalize(self):
+        self.indexDict = defaultdict(list)
+        for idx, e in enumerate(self.trace):
+            self.indexDict[e].append(idx)
 
     def __len__(self):
         return len(self.trace)
@@ -196,24 +237,53 @@ class PCTraceCollection(TraceCollection):
         for l in track(self.possibleLeaks, description="analyzing PC traces"):
             row = []
             numhits = 0
+            secrets = []
             for t in self.traces:
-                entry = [t.secret]
-                for idx, e in enumerate(t):
-                    if e == l:
-                        if idx + 1 < len(t):
-                            entry.append(t[idx + 1])
-                numhits = max(numhits, len(entry) - 1)
+                entry = []
+                if l not in t.indexDict:
+                    continue
+                else:
+                    secrets.append(t.secret)
+                indices = t.indexDict[l]
+
+                for i in indices:
+                    if i + 1 < len(t):
+                        entry.append(t[i + 1])
+                numhits = max(numhits, len(entry))
                 row.append(entry)
-            colnames = ["secret"] + [str(i) for i in range(numhits)]
-            f = pd.DataFrame(row, columns=colnames, dtype=object)
-            if MARK[l] != "SECRET DEP C1":
+            if not row:
+                continue
+            maxlen = max(len(r) for r in row)
+
+            if MARK[l] != "secret dep. branch":
+                f = pd.DataFrame(row, dtype=object)
                 # in the secret dependent hit count case, record the number of hits per secret.
                 f = f.count(axis=1).to_frame()
-            ffilter_stdev = f.loc[:, f.columns != 'secret'].std()
-            f.drop(ffilter_stdev[ffilter_stdev == 0].index, axis=1, inplace=True)
-            f.dropna(axis=0, inplace=True)
-            if len(f.columns) > 1 and len(f.index) > 1:
-                perLeakDict[l] = f
+                f.insert(0, "secret", secrets)
+            else:
+                # building dataframes is expensive. So do some prelim checks with np.
+                # skip df creation in it fails
+                nparr = np.zeros((len(row), maxlen), dtype=int)
+                for i in range(nparr.shape[0]):
+                    nparr[i, :len(row[i])] = row[i]
+                    # building dataframes is expensive. So do some prelim checks with np.
+                    # skip df creation in it fails
+                # uniqueRows, indices = np.unique(nparr, axis=0, return_index=True)
+                secrets = np.array(secrets)  # [indices]
+                # remove columns with zero variance
+                uniqueRows = nparr
+                mask = np.std(uniqueRows, axis=0) > 0
+                uniqueRows = uniqueRows.T[mask].T
+                uniqueRows = np.where(uniqueRows == 0, np.nan, uniqueRows)
+                nanmask = ~np.isnan(uniqueRows).any(axis=1)
+                uniqueRows = uniqueRows[nanmask]
+                secrets = secrets[nanmask]
+                if uniqueRows.shape[0] < 2 or uniqueRows.shape[1] < 1:
+                    continue
+                else:
+                    f = pd.DataFrame(uniqueRows)
+                    f.insert(0, "secret", secrets)
+            perLeakDict[l] = f
         self.DF = perLeakDict
         self.possibleLeaks = self.DF.keys()
         for k in self.possibleLeaks:
@@ -232,11 +302,11 @@ class PCTraceCollection(TraceCollection):
             for vec in v.values():
                 if len(vec) == len(normVec):
                     if normVec and vec != normVec:
-                        MARK[k] = "SECRET DEP C1"
+                        MARK[k] = "secret dep. branch"
                 else:
                     a = normVec if len(normVec) < len(vec) else vec
                     b = normVec if len(normVec) > len(vec) else vec
                     if b[: len(a)] == a:
                         if self.flagVariableHitCount:
-                            MARK[k] = "SECRET DEP HIT COUNT"
+                            MARK[k] = "secret dep. hit count"
         return

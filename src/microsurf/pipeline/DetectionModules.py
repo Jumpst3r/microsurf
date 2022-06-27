@@ -11,14 +11,14 @@ from microsurf.pipeline.tracetools.Trace import (
     MemTraceCollection,
     PCTraceCollection,
 )
-from microsurf.utils.generators import RSAPrivKeyGenerator
 
 
 class Detector:
-    def __init__(self, binaryLoader: BinaryLoader, miThreshold=0.2):
+    def __init__(self, binaryLoader: BinaryLoader, miThreshold=0.2, granularity: int = 1):
         self.loader = binaryLoader
         self.miThreshold = miThreshold
         self.NB_CORES = multiprocessing.cpu_count() - 1
+        self.granularity = granularity
 
     def recordTraces(
             self, n: int, pcList: List[int] = None, getAssembly=False
@@ -34,9 +34,8 @@ class DataLeakDetector(Detector):
         Values lower than 0.2 might produce results which do not make any sense (overfitted estimation).
     """
 
-    def __init__(self, *, binaryLoader: BinaryLoader, miThreshold: float = 0.2):
-        super().__init__(binaryLoader, miThreshold)
-        self.save = False
+    def __init__(self, *, binaryLoader: BinaryLoader, miThreshold: float = 0.2, granularity: int = 1):
+        super().__init__(binaryLoader, miThreshold, granularity)
 
     def recordTraces(
             self, n: int, pcList: List[int] = None, getAssembly=False) -> MemTraceCollection:
@@ -69,7 +68,7 @@ class DataLeakDetector(Detector):
             res = ray.get(futures)
             resList += [r for r in res]
         asm = [r[1] for r in resList]
-        mt = MemTraceCollection([r[0] for r in resList], possibleLeaks=pcList)
+        mt = MemTraceCollection([r[0] for r in resList[:n]], possibleLeaks=pcList, granularity=self.granularity)
         return mt, dict(ChainMap(*asm))
 
     def __str__(self):
