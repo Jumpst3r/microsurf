@@ -149,7 +149,7 @@ class NeuralLeakageModel(nn.Module):
                                 "" for _ in range(self.keylen)
                             ],
                 yticklabels=[
-                    f"inv-{i}" if i % 2 else " " for i in range(self.MIScores.shape[0])]
+                    f"inv-{i}" if i % 2 else " " for i in range(len(self.MIScores))]
             )
             ax.xaxis.set_label_position("top")
             f.savefig(

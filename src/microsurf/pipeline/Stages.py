@@ -131,7 +131,7 @@ class BinaryLoader:
                 self.rootfs = PurePath(tempfile.mkdtemp())
             log.info(f"detected static binary, jailing to {self.rootfs}")
             if self.sharedObjects:
-                log.warn(
+                log.warning(
                     "You provided a list of shared objects - but the target binary is static. Ignoring objects."
                 )
 

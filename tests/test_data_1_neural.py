@@ -40,7 +40,7 @@ def test_analyze_secret_simple(binPath, monkeypatch):
 
     binLoader = BinaryLoader(path=binPath, args=args, rootfs='/tmp',
                              rndGen=hex_key_generator(8),
-                             deterministic=False)
+                             deterministic=False, sharedObjects=['secret-dep-mem'])
     binLoader.configure()
 
     scd = SCDetector(modules=[DataLeakDetector(binaryLoader=binLoader)], addrList=[int(a, 16) for a in tAddr],
