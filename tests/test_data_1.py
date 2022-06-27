@@ -41,6 +41,8 @@ def test_analyze_secret_simple(binPath, monkeypatch):
     binLoader = BinaryLoader(path=binPath, args=args, rootfs='/tmp',
                              rndGen=hex_key_generator(8),
                              deterministic=False)
+    binLoader.configure()
+
     scd = SCDetector(modules=[DataLeakDetector(binaryLoader=binLoader)])
     scd.exec()
     df = scd.DF

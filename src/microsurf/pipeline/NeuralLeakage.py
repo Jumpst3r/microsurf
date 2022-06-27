@@ -49,7 +49,7 @@ class NeuralLeakageModel(nn.Module):
         self.keylen = keylen
         self.Y = self.binary(Y).reshape(Y.shape[0], self.keylen)
         self.assetDir = assetDir
-        self.HUnits = 50
+        self.HUnits = 25
         self.leakAddr = leakAddr
 
     def train(self):
@@ -128,15 +128,10 @@ class NeuralLeakageModel(nn.Module):
             except Exception:
                 return
             f, ax = plt.subplots(figsize=(8, 2))
-            self.MIScores = np.array(self.MIScores[: len(heatmaps)])
+           # self.MIScores = np.array(self.MIScores[: len(heatmaps)])
             # add a column to the far right to include the MI score in the heatmap
-            dependencies = np.c_[dependencies, self.MIScores]
             dependencies[dependencies[:, -1] < self.threshold] = 0
             deps = dependencies.copy()
-            mi = dependencies.copy()
-            deps.T[-1] = np.nan
-            mi[mi < 0.05] = 0
-            mi.T[:-1] = np.nan
             # plt.figure(figsize=(15, 2))
             ax = sns.heatmap(
                 deps,
@@ -146,31 +141,15 @@ class NeuralLeakageModel(nn.Module):
                 cbar_kws={
                     "orientation": "horizontal",
                     "label": "Estimated key bit dependency",
-                    "shrink": 0.5,
+                    "shrink": 0.25,
                 },
                 cmap="Blues",
                 square=True,
-            )
-            sns.heatmap(
-                mi,
-                cmap="Reds",
-                ax=ax,
-                vmin=0,
-                vmax=1,
-                cbar_kws={
-                    "label": "Estimated MI score per call",
-                    "location": "top",
-                    "shrink": 0.5,
-                },
                 xticklabels=[
                                 "" for _ in range(self.keylen)
-                            ]
-                            + ["MI"],
+                            ],
                 yticklabels=[
-                    f"inv-{i}" if i % 2 else " " for i in range(self.MIScores.shape[0])
-                ],  # MSB to LSB
-                linewidths=0.5,
-                square=True,
+                    f"inv-{i}" if i % 2 else " " for i in range(self.MIScores.shape[0])]
             )
             ax.xaxis.set_label_position("top")
             f.savefig(

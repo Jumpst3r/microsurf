@@ -36,13 +36,14 @@ targets = [armPath, x8632Path, x8664Path, mips32Path, riscv64Path]
 def test_norandom(capfd, binPath, monkeypatch):
     fd = tempfile.TemporaryFile()
     monkeypatch.setattr("sys.stdin", fd)
-    BinaryLoader(
+    binLoader = BinaryLoader(
         binPath,
         ["@"],
         deterministic=True,
         rndGen=hex_key_generator(3),
         rootfs="/tmp",
     )
+    binLoader.configure()
     out, _ = capfd.readouterr()
     fd.close()
     assert "FAIL" not in out

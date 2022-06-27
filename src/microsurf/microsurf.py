@@ -43,7 +43,7 @@ class SCDetector:
             run a second time on addresses of interest as found in the report.)
     """
 
-    def __init__(self, modules: List[Detector], itercount: int = 1000, addrList: Union[None, List[int]] = None, getAssembly=False):
+    def __init__(self, modules: List[Detector], itercount: int = 20, addrList: Union[None, List[int]] = None, getAssembly=False):
         self.modules = modules
         self.ITER_COUNT = itercount
         self.addrList = addrList
@@ -174,9 +174,9 @@ class SCDetector:
                             )
                         else:
                             symbname = getfnname(path, k)
-                            # for riscv symbols are messed up for some reason, ugly fix:
-                            if self.loader.dynamic and label in self.loader.binPath.name and self.loader.ARCH == 'RISCV':
-                                symbname = getfnname(path, k - self.loader.getlibbase(label))
+                            # sometimes the symbols are retrieved with k-offset or with k, depends how the binary was compiled, so include both in the results.
+                            if self.loader.dynamic and label in self.loader.binPath.name:
+                                symbname = getfnname(path, k) + ' (or) ' +  getfnname(path, k - self.loader.getlibbase(label))
                             source, srcpath, ln = getCodeSnippet(path, k)
                             mival = dic[hex(k)]
                             try:

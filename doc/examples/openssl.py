@@ -63,10 +63,11 @@ if __name__ == "__main__":
         rndGen=hex_key_generator(128),
         sharedObjects=sharedObjects,
     )
+    binLoader.configure()
     scd = SCDetector(modules=[
         # Secret dependent memory read detection
-        # DataLeakDetector(binaryLoader=binLoader),
+        DataLeakDetector(binaryLoader=binLoader),
         # Secret dependent control flow detection
-        CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True)
-    ])
+        # CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True)
+    ], addrList=[0x7fffb7fddbc9])
     scd.exec()

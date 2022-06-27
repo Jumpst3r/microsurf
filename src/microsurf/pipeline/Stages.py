@@ -78,6 +78,7 @@ class BinaryLoader:
         self.QLEngine: Qiling = None
         self.executableCode = []
         self.dryRun = False
+        self.multithreaded = False
         from microsurf.utils.logger import banner
         console.print(banner)
 
