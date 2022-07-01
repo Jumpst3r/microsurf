@@ -69,5 +69,7 @@ if __name__ == "__main__":
         DataLeakDetector(binaryLoader=binLoader),
         # Secret dependent control flow detection
         # CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True)
-    ], addrList=[0x7fffb7fddbc9])
+    ],
+    # addrList=[0x7fffb7fddbc9]
+    )
     scd.exec()

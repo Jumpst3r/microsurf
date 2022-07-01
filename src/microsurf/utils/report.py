@@ -1,3 +1,5 @@
+import markdown
+
 from datetime import datetime
 from pathlib import Path
 
@@ -76,7 +78,7 @@ class ReportGenerator:
     def generateResults(self):
         self.mdString += "__Table of contents:__\n\n"
         self.mdString += "[TOC] \n\n"
-        self.mdString += "\n ## Overview by function name\n"
+        self.mdString += "## Overview by function name\n"
         countByFunc = (
             self.results.groupby("Symbol Name")
                 .size()
@@ -119,10 +121,6 @@ class ReportGenerator:
                 by=["MI score"], ascending=False, inplace=False
             )
         if len(significant) > 0:
-            if not self.quickscan:
-                self.mdString += "## Leaks with estimated MI > threshold (grouped by symbol name)\n\n"
-            else:
-                self.mdString += "## Leaks (grouped by symbol name)\n\n"
             snames = set(
                 list(significant.loc[:, ["Symbol Name"]].to_dict("list").values())[0]
             )
@@ -177,6 +175,10 @@ class ReportGenerator:
         with open(f"{self.loader.resultDir}/results.md", "w") as f:
             f.writelines(self.mdString)
             log.info(f"Markdown report saved: {f.name} !")
+        html = markdown.markdown(self.mdString,  extensions=['markdown.extensions.tables', 'markdown.extensions.toc'])
+        with open(f"{self.loader.resultDir}/results.html", "w") as f:
+            f.writelines(html)
+            log.info(f"HTML report saved: {f.name} !")
         with open(f"{self.loader.resultDir}/results.json", "w") as f:
             f.writelines(self.results.loc[:, ['Runtime Addr', "offset", 'Comment', 'Symbol Name', 'Detection Module', 'Object Name']].to_json())
             log.info(f"json report saved: {f.name} !")
