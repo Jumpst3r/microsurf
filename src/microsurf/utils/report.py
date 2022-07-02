@@ -109,9 +109,9 @@ class ReportGenerator:
        
         fig = ax.get_figure()
         fig.savefig(f"{self.loader.resultDir}/assets/functions.png", dpi=300)
-        self.mdString += f'\n\n <img align="right" src="assets/functions.png" width=300 /> \n\n'
+        #self.mdString += f'\n\n <img align="right" src="assets/functions.png" width=300 /> \n\n'
         self.mdString += mergedDF.to_markdown(index=False)
-        self.mdString += "\n\n\n\n\n\n\n\n\n"
+        self.mdString += "\n\n"
         significant = self.results[
             self.results["MI score"] > self.threshold
             ].sort_values(by=["MI score"], ascending=False, inplace=False)
@@ -146,7 +146,7 @@ class ReportGenerator:
                         self.mdString += "\n```\n"
                     self.mdString += "\n\nLeaking instruction\n\n"
                     src = row[["asm"]].values[0][0]
-                    self.mdString += "```C\n"
+                    self.mdString += "```\n"
                     self.mdString += src
                     self.mdString += "\n```\n"
                     if not self.quickscan:
@@ -175,7 +175,7 @@ class ReportGenerator:
         with open(f"{self.loader.resultDir}/results.md", "w") as f:
             f.writelines(self.mdString)
             log.info(f"Markdown report saved: {f.name} !")
-        html = markdown.markdown(self.mdString,  extensions=['markdown.extensions.tables', 'markdown.extensions.toc'])
+        html = markdown.markdown(self.mdString,  extensions=['markdown.extensions.tables', 'markdown.extensions.toc', 'markdown.extensions.fenced_code'])
         with open(f"{self.loader.resultDir}/results.html", "w") as f:
             f.writelines(html)
             log.info(f"HTML report saved: {f.name} !")
