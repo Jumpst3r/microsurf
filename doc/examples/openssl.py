@@ -15,28 +15,9 @@ from microsurf.utils.generators import hex_key_generator
 
 if __name__ == "__main__":
     # define lib / bin paths
-    # comparative evalutation mode, older OpenSSL version - only x86
-    if len(sys.argv) > 1 and sys.argv[1] == 'eval':
-        jailroot = "doc/examples/rootfs/openssl/jail-openssl-1.1.1dev-x8664/"
-    elif len(sys.argv) > 1 and sys.argv[1] == 'noopt':
-        jailroot = "doc/examples/rootfs/openssl/jail-openssl-x8664-noopt/"
-    elif len(sys.argv) > 1 and sys.argv[1] == 'armv4':
-        jailroot = "doc/examples/rootfs/openssl/jail-openssl-armv4/"
-    elif len(sys.argv) > 1 and sys.argv[1] == 'armv7':
-        jailroot = "doc/examples/rootfs/openssl/jail-openssl-armv7/"
-    elif len(sys.argv) > 1 and sys.argv[1] == 'arm64':
-        jailroot = "doc/examples/rootfs/openssl/jail-openssl-arm64/"
-    elif len(sys.argv) > 1 and sys.argv[1] == 'x8664':
-        jailroot = "doc/examples/rootfs/openssl/jail-openssl-x8664/"
-    elif len(sys.argv) > 1 and sys.argv[1] == 'mipsel32':
-        jailroot = "doc/examples/rootfs/openssl/jail-openssl-mipsel32/"
-    elif len(sys.argv) > 1 and sys.argv[1] == 'core2':
-        jailroot = "doc/examples/rootfs/openssl/jail-openssl-80386-core2/"
-    elif len(sys.argv) > 1 and sys.argv[1] == 'riscv64':
-        jailroot = "doc/examples/rootfs/openssl/jail-openssl-riscv64/"
-    else:
-        print("usage: openssl.py [armv4, armv7, arm64, x8664, mipsel32, riscv64, eval]")
-        exit(0)
+    
+    jailroot = "doc/examples/rootfs/openssl/jail-openssl-1.1.1dev-x8664/"
+   
     binpath = jailroot + "openssl"
 
     # the arguments to pass to the binary.
