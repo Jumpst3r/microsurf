@@ -139,6 +139,9 @@ class MemTraceCollection(TraceCollection):
                 nparr[i, :len(row[i])] = row[i]
             # building dataframes is expensive. So do some prelim checks with np.
             # skip df creation in it fails
+            # The emulator has a quick of marking pop instructions as mem reads, this filters that case:
+            if nparr.shape[1] > 800 and len(np.unique(nparr)) <= 2:
+                continue 
             uniqueRows, indices = np.unique(nparr, axis=0, return_index=True)
             secrets = np.array(secrets)[indices]
             # remove columns with zero variance

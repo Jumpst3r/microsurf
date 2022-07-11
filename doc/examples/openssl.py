@@ -51,7 +51,7 @@ if __name__ == "__main__":
     # opensslArgs = "dgst -whirlpool @".split()
 
     # list of objects to trace
-    sharedObjects = ['libcrypto']
+    sharedObjects = ['libcrypto', 'openssl']
 
     binLoader = BinaryLoader(
         path=binpath,
@@ -61,15 +61,16 @@ if __name__ == "__main__":
         # openssl_hex_key_generator generates hex secrets, these will replace the
         # @ symbol in the arg list during emulation.
         rndGen=hex_key_generator(128),
+        x8664Extensions=['NONE'],
         sharedObjects=sharedObjects,
     )
     binLoader.configure()
     scd = SCDetector(modules=[
         # Secret dependent memory read detection
-        DataLeakDetector(binaryLoader=binLoader),
+        #DataLeakDetector(binaryLoader=binLoader),
         # Secret dependent control flow detection
-        # CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True)
-    ],
+        CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True)
+    ], getAssembly=True
     # addrList=[0x7fffb7fddbc9]
     )
     scd.exec()

@@ -11,7 +11,9 @@ from microsurf.pipeline.tracetools.Trace import (
     MemTraceCollection,
     PCTraceCollection,
 )
+from microsurf.utils.logger import getLogger
 
+log = getLogger()
 
 class Detector:
     def __init__(self, binaryLoader: BinaryLoader, miThreshold=0.2, granularity: int = 1):
@@ -52,6 +54,7 @@ class DataLeakDetector(Detector):
                 self.loader.md.mode,
                 locations=pcList,
                 getAssembly=getAssembly,
+                x8664Extensions=self.loader.x8664Extensions,
                 deterministic=self.loader.deterministic,
                 multithread=self.loader.multithreaded,
                 codeRanges=codeRanges,
@@ -107,6 +110,7 @@ class CFLeakDetector(Detector):
                 mode=self.loader.md.mode,
                 locations=pcList,
                 getAssembly=getAssembly,
+                x8664Extensions=self.loader.x8664Extensions,
                 deterministic=self.loader.deterministic,
                 multithread=self.loader.multithreaded,
             )

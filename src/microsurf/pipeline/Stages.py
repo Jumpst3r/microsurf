@@ -9,13 +9,23 @@ from datetime import datetime
 from functools import lru_cache
 from pathlib import Path, PurePath
 from typing import Dict, List
-
+from unicorn.x86_const import UC_X86_INS_CPUID
 import magic
 import ray
 from capstone import CS_ARCH_RISCV, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_ARCH_ARM64, CS_MODE_ARM, CS_MODE_MIPS32, \
     CS_ARCH_MIPS, CS_MODE_RISCV64, Cs
-from qiling import Qiling
+from qiling import Qiling, const
 from qiling.const import QL_VERBOSE
+
+# ECX reg vals
+AESNI_ID = 0b00000010000000000000000000000000
+AVX_ID = 0b00010000000000000000000000000000
+SSE3_ID = 0b00000000000000000000000000000001
+
+# EDX reg vals
+SSE_ID = 0b00000010000000000000000000000000
+SSE2_ID = 0b00000100000000000000000000000000
+
 
 from .NeuralLeakage import NeuralLeakageModel
 from .tracetools.Trace import MemTrace, PCTrace, TraceCollection
@@ -48,6 +58,7 @@ class BinaryLoader:
         args: List of arguments to pass, '@' may be used to mark one argument as secret.
         rootfs: The emulation root directory. Has to contain expected shared objects for dynamic binaries.
         rndGen: The function which will be called to generate secret inputs.
+        x8664Extensions: List of x86 features, ["DEFAULT"] for all (supported) extensions. Must be subset of: ["DEFAULT", "AESNI", "SSE", "SSE2", "SSE3", "AVX"]
         sharedObjects: List of shared objects to trace, defaults to tracing everything. Include binary name to also trace the binary.
         deterministic: Force deterministic execution.
         resultDir: Path to the results directory.
@@ -59,11 +70,13 @@ class BinaryLoader:
             args: List[str],
             rootfs: str,
             rndGen: SecretGenerator,
+            x8664Extensions : List[str] = ["DEFAULT", "AESNI", "SSE", "SSE2", "SSE3", "AVX"],
             sharedObjects: List[str] = [],
             deterministic: bool = True,
             resultDir: str = "results",
     ) -> None:
         self.binPath = Path(path)
+        self.x8664Extensions = x8664Extensions
         self.args = args
         self.rootfs = rootfs
         self.rndGen = rndGen
@@ -110,6 +123,9 @@ class BinaryLoader:
         elif "RISC-V" in fileinfo:
             self.ARCH = "RISCV"
             self.md = Cs(CS_ARCH_RISCV, CS_MODE_RISCV64)
+        elif "Power" in fileinfo:
+            self.ARCH = "POWERPC"
+            self.md = None
         else:
             log.info(fileinfo)
             log.error("Target architecture not implemented")
@@ -333,6 +349,7 @@ class MemWatcher:
             mode,
             locations=None,
             getAssembly=False,
+            x8664Extensions=["DEFAULT"],
             deterministic=False,
             multithread=True,
             codeRanges=[],
@@ -348,6 +365,7 @@ class MemWatcher:
             {l: 1 for l in locations} if locations is not None else locations
         )
         self.getAssembly = getAssembly
+        self.x8664Extensions = x8664Extensions
         self.ignoredObjects = ignoredObjects
         self.mappings = mappings
         self.deterministic = deterministic
@@ -371,7 +389,28 @@ class MemWatcher:
             self.asm[
                 hex(pc)
             ] = f"{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}"
-
+            if insn.mnemonic.lower() == 'cpuid':
+                log.debug(f"[CPUID@{pc:#x}] with EAX={ql.arch.regs.eax:032b}")
+                ecxval = 0
+                edxval = 0
+                if "DEFAULT" not in self.x8664Extensions:
+                    if 'AESNI-ONLY' in self.x8664Extensions:
+                        ecxval |= AESNI_ID
+                    if 'AVX' in self.x8664Extensions:
+                        ecxval |= AVX_ID
+                    if 'SSE3' in self.x8664Extensions:
+                        ecxval |= SSE3_ID 
+                    if 'SSE' in self.x8664Extensions:
+                        edxval |= SSE_ID
+                    if 'SSE2' in self.x8664Extensions:
+                        edxval |= SSE2_ID
+                    if "NONE" in self.x8664Extensions:
+                        ecxval = 0
+                        edxval = 0
+                    ql.arch.regs.edx = edxval
+                    ql.arch.regs.ecx = ecxval
+                    ql.arch.regs.arch_pc += 2
+    
     def getlibname(self, addr):
         return next(
             (label for s, e, _, label, _ in self.mappings if s < addr < e),
@@ -466,6 +505,7 @@ class CFWatcher:
             mode,
             locations=None,
             getAssembly=False,
+            x8664Extensions=["DEFAULT"],
             deterministic=False,
             multithread=True,
     ) -> None:
@@ -473,6 +513,7 @@ class CFWatcher:
         self.currenttrace = None
         self.traces: List[PCTrace] = []
         self.binPath = binpath
+        self.x8664Extensions = x8664Extensions
         self.args = args
         self.rootfs = rootfs
         self.tracedObjects = tracedObjects
@@ -493,7 +534,37 @@ class CFWatcher:
         self.saveNext = False
 
     def _hook_code(self, ql: Qiling, address: int, size: int):
-        pass
+        if not self.getAssembly:
+            return
+        pc = ql.arch.regs.arch_pc
+        buf = ql.mem.read(address, size)
+        for insn in ql.arch.disassembler.disasm(buf, address):
+            self.asm[
+                hex(pc)
+            ] = f"{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}"
+            if insn.mnemonic.lower() == 'cpuid':
+                log.info(self.x8664Extensions)
+                log.debug(f"[CPUID@{pc:#x}] with EAX={ql.arch.regs.eax:032b}")
+                ecxval = 0
+                edxval = 0
+                if "DEFAULT" not in self.x8664Extensions:
+                    if 'AESNI-ONLY' in self.x8664Extensions:
+                        ecxval |= AESNI_ID
+                    if 'AVX' in self.x8664Extensions:
+                        ecxval |= AVX_ID
+                    if 'SSE3' in self.x8664Extensions:
+                        ecxval |= SSE3_ID 
+                    if 'SSE' in self.x8664Extensions:
+                        edxval |= SSE_ID
+                    if 'SSE2' in self.x8664Extensions:
+                        edxval |= SSE2_ID
+                    if "NONE" in self.x8664Extensions:
+                        ecxval = 0
+                        edxval = 0
+                    ql.arch.regs.edx = edxval
+                    ql.arch.regs.ecx = ecxval
+                    ql.arch.regs.arch_pc += 2
+                   
 
     def _trace_block(self, ql, address, size):
         buf = ql.mem.read(address, size)
@@ -548,8 +619,11 @@ class CFWatcher:
 
         self.currenttrace = PCTrace(secret)
         for (s, e) in self.tracedObjects:
-            if self.arch != CS_ARCH_X86:
+            if self.arch != CS_ARCH_X86 and not self.getAssembly:
                 self.QLEngine.hook_code(self._hook_code)
+            elif self.getAssembly:
+                self.QLEngine.hook_code(self._hook_code, begin=s, end=e)
+
             self.QLEngine.hook_block(self._trace_block, begin=s, end=e)
         if self.deterministic:
             self.QLEngine.add_fs_mapper("/dev/urandom", device_random)

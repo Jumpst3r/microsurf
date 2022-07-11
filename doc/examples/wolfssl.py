@@ -15,7 +15,6 @@ from microsurf.utils.generators import hex_key_generator
 
 if __name__ == "__main__":
     # define lib / bin paths
-    # comparative evalutation mode, older OpenSSL version - only x86
     if len(sys.argv) > 1 and sys.argv[1] == 'armv4':
         jailroot = "doc/examples/rootfs/wolfssl/jail-wolfssl-armv4/"
     elif len(sys.argv) > 1 and sys.argv[1] == 'armv7':
