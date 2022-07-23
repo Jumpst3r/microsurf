@@ -11,7 +11,7 @@ import sys
 from microsurf.microsurf import SCDetector
 from microsurf.pipeline.DetectionModules import CFLeakDetector, DataLeakDetector
 from microsurf.pipeline.Stages import BinaryLoader
-from microsurf.utils.generators import hex_key_generator
+from microsurf.utils.generators import hex_key_generator, ecdsa_privkey_generator
 
 if __name__ == "__main__":
     # define lib / bin paths
@@ -27,7 +27,7 @@ if __name__ == "__main__":
     # opensslArgs = "dgst -sha1 -sign @ -out output.bin input.bin".split()
     # opensslArgs = "aria128 -list".split()
     # opensslArgs = "rand -hex 8".split()
-    opensslArgs = "aes-128-cbc -in input.bin -iv 0 -out output.bin -nosalt -K @".split()
+    opensslArgs = "camellia-128-cbc -in input.bin -iv 0 -out output.bin -nosalt -K @".split()
     # opensslArgs = "version -a".split()
     # opensslArgs = "dgst -whirlpool @".split()
 
@@ -37,21 +37,19 @@ if __name__ == "__main__":
     binLoader = BinaryLoader(
         path=binpath,
         args=opensslArgs,
-        # emulation root directory
         rootfs=jailroot,
-        # openssl_hex_key_generator generates hex secrets, these will replace the
-        # @ symbol in the arg list during emulation.
         rndGen=hex_key_generator(128),
-        x8664Extensions=['NONE'],
         sharedObjects=sharedObjects,
     )
     binLoader.configure()
     scd = SCDetector(modules=[
         # Secret dependent memory read detection
-        #DataLeakDetector(binaryLoader=binLoader),
+        DataLeakDetector(binaryLoader=binLoader),
         # Secret dependent control flow detection
-        CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True)
-    ], getAssembly=True
-    # addrList=[0x7fffb7fddbc9]
+        # CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True)
+    ], 
+    getAssembly=False,
+    addrList=[0x7fffb7fddbc9],
+    itercount=1000
     )
     scd.exec()

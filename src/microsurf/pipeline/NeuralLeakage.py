@@ -61,14 +61,14 @@ class NeuralLeakageModel(nn.Module):
         for idx, x in enumerate(self.X.T):
             x = x[:, None]
             x_train, x_val, y_train, y_val = train_test_split(
-                x, self.Y, test_size=0.5, random_state=42
+                x, self.Y, test_size=0.3, random_state=42
             )
             lm = nn.Sequential(
                 nn.Linear(self.keylen, self.HUnits),
-                nn.Dropout(0.5),
+                nn.Dropout(0.3),
                 nn.ReLU(),
                 nn.Linear(self.HUnits, self.HUnits),
-                nn.Dropout(0.5),
+                nn.Dropout(0.3),
                 nn.ReLU(),
                 nn.Linear(self.HUnits, 1),
             )
@@ -128,9 +128,9 @@ class NeuralLeakageModel(nn.Module):
             except Exception:
                 return
             f, ax = plt.subplots(figsize=(8, 2))
-           # self.MIScores = np.array(self.MIScores[: len(heatmaps)])
+            # self.MIScores = np.array(self.MIScores[: len(heatmaps)])
             # add a column to the far right to include the MI score in the heatmap
-            dependencies[dependencies[:, -1] < self.threshold] = 0
+            # dependencies[dependencies[:, -1] < self.threshold] = 0
             deps = dependencies.copy()
             # plt.figure(figsize=(15, 2))
             ax = sns.heatmap(
@@ -146,12 +146,13 @@ class NeuralLeakageModel(nn.Module):
                 cmap="Blues",
                 square=True,
                 xticklabels=[
-                                "" for _ in range(self.keylen)
+                                str(i) if i % 2 else " " for i in range(1, self.keylen + 1)
                             ],
                 yticklabels=[
                     f"inv-{i}" if i % 2 else " " for i in range(len(self.MIScores))]
             )
             ax.xaxis.set_label_position("top")
+            plt.xticks(rotation=90)
             f.savefig(
                 f"{self.assetDir}/saliency-map-{hex(self.leakAddr)}.png",
                 dpi=300,

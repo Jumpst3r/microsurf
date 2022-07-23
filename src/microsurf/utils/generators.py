@@ -114,7 +114,7 @@ class ecdsa_privkey_generator(SecretGenerator):
         super().__init__(keylen, asFile=True)
 
     def __call__(self, *args, **kwargs) -> str:
-        self.pkey =  ec.generate_private_key(ec.SECP384R1())
+        self.pkey =  ec.generate_private_key(ec.SECP256K1())
         kbytes = self.pkey.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.PKCS8,
