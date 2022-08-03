@@ -388,7 +388,7 @@ class MemWatcher:
         self.codeRanges = codeRanges
         self.asm = {}
 
-    def _trace_mem_read(self, ql: Qiling, access, addr, size, value):
+    def _trace_mem(self, ql: Qiling, access, addr, size, value):
         pc = ql.arch.regs.arch_pc
         if self.locations is None:
             self.currenttrace.add(pc, addr)
@@ -454,7 +454,9 @@ class MemWatcher:
             shutil.copy(secretString, dst)
 
         self.currenttrace = MemTrace(secret)
-        self.QLEngine.hook_mem_read(self._trace_mem_read)
+        self.QLEngine.hook_mem_read(self._trace_mem)
+        self.QLEngine.hook_mem_write(self._trace_mem)
+
 
         # no code hooks on x86, as the PC is always correct in the memread hook (not given on other archs)
         if self.arch != CS_ARCH_X86 and not self.getAssembly:

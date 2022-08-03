@@ -11,7 +11,7 @@ import sys
 from microsurf.microsurf import SCDetector
 from microsurf.pipeline.DetectionModules import CFLeakDetector, DataLeakDetector
 from microsurf.pipeline.Stages import BinaryLoader
-from microsurf.utils.generators import hex_key_generator, ecdsa_privkey_generator
+from microsurf.utils.generators import hex_key_generator, ecdsa_privkey_generator, RSAPrivKeyGenerator
 
 if __name__ == "__main__":
     # define lib / bin paths
@@ -23,11 +23,11 @@ if __name__ == "__main__":
     # the arguments to pass to the binary.
     # the secret is marked with a '@' placeholder
     # opensslArgs = "pkeyutl -sign -in input-rsa.bin -out output.bin -inkey @ -pkeyopt digest:sha1".split()
-    # opensslArgs = "des3 -in input.bin -out output.bin -nosalt -K @ -iv 0".split()
+    opensslArgs = "camellia-128-ecb -in input.bin -out output.bin -nosalt -K @ -iv 0".split()
     # opensslArgs = "dgst -sha1 -sign @ -out output.bin input.bin".split()
     # opensslArgs = "aria128 -list".split()
     # opensslArgs = "rand -hex 8".split()
-    opensslArgs = "camellia-128-cbc -in input.bin -iv 0 -out output.bin -nosalt -K @".split()
+    # opensslArgs = "cast-128-cbc -in input.bin -iv 0 -out output.bin -nosalt -K @".split()
     # opensslArgs = "version -a".split()
     # opensslArgs = "dgst -whirlpool @".split()
 
@@ -39,17 +39,17 @@ if __name__ == "__main__":
         args=opensslArgs,
         rootfs=jailroot,
         rndGen=hex_key_generator(128),
+        # rndGen=RSAPrivKeyGenerator(2048),
         sharedObjects=sharedObjects,
     )
-    binLoader.configure()
+    if binLoader.configure(): exit(0)
     scd = SCDetector(modules=[
         # Secret dependent memory read detection
         DataLeakDetector(binaryLoader=binLoader),
         # Secret dependent control flow detection
-        # CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True)
+        CFLeakDetector(binaryLoader=binLoader, flagVariableHitCount=True)
     ], 
-    getAssembly=False,
-    addrList=[0x7fffb7fddbc9],
-    itercount=1000
+    getAssembly=False
     )
+    scd.initTraceCount = 11
     scd.exec()
