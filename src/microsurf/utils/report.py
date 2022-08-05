@@ -89,14 +89,14 @@ class ReportGenerator:
             y="Leak Count", figsize=(6, 4), colormap="Blues_r", legend=False
         )
         memdf = (
-            self.results.where(self.results['Detection Module'] == 'Secret dep. mem. read detector').groupby(
+            self.results.where(self.results['Detection Module'] == 'Secret dep. mem. operation (R/W)').groupby(
                 "Symbol Name")
                 .size()
                 .reset_index(name="Memory Leak Count")
                 .sort_values(by=["Memory Leak Count"], ascending=False)
         )
         cfdf = (
-            self.results.where(self.results['Detection Module'] == 'Secret dep. CF detector').groupby(
+            self.results.where(self.results['Detection Module'] == 'Secret dep. CF').groupby(
                 "Symbol Name")
                 .size()
                 .reset_index(name="CF Leak Count")

@@ -23,7 +23,7 @@ if __name__ == "__main__":
     # the arguments to pass to the binary.
     # the secret is marked with a '@' placeholder
     # opensslArgs = "pkeyutl -sign -in input-rsa.bin -out output.bin -inkey @ -pkeyopt digest:sha1".split()
-    opensslArgs = "camellia-128-ecb -in input.bin -out output.bin -nosalt -K @ -iv 0".split()
+    opensslArgs = "aes-128-ecb -in input.bin -out output.bin -nosalt -K @ -iv 0".split()
     # opensslArgs = "dgst -sha1 -sign @ -out output.bin input.bin".split()
     # opensslArgs = "aria128 -list".split()
     # opensslArgs = "rand -hex 8".split()
@@ -51,5 +51,5 @@ if __name__ == "__main__":
     ], 
     getAssembly=False
     )
-    scd.initTraceCount = 11
+    scd.initTraceCount = 45
     scd.exec()
