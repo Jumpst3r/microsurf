@@ -6,6 +6,8 @@
    quickstart.md
    control-flow.md
    memory.md
+   generators.md
+   compiler.md
    advanced.md
    contributing.md
    modules.md

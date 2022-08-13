@@ -29,14 +29,16 @@ class Detector:
 
 
 class DataLeakDetector(Detector):
-    """
-    The DataLeakDetector class is used to collect traces for analysis of secret dependent memory accesses.
+    """The DataLeakDetector class is used to collect traces for analysis of secret dependent memory accesses.
 
-    Args: binaryLoader: A BinaryLoader instance miThreshold: The treshold for which to produce key bit estimates.
-        Values lower than 0.2 might produce results which do not make any sense (overfitted estimation).
+    Args: 
+        binaryLoader: A BinaryLoader instance.
+        miThreshold: The treshold for which to produce key bit estimates (if key bit estimates are requested). Values lower than 0.2 might produce results which do not make any sense (overfitted estimation).
+        granularity: Resultion of the detection algorithm (in bytes). The default value of one flags any memory accesses which differ by at least one byte. This value can be increased to simlulate detection of cross-cache line leaks.
+       
     """
 
-    def __init__(self, *, binaryLoader: BinaryLoader, miThreshold: float = 0.2, granularity: int = 1):
+    def __init__(self, binaryLoader: BinaryLoader, miThreshold: float = 0.2, granularity: int = 1):
         super().__init__(binaryLoader, miThreshold, granularity)
 
     def recordTraces(
@@ -82,13 +84,15 @@ class CFLeakDetector(Detector):
     """
     The CFLeakDetector class is used to collect traces for analysis of secret dependent conctrol flow.
 
-    Args: binaryLoader: A BinaryLoader instance miThreshold: The treshold for which to produce key bit estimates.
-        Values lower than 0.2 might produce results which do not make any sense (overfitted estimation).
-    flagVariableHitCount: Include branching instruction which were hit a variable number of times in the report.
-        Doing so will catch things like secret dependent iteration counts but might also cause false positives. Usually
-        these are caused by a secret dependent branch earlier in the control flow, which causes variable hit rates for
-        subsequent branching instructions. Fixing any secret dependent branching and then running with
-        flagVariableHitCount=True is advised.
+    Args:
+        binaryLoader: A BinaryLoader instance 
+        miThreshold: The treshold for which to produce key bit estimates.
+            Values lower than 0.2 might produce results which do not make any sense (overfitted estimation).
+        flagVariableHitCount: Include branching instruction which were hit a variable number of times in the report.
+            Doing so will catch things like secret dependent iteration counts but might also cause false positives. Usually
+            these are caused by a secret dependent branch earlier in the control flow, which causes variable hit rates for
+            subsequent branching instructions. Fixing any secret dependent branching and then running with
+            flagVariableHitCount=True is advised.
     """
 
     def __init__(self, *, binaryLoader: BinaryLoader, miThreshold: float = 0.2, flagVariableHitCount: bool = False):

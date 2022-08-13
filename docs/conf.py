@@ -20,7 +20,7 @@ import sphinx_rtd_theme
 project = 'microsurf'
 copyright = '2022, Nicolas Dutly'
 author = 'Nicolas Dutly'
-version = '0.0.0-NOT_RELEASED'
+version = '1.0'
 
 # -- General configuration ---------------------------------------------------
 

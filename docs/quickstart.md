@@ -1,4 +1,4 @@
-# Quickstart - OpenSSL Camellia-128 Example
+# Quickstart
 
 _This page will walk you through the basics of using Microsurf with an applied example, testing for side
 channel vulnerabilities in OpenSSL's Camellia-128 implementation._
@@ -19,7 +19,7 @@ The general workflow is as follows:
 1. Create a new `BinaryLoader` instance, this will allow you to configure general settings relating to the target binary:
 
 ```{eval-rst}
-.. autoclass:: microsurf.SCDetector.BinaryLoader
+.. autoclass:: microsurf.BinaryLoader
 
 ```
 
@@ -112,12 +112,14 @@ args = [
 A secret often has to adhere to some specific format in order to be processed by the target binary. Since microsurf cannot guess that, it is the end user's job to specify such a function. In our example, the `-K` flag expects a 128bit key specified as a hex string. Since this is a fairly common requirement, it is already implemented in the `microsurf` framework:
 
 ```{eval-rst}
-.. autoclass:: microsurf.utils.generators.getRandomHexKeyFunction
+.. autoclass:: microsurf.utils.generators.hex_key_generator
 ```
 
 ```{note}
 The `randGen` parameter takes a __callable__ object. The framework will validate whether it produces sufficiently random output when called.
 ```
+
+A list of secret generators is given [here](generators.md), along with a guide on how to write your own generators.
 
 ## Selective tracing (`sharedObjects` argument)
 

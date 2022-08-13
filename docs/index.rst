@@ -8,11 +8,12 @@
 
 **PDF version of this documentation**: `PDF Version <_static/microsurf.pdf>`__
 
+
 **Useful links**:
 `Github repository <https://github.com/Jumpst3r/msc-thesis-work>`__ |
 `Issues <https://github.com/Jumpst3r/msc-thesis-work/issues>`__ |
 
-`microsurf` is an architecture independent, dynamic side channel detection framework. It can be
+`microsurf` is an multi-architectural, dynamic side channel detection framework. It can be
 used in an end-to-end manner with minimal configuration (ideal for quickly testing existing binaries)
 or it can be used as a framework to conduct research on cross-architectue side channel leaks.
 

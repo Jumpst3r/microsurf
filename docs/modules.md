@@ -38,7 +38,3 @@ _This page gives detailed documentation about the different modules._
 ## Secret Generators
 
 
-```{eval-rst}
-.. autoclass:: microsurf.pipeline.DetectionModules.DataLeakDetector
-
-```
