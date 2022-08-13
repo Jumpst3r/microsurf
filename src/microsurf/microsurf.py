@@ -174,9 +174,11 @@ class SCDetector:
                             )
                         else:
                             symbname = getfnname(path, k)
+                            offset = k
                             # sometimes the symbols are retrieved with k-offset or with k, depends how the binary was compiled, so include both in the results.
                             if self.loader.dynamic and label in self.loader.binPath.name:
                                 symbname = getfnname(path, k) + ' (or) ' +  getfnname(path, k - self.loader.getlibbase(label))
+                                offset = k - self.loader.getlibbase(label)
                             source, srcpath, ln = getCodeSnippet(path, k)
                             mival = dic[hex(k)]
                             try:
@@ -186,7 +188,7 @@ class SCDetector:
                             self.MDresults.append(
                                 {
                                     "Runtime Addr": hex(k),
-                                    "offset": f"{k:#08x}",
+                                    "offset": f"{offset:#08x}",
                                     "MI score": mival,
                                     "Comment": MARK[k] if k in MARK else "none",
                                     "Symbol Name": f'{symbname if symbname else "??":}',

@@ -268,7 +268,7 @@ def syscall_exit_group(ql, code: int):
         ql.os.stop()
     if not success:
         log.error("Application returned a non zero exit code.")
-        exit(0)
+        raise ValueError
     else:
         return 0
 

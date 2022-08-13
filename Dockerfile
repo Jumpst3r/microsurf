@@ -1,4 +1,4 @@
-FROM ubuntu:21.04
+FROM ubuntu:22.04
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt update && apt install --no-install-recommends -y python3-pip libmagic-dev && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt

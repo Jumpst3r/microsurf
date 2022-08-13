@@ -11,13 +11,15 @@ from microsurf.pipeline.tracetools.Trace import (
     MemTraceCollection,
     PCTraceCollection,
 )
+from microsurf.utils.logger import getLogger
 
+log = getLogger()
 
 class Detector:
     def __init__(self, binaryLoader: BinaryLoader, miThreshold=0.2, granularity: int = 1):
         self.loader = binaryLoader
         self.miThreshold = miThreshold
-        self.NB_CORES = multiprocessing.cpu_count() - 1
+        self.NB_CORES = multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 1 else 1
         self.granularity = granularity
 
     def recordTraces(
@@ -49,9 +51,10 @@ class DataLeakDetector(Detector):
                 self.loader.ignoredObjects,
                 self.loader.mappings,
                 self.loader.md.arch,
-                self.loader.md.mode,
+                (self.loader.archtype, self.loader.ostype),
                 locations=pcList,
                 getAssembly=getAssembly,
+                x8664Extensions=self.loader.x8664Extensions,
                 deterministic=self.loader.deterministic,
                 multithread=self.loader.multithreaded,
                 codeRanges=codeRanges,
@@ -72,7 +75,7 @@ class DataLeakDetector(Detector):
         return mt, dict(ChainMap(*asm))
 
     def __str__(self):
-        return "Secret dep. mem. read detector"
+        return "Secret dep. mem. operation (R/W)"
 
 
 class CFLeakDetector(Detector):
@@ -104,9 +107,10 @@ class CFLeakDetector(Detector):
                 rootfs=self.loader.rootfs,
                 tracedObjects=self.loader.executableCode,
                 arch=self.loader.md.arch,
-                mode=self.loader.md.mode,
+                mode=(self.loader.archtype, self.loader.ostype),
                 locations=pcList,
                 getAssembly=getAssembly,
+                x8664Extensions=self.loader.x8664Extensions,
                 deterministic=self.loader.deterministic,
                 multithread=self.loader.multithreaded,
             )
@@ -127,4 +131,4 @@ class CFLeakDetector(Detector):
         return mt, dict(ChainMap(*asm))
 
     def __str__(self):
-        return "Secret dep. CF detector"
+        return "Secret dep. CF"

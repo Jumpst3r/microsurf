@@ -9,13 +9,16 @@ from datetime import datetime
 from functools import lru_cache
 from pathlib import Path, PurePath
 from typing import Dict, List
-
+from unicorn.x86_const import UC_X86_INS_CPUID
 import magic
 import ray
-from capstone import CS_ARCH_RISCV, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_ARCH_ARM64, CS_MODE_ARM, CS_MODE_MIPS32, \
+from capstone import CS_ARCH_ARM, CS_ARCH_PPC, CS_ARCH_RISCV, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_ARCH_ARM64, CS_MODE_ARM, CS_MODE_MIPS32, \
     CS_ARCH_MIPS, CS_MODE_RISCV64, Cs
-from qiling import Qiling
-from qiling.const import QL_VERBOSE
+from qiling import Qiling, const
+from qiling.const import QL_VERBOSE, QL_ARCH, QL_OS
+
+# ECX reg vals
+AESNI_ID = 0b00000010000000000000000000000000
 
 from .NeuralLeakage import NeuralLeakageModel
 from .tracetools.Trace import MemTrace, PCTrace, TraceCollection
@@ -48,6 +51,7 @@ class BinaryLoader:
         args: List of arguments to pass, '@' may be used to mark one argument as secret.
         rootfs: The emulation root directory. Has to contain expected shared objects for dynamic binaries.
         rndGen: The function which will be called to generate secret inputs.
+        x8664Extensions: List of x86 features, ["DEFAULT"] for all (supported) extensions. Must be subset of: ["DEFAULT", "AESNI", "SSE", "SSE2", "SSE3", "AVX"]
         sharedObjects: List of shared objects to trace, defaults to tracing everything. Include binary name to also trace the binary.
         deterministic: Force deterministic execution.
         resultDir: Path to the results directory.
@@ -59,11 +63,13 @@ class BinaryLoader:
             args: List[str],
             rootfs: str,
             rndGen: SecretGenerator,
+            x8664Extensions : List[str] = ["DEFAULT", "AESNI", "SSE", "SSE2", "SSE3", "AVX"],
             sharedObjects: List[str] = [],
             deterministic: bool = True,
             resultDir: str = "results",
     ) -> None:
         self.binPath = Path(path)
+        self.x8664Extensions = x8664Extensions
         self.args = args
         self.rootfs = rootfs
         self.rndGen = rndGen
@@ -98,18 +104,40 @@ class BinaryLoader:
         if "80386" in fileinfo:
             self.ARCH = "X86_32"
             self.md = Cs(CS_ARCH_X86, CS_MODE_32)
+            self.archtype = QL_ARCH.X86
+            self.ostype = QL_OS.LINUX
         elif "x86" in fileinfo:
             self.ARCH = "X86_64"
             self.md = Cs(CS_ARCH_X86, CS_MODE_64)
-        elif "ARM" in fileinfo:
+            self.archtype = QL_ARCH.X8664
+            self.ostype = QL_OS.LINUX
+        elif "ARM" in fileinfo and '64-bit' not in fileinfo:
+            log.debug("Detected 32 bit ARM")
             self.ARCH = "ARM"
+            self.md = Cs(CS_ARCH_ARM, CS_MODE_ARM)
+            self.archtype = QL_ARCH.ARM
+            self.ostype = QL_OS.LINUX
+        elif "ARM" in fileinfo and "64-bit" in fileinfo:
+            log.debug("Detected 64 bit ARM")
+            self.ARCH = "ARM64"
             self.md = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
+            self.archtype = QL_ARCH.ARM64
+            self.ostype = QL_OS.LINUX
         elif "MIPS32" in fileinfo:
             self.ARCH = "MIPS32"
             self.md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS32)
+            self.archtype = QL_ARCH.MIPS
+            self.ostype = QL_OS.LINUX
         elif "RISC-V" in fileinfo:
             self.ARCH = "RISCV"
             self.md = Cs(CS_ARCH_RISCV, CS_MODE_RISCV64)
+            self.archtype = QL_ARCH.RISCV64
+            self.ostype = QL_OS.LINUX
+        elif "Power" in fileinfo:
+            self.ARCH = "POWERPC"
+            self.md = Cs(CS_ARCH_PPC, CS_MODE_32)
+            self.archtype = QL_ARCH.PPC
+            self.ostype = QL_OS.LINUX
         else:
             log.info(fileinfo)
             log.error("Target architecture not implemented")
@@ -163,6 +191,8 @@ class BinaryLoader:
                 log_override=getQilingLogger(),
                 verbose=QL_VERBOSE.DISABLED if LOGGING_LEVEL == logging.INFO else QL_VERBOSE.DEBUG,
                 console=True,
+                archtype=self.archtype,
+                ostype=self.ostype,
                 multithread=self.multithreaded,
             )
             self.Cs = self.QLEngine.arch.disassembler
@@ -202,6 +232,8 @@ class BinaryLoader:
                         log_override=getQilingLogger(),
                         verbose=QL_VERBOSE.DEFAULT if LOGGING_LEVEL == logging.INFO else QL_VERBOSE.DEBUG,
                         console=True,
+                        archtype=self.archtype,
+                        ostype=self.ostype,
                         multithread=self.multithreaded,
                     )
                     self.fixSyscalls()
@@ -315,7 +347,6 @@ class BinaryLoader:
             self.QLEngine.add_fs_mapper("/dev/random", "/dev/random")
             self.QLEngine.add_fs_mapper("/dev/arandom", "/dev/arandom")
 
-
 @ray.remote
 class MemWatcher:
     """
@@ -333,6 +364,7 @@ class MemWatcher:
             mode,
             locations=None,
             getAssembly=False,
+            x8664Extensions=["DEFAULT"],
             deterministic=False,
             multithread=True,
             codeRanges=[],
@@ -348,6 +380,7 @@ class MemWatcher:
             {l: 1 for l in locations} if locations is not None else locations
         )
         self.getAssembly = getAssembly
+        self.x8664Extensions = x8664Extensions
         self.ignoredObjects = ignoredObjects
         self.mappings = mappings
         self.deterministic = deterministic
@@ -355,7 +388,7 @@ class MemWatcher:
         self.codeRanges = codeRanges
         self.asm = {}
 
-    def _trace_mem_read(self, ql: Qiling, access, addr, size, value):
+    def _trace_mem(self, ql: Qiling, access, addr, size, value):
         pc = ql.arch.regs.arch_pc
         if self.locations is None:
             self.currenttrace.add(pc, addr)
@@ -371,7 +404,20 @@ class MemWatcher:
             self.asm[
                 hex(pc)
             ] = f"{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}"
-
+            if insn.mnemonic.lower() == 'cpuid':
+                log.debug(f"[CPUID@{pc:#x}] with EAX={ql.arch.regs.eax:032b}")
+                ecxval = 0
+                edxval = 0
+                if "DEFAULT" not in self.x8664Extensions:
+                    if 'AESNI-ONLY' in self.x8664Extensions:
+                        ecxval |= AESNI_ID
+                    if "NONE" in self.x8664Extensions:
+                        ecxval = 0
+                        edxval = 0
+                    ql.arch.regs.edx = edxval
+                    ql.arch.regs.ecx = ecxval
+                    ql.arch.regs.arch_pc += 2
+    
     def getlibname(self, addr):
         return next(
             (label for s, e, _, label, _ in self.mappings if s < addr < e),
@@ -398,6 +444,8 @@ class MemWatcher:
             str(self.rootfs),
             console=False,
             verbose=QL_VERBOSE.DISABLED,
+            archtype=self.mode[0],
+            ostype=self.mode[1],
             multithread=self.multithread,
         )
         if asFile:
@@ -406,7 +454,9 @@ class MemWatcher:
             shutil.copy(secretString, dst)
 
         self.currenttrace = MemTrace(secret)
-        self.QLEngine.hook_mem_read(self._trace_mem_read)
+        self.QLEngine.hook_mem_read(self._trace_mem)
+        self.QLEngine.hook_mem_write(self._trace_mem)
+
 
         # no code hooks on x86, as the PC is always correct in the memread hook (not given on other archs)
         if self.arch != CS_ARCH_X86 and not self.getAssembly:
@@ -466,6 +516,7 @@ class CFWatcher:
             mode,
             locations=None,
             getAssembly=False,
+            x8664Extensions=["DEFAULT"],
             deterministic=False,
             multithread=True,
     ) -> None:
@@ -473,6 +524,7 @@ class CFWatcher:
         self.currenttrace = None
         self.traces: List[PCTrace] = []
         self.binPath = binpath
+        self.x8664Extensions = x8664Extensions
         self.args = args
         self.rootfs = rootfs
         self.tracedObjects = tracedObjects
@@ -493,7 +545,28 @@ class CFWatcher:
         self.saveNext = False
 
     def _hook_code(self, ql: Qiling, address: int, size: int):
-        pass
+        if not self.getAssembly:
+            return
+        pc = ql.arch.regs.arch_pc
+        buf = ql.mem.read(address, size)
+        for insn in ql.arch.disassembler.disasm(buf, address):
+            self.asm[
+                hex(pc)
+            ] = f"{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}"
+            if insn.mnemonic.lower() == 'cpuid':
+                log.debug(f"[CPUID@{pc:#x}] with EAX={ql.arch.regs.eax:032b}")
+                ecxval = 0
+                edxval = 0
+                if "DEFAULT" not in self.x8664Extensions:
+                    if 'AESNI-ONLY' in self.x8664Extensions:
+                        ecxval |= AESNI_ID
+                    if "NONE" in self.x8664Extensions:
+                        ecxval = 0
+                        edxval = 0
+                    ql.arch.regs.edx = edxval
+                    ql.arch.regs.ecx = ecxval
+                    ql.arch.regs.arch_pc += 2
+                   
 
     def _trace_block(self, ql, address, size):
         buf = ql.mem.read(address, size)
@@ -539,6 +612,8 @@ class CFWatcher:
             console=False,
             verbose=QL_VERBOSE.DISABLED,
             multithread=self.multithread,
+            archtype=self.mode[0],
+            ostype=self.mode[1],
         )
 
         if asFile:
@@ -548,8 +623,11 @@ class CFWatcher:
 
         self.currenttrace = PCTrace(secret)
         for (s, e) in self.tracedObjects:
-            if self.arch != CS_ARCH_X86:
+            if self.arch != CS_ARCH_X86 and not self.getAssembly:
                 self.QLEngine.hook_code(self._hook_code)
+            elif self.getAssembly:
+                self.QLEngine.hook_code(self._hook_code, begin=s, end=e)
+
             self.QLEngine.hook_block(self._trace_block, begin=s, end=e)
         if self.deterministic:
             self.QLEngine.add_fs_mapper("/dev/urandom", device_random)

@@ -2,7 +2,7 @@ import os
 import tempfile
 
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa, dsa
+from cryptography.hazmat.primitives.asymmetric import rsa, dsa, ec
 
 from microsurf.utils.logger import getLogger
 
@@ -107,6 +107,27 @@ class dsa_privkey_generator(SecretGenerator):
 
     def getSecret(self) -> int:
         return self.pkey.private_numbers().x
+
+class ecdsa_privkey_generator(SecretGenerator):
+    # we pass asFile=True because our secrets are directly included as command line arguments (hex strings)
+    def __init__(self, keylen):
+        super().__init__(keylen, asFile=True)
+
+    def __call__(self, *args, **kwargs) -> str:
+        self.pkey =  ec.generate_private_key(ec.SECP256K1())
+        kbytes = self.pkey.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        )
+        tempfile.tempdir = '/tmp'
+        keyfile = tempfile.NamedTemporaryFile(prefix="microsurf_key_gen", suffix=".tmpkey").name
+        with open(keyfile, 'wb') as f:
+            f.write(kbytes)
+        return keyfile
+
+    def getSecret(self) -> int:
+        return self.pkey.private_numbers().private_value
 
 
 class hex_key_generator(SecretGenerator):
