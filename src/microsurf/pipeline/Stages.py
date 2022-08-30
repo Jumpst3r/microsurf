@@ -9,12 +9,11 @@ from datetime import datetime
 from functools import lru_cache
 from pathlib import Path, PurePath
 from typing import Dict, List
-from unicorn.x86_const import UC_X86_INS_CPUID
 import magic
 import ray
 from capstone import CS_ARCH_ARM, CS_ARCH_PPC, CS_ARCH_RISCV, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_ARCH_ARM64, CS_MODE_ARM, CS_MODE_MIPS32, \
     CS_ARCH_MIPS, CS_MODE_RISCV64, Cs
-from qiling import Qiling, const
+from qiling import Qiling
 from qiling.const import QL_VERBOSE, QL_ARCH, QL_OS
 
 # ECX reg vals
@@ -51,7 +50,7 @@ class BinaryLoader:
         args: List of arguments to pass, '@' may be used to mark one argument as secret.
         rootfs: The emulation root directory. Has to contain expected shared objects for dynamic binaries.
         rndGen: The function which will be called to generate secret inputs.
-        x8664Extensions: List of x86 features, ["DEFAULT"] for all (supported) extensions. Must be subset of: ["DEFAULT", "AESNI", "SSE", "SSE2", "SSE3", "AVX"]
+        x8664Extensions: List of x86 features, ["DEFAULT"] for all (supported) extensions. Must be subset of: ["DEFAULT", "AESNI", "NONE"]
         sharedObjects: List of shared objects to trace, defaults to tracing everything. Include binary name to also trace the binary.
         deterministic: Force deterministic execution.
         resultDir: Path to the results directory.

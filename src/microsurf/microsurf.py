@@ -9,13 +9,14 @@ refer to the class SCDetector documentation for further information.
 
 __all__ = ["SCDetector"]
 __author__ = "Nicolas Dutly"
-__version__ = "0.0.0a"
+__version__ = "1.0"
 
 import glob
 import os
 import shutil
 import time
 from typing import List, Union
+from xmlrpc.client import Boolean
 
 import pandas as pd
 
@@ -43,7 +44,7 @@ class SCDetector:
             run a second time on addresses of interest as found in the report.)
     """
 
-    def __init__(self, modules: List[Detector], itercount: int = 20, addrList: Union[None, List[int]] = None, getAssembly=False):
+    def __init__(self, modules: List[Detector], itercount: int = 20, addrList: Union[None, List[int]] = None, getAssembly: Boolean =False):
         self.modules = modules
         self.ITER_COUNT = itercount
         self.addrList = addrList
@@ -62,7 +63,7 @@ class SCDetector:
         self.results = {}
         self.starttime = None
         self.MDresults = []
-        self.initTraceCount = 8
+        self.initTraceCount = self.modules[0].loader.rndGen.nbTraces
 
     def exec(self):
         """
