@@ -17,10 +17,14 @@ class SecretGenerator:
     Args:
         keylen: Length of the key.
         asFile: Whether the class implements an on-disk generator.
+        nbTraces: Number of traces to gather. In the absence of detected leaks, consitutes the size of the resulting anonymity set.
     """
-    def __init__(self, keylen: int, asFile: boolean):
+    def __init__(self, keylen: int, asFile: boolean, nbTraces = 8):
         self.keylen = keylen
         self.asFile = asFile
+        self.nbTraces = nbTraces
+        self.secrets = []
+        self.index = 0
 
     
     def __call__(self, *args, **kwargs) -> str:
@@ -52,28 +56,32 @@ class RSAPrivKeyGenerator(SecretGenerator):
         Args:
             keylen: The length of the private key in bits.
     """
-    def __init__(self, keylen:int):
+    def __init__(self, keylen:int, nbTraces=8):
         # we pass asFile=True because our secrets are loaded from disk (RSA priv key)
-        super().__init__(keylen, asFile=True)
+        super().__init__(keylen, asFile=True, nbTraces=nbTraces)
 
     def __call__(self, *args, **kwargs):
-        self.pkey = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=self.keylen
-        )
-        kbytes = self.pkey.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        )
-        tempfile.tempdir = '/tmp'
-        keyfile = tempfile.NamedTemporaryFile(prefix="microsurf_key_gen", suffix=".key").name
-        with open(keyfile, 'wb') as f:
-            f.write(kbytes)
-        return keyfile
+        if self.index < self.nbTraces:
+            self.pkey = rsa.generate_private_key(
+                public_exponent=65537,
+                key_size=self.keylen
+            )
+            kbytes = self.pkey.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            )
+            tempfile.tempdir = '/tmp'
+            keyfile = tempfile.NamedTemporaryFile(prefix="microsurf_key_gen", suffix=".key").name
+            with open(keyfile, 'wb') as f:
+                f.write(kbytes)
+            self.secrets.append((keyfile, self.pkey))
+        secret = self.secrets[self.index % self.nbTraces][0]
+        self.index += 1
+        return secret
 
     def getSecret(self) -> int:
-        return self.pkey.private_numbers().p
+        return self.secrets[(self.index-1) % self.nbTraces][1].private_numbers().p
 
 
 class DSAPrivateKeyGenerator(SecretGenerator):
@@ -83,24 +91,28 @@ class DSAPrivateKeyGenerator(SecretGenerator):
         Args:
             keylen: The length of the private key in bits.
     """
-    def __init__(self, keylen:int):
-        super().__init__(keylen, asFile=True)
+    def __init__(self, keylen:int, nbTraces=8):
+        super().__init__(keylen, asFile=True, nbTraces=nbTraces)
 
     def __call__(self, *args, **kwargs) -> str:
-        self.pkey = dsa.generate_private_key(self.keylen)
-        kbytes = self.pkey.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        )
-        tempfile.tempdir = '/tmp'
-        keyfile = tempfile.NamedTemporaryFile(prefix="microsurf_key_gen", suffix=".key").name
-        with open(keyfile, 'wb') as f:
-            f.write(kbytes)
-        return keyfile
+        if self.index < self.nbTraces:
+            self.pkey = dsa.generate_private_key(self.keylen)
+            kbytes = self.pkey.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            )
+            tempfile.tempdir = '/tmp'
+            keyfile = tempfile.NamedTemporaryFile(prefix="microsurf_key_gen", suffix=".key").name
+            with open(keyfile, 'wb') as f:
+                f.write(kbytes)
+            self.secrets.append((keyfile, self.pkey))
+        secret = self.secrets[self.index % self.nbTraces][0]
+        self.index += 1
+        return secret
 
     def getSecret(self) -> int:
-        return self.pkey.private_numbers().x
+        return self.secrets[(self.index-1) % self.nbTraces][1].private_numbers().x
 
 class ECDSAPrivateKeyGenerator(SecretGenerator):
     """
@@ -109,24 +121,29 @@ class ECDSAPrivateKeyGenerator(SecretGenerator):
         Args:
             keylen: The length of the private key in bits.
     """
-    def __init__(self, keylen:int):
-        super().__init__(keylen, asFile=True)
+    def __init__(self, keylen:int, nbTraces=8):
+        super().__init__(keylen, asFile=True, nbTraces=nbTraces)
 
     def __call__(self, *args, **kwargs) -> str:
-        self.pkey =  ec.generate_private_key(ec.SECP256K1())
-        kbytes = self.pkey.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        )
-        tempfile.tempdir = '/tmp'
-        keyfile = tempfile.NamedTemporaryFile(prefix="microsurf_key_gen", suffix=".key").name
-        with open(keyfile, 'wb') as f:
-            f.write(kbytes)
-        return keyfile
+        if self.index < self.nbTraces:
+            self.pkey =  ec.generate_private_key(ec.SECP256K1())
+            kbytes = self.pkey.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            )
+            tempfile.tempdir = '/tmp'
+            keyfile = tempfile.NamedTemporaryFile(prefix="microsurf_key_gen", suffix=".key").name
+            with open(keyfile, 'wb') as f:
+                f.write(kbytes)
+            self.secrets.append((keyfile, self.pkey))
+        secret = self.secrets[self.index % self.nbTraces][0]
+        self.index += 1
+        return secret
 
     def getSecret(self) -> int:
-        return self.pkey.private_numbers().private_value
+        return self.secrets[(self.index - 1) % self.nbTraces][1].private_numbers().private_value
+
 
 
 class hex_key_generator(SecretGenerator):
@@ -136,33 +153,16 @@ class hex_key_generator(SecretGenerator):
         Args:
             keylen: The length of the key in bits.
     """
-    def __init__(self, keylen:int):
-        super().__init__(keylen, asFile=False)
+    def __init__(self, keylen:int, nbTraces=8):
+        super().__init__(keylen, asFile=False, nbTraces=nbTraces)
 
     def __call__(self, *args, **kwargs) -> str:
-        self.hexstr = f"{int.from_bytes(os.urandom(self.keylen // 8), byteorder='big'):0{self.keylen // 8 * 2}x}"
-        return self.hexstr
+        if self.index < self.nbTraces:
+            self.hexstr = f"{int.from_bytes(os.urandom(self.keylen // 8), byteorder='big'):0{self.keylen // 8 * 2}x}"
+            self.secrets.append(self.hexstr)
+        secret = self.secrets[self.index % self.nbTraces]
+        self.index += 1
+        return secret
 
     def getSecret(self) -> int:
-        return int(self.hexstr, 16)
-
-
-class hex_file(SecretGenerator):
-    """
-    Generates a binary file. Good for use when evaluating constant time proprieties of hashing functions.
-
-        Args:
-            keylen: The length of the file in bits.
-    """
-    def __init__(self, keylen:int):
-        super().__init__(keylen, asFile=True)
-
-    def __call__(self, *args, **kwargs) -> str:
-        self.hexstr = f"{int.from_bytes(os.urandom(self.keylen // 8), byteorder='big'):0{self.keylen // 8 * 2}x}"
-        keyfile = tempfile.NamedTemporaryFile(prefix="microsurf_input_gen", suffix=".input").name
-        with open(keyfile, 'w') as f:
-            f.writelines(self.hexstr)
-        return keyfile
-
-    def getSecret(self) -> int:
-        return int(self.hexstr, 16)
+        return int(self.secrets[(self.index - 1)  % self.nbTraces], 16)

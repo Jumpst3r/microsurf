@@ -2,10 +2,6 @@
 
 
 
-<p align="center">
-    <img src="https://github.com/Jumpst3r/msc-thesis-work/actions/workflows/pytest.yml/badge.svg"
-         alt="Unit & Integration tests">
-</p>
 
 <p align="center">
   <a href="#About">About</a> •
@@ -130,8 +126,7 @@ pip install -e .
 
 ### Contributing
 
-Contributions are very welcome and actively encouraged. The goal is that microsurf is actively maintained and
-continously improved.
+Contributions are very welcome and actively encouraged.
 
 ### License
 

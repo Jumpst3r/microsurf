@@ -63,7 +63,7 @@ class SCDetector:
         self.results = {}
         self.starttime = None
         self.MDresults = []
-        self.initTraceCount = 8
+        self.initTraceCount = self.modules[0].loader.rndGen.nbTraces
 
     def exec(self):
         """

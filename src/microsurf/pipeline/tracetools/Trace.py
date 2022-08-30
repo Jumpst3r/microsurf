@@ -160,6 +160,10 @@ class MemTraceCollection(TraceCollection):
         for k in self.DF.keys():
             self.results[hex(k)] = -1
         self.possibleLeaks = set(self.DF.keys())
+        if len(self.possibleLeaks) == 0:
+            log.info("Memory Op Anonymity Set:")
+            for trace in self.traces:
+                log.info(hex(trace.secret))
 
     def maskAddresses(self):
         mask = 2 ** (4 * (self.granularity - 1)) - 1
@@ -289,6 +293,10 @@ class PCTraceCollection(TraceCollection):
             perLeakDict[l] = f
         self.DF = perLeakDict
         self.possibleLeaks = self.DF.keys()
+        if len(self.possibleLeaks) == 0:
+            log.info("Control Flow Anonymity Set:")
+            for trace in self.traces:
+                log.info(hex(trace.secret))
         for k in self.possibleLeaks:
             self.results[hex(k)] = -1
 
