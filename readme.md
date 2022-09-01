@@ -1,4 +1,4 @@
-<img align="center" width="700" height="230" src="doc/figures/logo.png" alt="application project app icon" style="zoom: 50%;" >
+<img align="center" width="700" height="230" src="docs/figures/logo.png" alt="application project app icon" style="zoom: 50%;" >
 
 
 

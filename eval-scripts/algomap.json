@@ -1,0 +1,6 @@
+[
+{
+	"algo": "aes-cbc",
+	"keylen": 128
+}
+]
