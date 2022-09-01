@@ -19,6 +19,14 @@ if __name__ == "__main__":
 
     # the arguments to pass to the binary.
     # the secret is marked with a '@' placeholder
+    '''
+    aes-128-ecb 128
+    bf-ecb 128
+    camellia-128-ecb 128
+    cast5-ecb 128
+    des-ecb 64
+    des3 192
+    '''
     opensslArgs = "camellia-128-ecb -in input.bin -out output.bin -nosalt -K @".split()
 
     # list of objects to trace (the command line utility and the libcrypto library.)
@@ -28,7 +36,7 @@ if __name__ == "__main__":
         path=binaryPath,
         args=opensslArgs,
         rootfs=emulationDir,
-        rndGen=hex_key_generator(keylen=128, nbTraces=8),
+        rndGen=hex_key_generator(keylen=128, nbTraces=5),
         sharedObjects=sharedObjects,
     )
 

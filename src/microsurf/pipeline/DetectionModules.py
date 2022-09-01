@@ -45,6 +45,7 @@ class DataLeakDetector(Detector):
             self, n: int, pcList: List[int] = None, getAssembly=False) -> MemTraceCollection:
         codeRanges = self.loader.executableCode
         NB_CORES = min(self.NB_CORES, n)
+        log.debug(f"Using {NB_CORES} cores")
         memWatchers = [
             MemWatcher.remote(
                 self.loader.binPath,

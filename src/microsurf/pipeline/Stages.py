@@ -461,7 +461,8 @@ class MemWatcher:
         if self.arch != CS_ARCH_X86 and not self.getAssembly:
             for (s, e) in self.codeRanges:
                 self.QLEngine.hook_code(self._hook_code, begin=s, end=e)
-        elif self.getAssembly:
+            pass
+        elif self.getAssembly or 'DEFAULT' not in self.x8664Extensions:
             for (s, e) in self.codeRanges:
                 self.QLEngine.hook_code(self._hook_code, begin=s, end=e)
 
