@@ -143,7 +143,7 @@ class ReportGenerator:
                         self.mdString += "```C\n"
                         for l in src:
                             self.mdString += l
-                            self.mdString += '\n'
+                            #self.mdString += '\n'
                         self.mdString += "\n```\n"
                     self.mdString += "\n\nLeaking instruction\n\n"
                     src = row[["asm"]].values[0][0]
