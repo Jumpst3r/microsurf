@@ -50,7 +50,7 @@ Most optional arguments can be left as is, we'll dive into more details later on
 `BinaryLoader` class if you would like to test the OpenSSL implementation of _Camellia-128_.
 
 ```{note}
-A full working example can be found [here](examples/openssl.py).
+A full working example can be found under `docs/examples/openssl.py` .
 ```
 
 ## Emulation root directory (`rootfs` argument)
