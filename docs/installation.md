@@ -26,10 +26,7 @@ The framework has been tested with Ubuntu 22.04 LTS x86-64. It has not been test
 
 If the code was acquired as a zip archive:
 
-```bash
-unzip -r microsurf.zip
-cd microsurf
-```
+unzip it and navigates to the resulting directory (containing USAGE.pdf)
 
 If access has been granted to repository or the repository has been made public:
 
