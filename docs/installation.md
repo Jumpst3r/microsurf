@@ -10,7 +10,7 @@ Microsurf has been tested on python 3.9 and python 3.10. It might work on other 
 python --version
 ```
 
-If your python version differs, follow (this)[https://computingforgeeks.com/how-to-install-python-on-ubuntu-linux-system/] guide to install the required version. 
+If your python version differs, follow [this](https://computingforgeeks.com/how-to-install-python-on-ubuntu-linux-system/) guide to install the required version. 
 
 If you want to install the package in a virtual environment, you will need a tool that allows you to do so:
 
@@ -18,7 +18,7 @@ If you want to install the package in a virtual environment, you will need a too
 pip3 install virtualenv
 ```
 
-The framework has been tested with Ubuntu 22.04 LTS x86-64. It has not been tested on M1 (ARM) chips, if you do have such a system and encounter an issue, please file an issue (here)[https://github.com/Jumpst3r/microsurf/issues].
+The framework has been tested with Ubuntu 22.04 LTS x86-64. It has not been tested on M1 (ARM) chips.
 
 ### Installing microsurf (from source)
 

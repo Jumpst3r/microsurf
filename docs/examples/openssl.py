@@ -2,11 +2,10 @@
 @file openssl.py
 
 This is an example on how to use the microsurf library
-to gather PC traces on the openssl camellia-128-ecbb 128 implementation
+to analyze the OpenSSL camellia-128-ecb 128 implementation for secret-dependent memory accesses and control flow operations.
 
 openssl camellia-128-ecb -e -in input.bin -out output.bin -nosalt -K hexdata
 """
-import sys
 
 from microsurf.microsurf import SCDetector
 from microsurf.pipeline.DetectionModules import CFLeakDetector, DataLeakDetector
@@ -21,7 +20,6 @@ if __name__ == "__main__":
     # the arguments to pass to the binary.
     # the secret is marked with a '@' placeholder
     opensslArgs = "camellia-128-ecb -in input.bin -out output.bin -nosalt -K @".split()
-
     # list of objects to trace (the command line utility and the libcrypto library.)
     sharedObjects = ['libcrypto', 'openssl']
 

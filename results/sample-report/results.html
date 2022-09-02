@@ -1,0 +1,2562 @@
+<h1 id="microsurf-analysis-results">Microsurf Analysis Results</h1>
+<p><strong>Run at</strong>: 09/02/2022, 12:53:33 </p>
+<p><strong>Elapsed time (analysis)</strong>: 00:03:42 </p>
+<p><strong>Elapsed time (single run emulation)</strong>: 0:00:00.241930 </p>
+<p><strong>Total leak count</strong>: 82 </p>
+<p><strong>Binary</strong>: <code>docs/examples/rootfs/openssl/jail-openssl-1.1.1dev-x8664/openssl</code></p>
+<blockquote>
+<p>ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 4.4.0, with debug_info, not stripped </p>
+</blockquote>
+<p><strong>Args</strong>: <code>['camellia-128-ecb', '-in', 'input.bin', '-out', 'output.bin', '-nosalt', '-K', '@']</code> </p>
+<p><strong>Emulation root</strong>: <code>docs/examples/rootfs/openssl/jail-openssl-1.1.1dev-x8664/</code> </p>
+<p><strong>Table of contents:</strong></p>
+<div class="toc">
+<ul>
+<li><a href="#microsurf-analysis-results">Microsurf Analysis Results</a><ul>
+<li><a href="#overview-by-function-name">Overview by function name</a><ul>
+<li><a href="#leaks-for-set_hex-or-asn1_generate_nconfopenssl_1_1_0">Leaks for set_hex (or) ASN1_generate_nconf@@OPENSSL_1_1_0</a></li>
+<li><a href="#leaks-for-camellia_ekeygen">Leaks for Camellia_Ekeygen</a></li>
+<li><a href="#leaks-for-openssl_hexchar2int">Leaks for OPENSSL_hexchar2int</a></li>
+<li><a href="#leaks-for-_x86_64_camellia_encrypt">Leaks for _x86_64_Camellia_encrypt</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<h2 id="overview-by-function-name">Overview by function name</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: right;">Memory Leak Count</th>
+<th style="text-align: right;">CF Leak Count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: right;">48</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">OPENSSL_hexchar2int</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">set_hex (or) ASN1_generate_nconf@@OPENSSL_1_1_0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+</tr>
+</tbody>
+</table>
+<h3 id="leaks-for-set_hex-or-asn1_generate_nconfopenssl_1_1_0">Leaks for set_hex (or) ASN1_generate_nconf@@OPENSSL_1_1_0</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x431cf2</td>
+<td style="text-align: left;">0x031cf2</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">set_hex (or) ASN1_generate_nconf@@OPENSSL_1_1_0</td>
+<td style="text-align: left;">openssl</td>
+<td style="text-align: left;">/home/nicolas/cryptolibs/openssl_x86_64/apps/enc.c:616</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code class="language-C">                goto end;
+
+            }
+
+        }
+
+    }
+
+
+
+    /* Only encrypt/decrypt as we write the file */
+
+    if (benc != NULL)
+
+        wbio = BIO_push(benc, wbio);
+
+
+
+    while (BIO_pending(rbio) || !BIO_eof(rbio)) {
+
+
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0x431cf2] : test       byte ptr [rdx + rax*2 + 1], 0x10
+</code></pre>
+<h3 id="leaks-for-camellia_ekeygen">Leaks for Camellia_Ekeygen</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37ae1</td>
+<td style="text-align: left;">0x0d7ae1</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7ae1] : xor        edx, dword ptr [rbp + rsi*8]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37ad0</td>
+<td style="text-align: left;">0x0d7ad0</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7ad0] : xor        edx, dword ptr [rbp + rsi*8 + 4]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37ac3</td>
+<td style="text-align: left;">0x0d7ac3</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7ac3] : mov        ecx, dword ptr [rbp + rdi*8]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37abc</td>
+<td style="text-align: left;">0x0d7abc</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7abc] : mov        edx, dword ptr [rbp + rsi*8 + 0x804]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37a93</td>
+<td style="text-align: left;">0x0d7a93</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7a93] : xor        ecx, dword ptr [rbp + rdi*8 + 0x800]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37a8c</td>
+<td style="text-align: left;">0x0d7a8c</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7a8c] : xor        edx, dword ptr [rbp + rsi*8 + 0x800]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37a7f</td>
+<td style="text-align: left;">0x0d7a7f</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7a7f] : xor        ecx, dword ptr [rbp + rdi*8 + 0x804]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37a7b</td>
+<td style="text-align: left;">0x0d7a7b</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7a7b] : xor        edx, dword ptr [rbp + rsi*8]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37a71</td>
+<td style="text-align: left;">0x0d7a71</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7a71] : xor        ecx, dword ptr [rbp + rdi*8 + 4]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37a6a</td>
+<td style="text-align: left;">0x0d7a6a</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7a6a] : xor        edx, dword ptr [rbp + rsi*8 + 4]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37a5d</td>
+<td style="text-align: left;">0x0d7a5d</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7a5d] : mov        ecx, dword ptr [rbp + rdi*8]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37a56</td>
+<td style="text-align: left;">0x0d7a56</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7a56] : mov        edx, dword ptr [rbp + rsi*8 + 0x804]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37ad7</td>
+<td style="text-align: left;">0x0d7ad7</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7ad7] : xor        ecx, dword ptr [rbp + rdi*8 + 4]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37ae5</td>
+<td style="text-align: left;">0x0d7ae5</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7ae5] : xor        ecx, dword ptr [rbp + rdi*8 + 0x804]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37af2</td>
+<td style="text-align: left;">0x0d7af2</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7af2] : xor        edx, dword ptr [rbp + rsi*8 + 0x800]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37bce</td>
+<td style="text-align: left;">0x0d7bce</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7bce] : xor        edx, dword ptr [rbp + rsi*8 + 0x800]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37bc1</td>
+<td style="text-align: left;">0x0d7bc1</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7bc1] : xor        ecx, dword ptr [rbp + rdi*8 + 0x804]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37bbd</td>
+<td style="text-align: left;">0x0d7bbd</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7bbd] : xor        edx, dword ptr [rbp + rsi*8]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37bb3</td>
+<td style="text-align: left;">0x0d7bb3</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7bb3] : xor        ecx, dword ptr [rbp + rdi*8 + 4]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37bac</td>
+<td style="text-align: left;">0x0d7bac</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7bac] : xor        edx, dword ptr [rbp + rsi*8 + 4]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37b9f</td>
+<td style="text-align: left;">0x0d7b9f</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7b9f] : mov        ecx, dword ptr [rbp + rdi*8]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37b98</td>
+<td style="text-align: left;">0x0d7b98</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7b98] : mov        edx, dword ptr [rbp + rsi*8 + 0x804]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37b6f</td>
+<td style="text-align: left;">0x0d7b6f</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7b6f] : xor        ecx, dword ptr [rbp + rdi*8 + 0x800]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37b68</td>
+<td style="text-align: left;">0x0d7b68</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7b68] : xor        edx, dword ptr [rbp + rsi*8 + 0x800]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37b5b</td>
+<td style="text-align: left;">0x0d7b5b</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7b5b] : xor        ecx, dword ptr [rbp + rdi*8 + 0x804]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37b57</td>
+<td style="text-align: left;">0x0d7b57</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7b57] : xor        edx, dword ptr [rbp + rsi*8]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37b4d</td>
+<td style="text-align: left;">0x0d7b4d</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7b4d] : xor        ecx, dword ptr [rbp + rdi*8 + 4]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37b46</td>
+<td style="text-align: left;">0x0d7b46</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7b46] : xor        edx, dword ptr [rbp + rsi*8 + 4]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37b39</td>
+<td style="text-align: left;">0x0d7b39</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7b39] : mov        ecx, dword ptr [rbp + rdi*8]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37b32</td>
+<td style="text-align: left;">0x0d7b32</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7b32] : mov        edx, dword ptr [rbp + rsi*8 + 0x804]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37af9</td>
+<td style="text-align: left;">0x0d7af9</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7af9] : xor        ecx, dword ptr [rbp + rdi*8 + 0x800]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37bd5</td>
+<td style="text-align: left;">0x0d7bd5</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">Camellia_Ekeygen</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7bd5] : xor        ecx, dword ptr [rbp + rdi*8 + 0x800]
+</code></pre>
+<h3 id="leaks-for-openssl_hexchar2int">Leaks for OPENSSL_hexchar2int</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7fddbc9</td>
+<td style="text-align: left;">0x17dbc9</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">OPENSSL_hexchar2int</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">/home/nicolas/cryptolibs/openssl_x86_64/crypto/o_str.c:105</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code class="language-C">    switch (c) {
+
+    case '0':
+
+        return 0;
+
+    case '1':
+
+        return 1;
+
+    case '2':
+
+        return 2;
+
+    case '3':
+
+        return 3;
+
+    case '4':
+
+
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0x17dbc9] : movsx      eax, byte ptr [rax + rdi]
+</code></pre>
+<h3 id="leaks-for-_x86_64_camellia_encrypt">Leaks for _x86_64_Camellia_encrypt</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f375bf</td>
+<td style="text-align: left;">0x0d75bf</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd75bf] : xor        ecx, dword ptr [rbp + rdi*8 + 0x800]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f375b8</td>
+<td style="text-align: left;">0x0d75b8</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd75b8] : xor        edx, dword ptr [rbp + rsi*8 + 0x800]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f375ab</td>
+<td style="text-align: left;">0x0d75ab</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd75ab] : xor        ecx, dword ptr [rbp + rdi*8 + 0x804]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f375a7</td>
+<td style="text-align: left;">0x0d75a7</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd75a7] : xor        edx, dword ptr [rbp + rsi*8]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f3759d</td>
+<td style="text-align: left;">0x0d759d</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd759d] : xor        ecx, dword ptr [rbp + rdi*8 + 4]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37596</td>
+<td style="text-align: left;">0x0d7596</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7596] : xor        edx, dword ptr [rbp + rsi*8 + 4]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37384</td>
+<td style="text-align: left;">0x0d7384</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7384] : mov        edx, dword ptr [rbp + rsi*8 + 0x804]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37589</td>
+<td style="text-align: left;">0x0d7589</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7589] : mov        ecx, dword ptr [rbp + rdi*8]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37582</td>
+<td style="text-align: left;">0x0d7582</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7582] : mov        edx, dword ptr [rbp + rsi*8 + 0x804]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37559</td>
+<td style="text-align: left;">0x0d7559</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7559] : xor        ecx, dword ptr [rbp + rdi*8 + 0x800]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37552</td>
+<td style="text-align: left;">0x0d7552</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7552] : xor        edx, dword ptr [rbp + rsi*8 + 0x800]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37457</td>
+<td style="text-align: left;">0x0d7457</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7457] : mov        ecx, dword ptr [rbp + rdi*8]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37450</td>
+<td style="text-align: left;">0x0d7450</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7450] : mov        edx, dword ptr [rbp + rsi*8 + 0x804]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37427</td>
+<td style="text-align: left;">0x0d7427</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7427] : xor        ecx, dword ptr [rbp + rdi*8 + 0x800]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37420</td>
+<td style="text-align: left;">0x0d7420</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7420] : xor        edx, dword ptr [rbp + rsi*8 + 0x800]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37413</td>
+<td style="text-align: left;">0x0d7413</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7413] : xor        ecx, dword ptr [rbp + rdi*8 + 0x804]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f3740f</td>
+<td style="text-align: left;">0x0d740f</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd740f] : xor        edx, dword ptr [rbp + rsi*8]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37405</td>
+<td style="text-align: left;">0x0d7405</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7405] : xor        ecx, dword ptr [rbp + rdi*8 + 4]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f373fe</td>
+<td style="text-align: left;">0x0d73fe</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd73fe] : xor        edx, dword ptr [rbp + rsi*8 + 4]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f373f1</td>
+<td style="text-align: left;">0x0d73f1</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd73f1] : mov        ecx, dword ptr [rbp + rdi*8]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f373ea</td>
+<td style="text-align: left;">0x0d73ea</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd73ea] : mov        edx, dword ptr [rbp + rsi*8 + 0x804]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f373c1</td>
+<td style="text-align: left;">0x0d73c1</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd73c1] : xor        ecx, dword ptr [rbp + rdi*8 + 0x800]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f373ba</td>
+<td style="text-align: left;">0x0d73ba</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd73ba] : xor        edx, dword ptr [rbp + rsi*8 + 0x800]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f373ad</td>
+<td style="text-align: left;">0x0d73ad</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd73ad] : xor        ecx, dword ptr [rbp + rdi*8 + 0x804]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f373a9</td>
+<td style="text-align: left;">0x0d73a9</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd73a9] : xor        edx, dword ptr [rbp + rsi*8]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f3739f</td>
+<td style="text-align: left;">0x0d739f</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd739f] : xor        ecx, dword ptr [rbp + rdi*8 + 4]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37398</td>
+<td style="text-align: left;">0x0d7398</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7398] : xor        edx, dword ptr [rbp + rsi*8 + 4]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f3738b</td>
+<td style="text-align: left;">0x0d738b</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd738b] : mov        ecx, dword ptr [rbp + rdi*8]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37464</td>
+<td style="text-align: left;">0x0d7464</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7464] : xor        edx, dword ptr [rbp + rsi*8 + 4]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f3746b</td>
+<td style="text-align: left;">0x0d746b</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd746b] : xor        ecx, dword ptr [rbp + rdi*8 + 4]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37475</td>
+<td style="text-align: left;">0x0d7475</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7475] : xor        edx, dword ptr [rbp + rsi*8]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f374ec</td>
+<td style="text-align: left;">0x0d74ec</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd74ec] : xor        edx, dword ptr [rbp + rsi*8 + 0x800]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37545</td>
+<td style="text-align: left;">0x0d7545</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7545] : xor        ecx, dword ptr [rbp + rdi*8 + 0x804]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37541</td>
+<td style="text-align: left;">0x0d7541</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7541] : xor        edx, dword ptr [rbp + rsi*8]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37537</td>
+<td style="text-align: left;">0x0d7537</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7537] : xor        ecx, dword ptr [rbp + rdi*8 + 4]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37530</td>
+<td style="text-align: left;">0x0d7530</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7530] : xor        edx, dword ptr [rbp + rsi*8 + 4]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37523</td>
+<td style="text-align: left;">0x0d7523</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7523] : mov        ecx, dword ptr [rbp + rdi*8]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f3751c</td>
+<td style="text-align: left;">0x0d751c</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd751c] : mov        edx, dword ptr [rbp + rsi*8 + 0x804]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f374f3</td>
+<td style="text-align: left;">0x0d74f3</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd74f3] : xor        ecx, dword ptr [rbp + rdi*8 + 0x800]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f374df</td>
+<td style="text-align: left;">0x0d74df</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd74df] : xor        ecx, dword ptr [rbp + rdi*8 + 0x804]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37479</td>
+<td style="text-align: left;">0x0d7479</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7479] : xor        ecx, dword ptr [rbp + rdi*8 + 0x804]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f374db</td>
+<td style="text-align: left;">0x0d74db</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd74db] : xor        edx, dword ptr [rbp + rsi*8]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f374d1</td>
+<td style="text-align: left;">0x0d74d1</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd74d1] : xor        ecx, dword ptr [rbp + rdi*8 + 4]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f374ca</td>
+<td style="text-align: left;">0x0d74ca</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd74ca] : xor        edx, dword ptr [rbp + rsi*8 + 4]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f374bd</td>
+<td style="text-align: left;">0x0d74bd</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd74bd] : mov        ecx, dword ptr [rbp + rdi*8]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f374b6</td>
+<td style="text-align: left;">0x0d74b6</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd74b6] : mov        edx, dword ptr [rbp + rsi*8 + 0x804]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f3748d</td>
+<td style="text-align: left;">0x0d748d</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd748d] : xor        ecx, dword ptr [rbp + rdi*8 + 0x800]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Runtime Addr</th>
+<th style="text-align: left;">offset</th>
+<th style="text-align: left;">Detection Module</th>
+<th style="text-align: left;">Comment</th>
+<th style="text-align: left;">Symbol Name</th>
+<th style="text-align: left;">Object Name</th>
+<th style="text-align: left;">Source Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">0x7fffb7f37486</td>
+<td style="text-align: left;">0x0d7486</td>
+<td style="text-align: left;">Secret dep. mem. operation (R/W)</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">_x86_64_Camellia_encrypt</td>
+<td style="text-align: left;">libcrypto.so.1.1</td>
+<td style="text-align: left;">None:None</td>
+</tr>
+</tbody>
+</table>
+<p>Source code snippet</p>
+<pre><code>n/a
+</code></pre>
+<p>Leaking instruction</p>
+<pre><code>[0xd7486] : xor        edx, dword ptr [rbp + rsi*8 + 0x800]
+</code></pre>

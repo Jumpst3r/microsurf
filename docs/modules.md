@@ -37,4 +37,22 @@ _This page gives detailed documentation about the different modules._
 
 ## Secret Generators
 
+```{eval-rst}
+.. autoclass:: microsurf.utils.generators.hex_key_generator
 
+```
+
+```{eval-rst}
+.. autoclass:: microsurf.utils.generators.ECDSAPrivateKeyGenerator
+
+```
+
+```{eval-rst}
+.. autoclass:: microsurf.utils.generators.DSAPrivateKeyGenerator
+
+```
+
+```{eval-rst}
+.. autoclass:: microsurf.utils.generators.RSAPrivKeyGenerator
+
+```

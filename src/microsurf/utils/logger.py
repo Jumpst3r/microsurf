@@ -17,7 +17,7 @@ banner = '''        &&
                       /&&&&&& &&&&      
                       &&&&&&&&&&            Microsurf:  The Cross-Architecture Side Channel Detection Framework              
                    &&&&&&&&&&  (&&&     
-                   &&&&&&&        &&&&      v.0.0-dev
+                   &&&&&&&        &&&&      v.1.0
                   &&&&  &&&&&           
              &&&&&&&      &&&           
          /&&&&,          *&&&           
