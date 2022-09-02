@@ -31,32 +31,12 @@ __Table of contents:__
 
 | Runtime Addr   | offset   | Detection Module                 | Comment   | Symbol Name                                     | Object Name   | Source Path                                            |
 |:---------------|:---------|:---------------------------------|:----------|:------------------------------------------------|:--------------|:-------------------------------------------------------|
-| 0x431cf2       | 0x031cf2 | Secret dep. mem. operation (R/W) | none      | set_hex (or) ASN1_generate_nconf@@OPENSSL_1_1_0 | openssl       | /home/nicolas/cryptolibs/openssl_x86_64/apps/enc.c:616 |
+| 0x431cf2       | 0x031cf2 | Secret dep. mem. operation (R/W) | none      | set_hex (or) ASN1_generate_nconf@@OPENSSL_1_1_0 | openssl       | None:None |
 
 Source code snippet
 
 ```C
-                goto end;
-
-            }
-
-        }
-
-    }
-
-
-
-    /* Only encrypt/decrypt as we write the file */
-
-    if (benc != NULL)
-
-        wbio = BIO_push(benc, wbio);
-
-
-
-    while (BIO_pending(rbio) || !BIO_eof(rbio)) {
-
-
+n/a
 ```
 
 
