@@ -40,7 +40,7 @@ if __name__ == "__main__":
             DataLeakDetector(binaryLoader=binLoader),
             # Secret dependent control flow detection
             CFLeakDetector(binaryLoader=binLoader)
-            ]
+            ], getAssembly=True
         )
 
     scd.exec()
