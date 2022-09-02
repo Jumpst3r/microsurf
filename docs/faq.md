@@ -20,7 +20,9 @@ Sometimes, the emulation root directory might not be set up correctly and the ru
 
 make sure that all shared objects are where the binary expects them to be. If the target architecture matches the host architecture, you can check where an application expects shared objects to be located by running `ldd my-binary.elf`.
 
-## Secret Dependent Control Flow
+## Does the lack of reported leaks imply that my binary is safe ?
 
-todo
+No, it does not. A common trait of dynamic detection frameworks is that they can only reason about observed behavior. It may be possible that the generated secrets did not trigger every code path.
+
+Nevertheless, dynamic approaches are useful as constant-time debugging tools, especially given that they are much more scalable and easy to use compared to formal tools that may provide guarantees in the absence of leakages.
 

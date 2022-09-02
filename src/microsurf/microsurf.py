@@ -36,17 +36,17 @@ class SCDetector:
 
     Args:
         modules: List of detection modules to run.
-        itercount: Number of traces per module to collect when estimating key bit dependencies.
         addrList: List of addresses for which to perform detailed key bit dependency estimates. If
             None, no estimates will be performed. If an empty list is passed, estimates will be generated for
             all leaks. To selectively perform estimates on given leaks, pass a list of runtime addresses as integers.
             The runtime addresses can be taken from the generated reports (Run first with addrList=None and then
             run a second time on addresses of interest as found in the report.)
+        getAssembly: Whether to include assembly in the final report. Defaults to False, incurs a performance penalty if set to True.
     """
 
-    def __init__(self, modules: List[Detector], itercount: int = 20, addrList: Union[None, List[int]] = None, getAssembly: Boolean =False):
+    def __init__(self, modules: List[Detector], addrList: Union[None, List[int]] = None, getAssembly: Boolean =False):
         self.modules = modules
-        self.ITER_COUNT = itercount
+        self.ITER_COUNT = 8
         self.addrList = addrList
         self.getAssembly = getAssembly
         if addrList is None:

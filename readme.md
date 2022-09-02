@@ -32,28 +32,26 @@
 - **Easy to use**. Provides a high level API for developers and users alike
 - **Fast.** Optimized for parallel execution
 
-
-
 ![](doc/figures/header.png)
 
 
-### Features
+### Quickstart
 
+Install the framework (requires python 3.9 or 3.10):
 
-|                                        | Microsurf | [DATA](https://github.com/Fraunhofer-AISEC/DATA) | [Microwalk](https://github.com/UzL-ITS/Microwalk) | [Timecop](https://www.post-apocalyptic-crypto.org/timecop/) | [ct-grind](https://github.com/agl/ctgrind) |
-|----------------------------------------| :-------: | :----------------------------------------------: | :-----------------------------------------------: |:-----------------------------------------------------------:|:------------------------------------------:|
-| Memory side channel detection          |     ✔️     |                        ✔️                         |                         ✔️                         |                             ✔️                              |                     ✔️                     |
-| Control Flow side channel detection    |     ✔️     |                        ✔️                         |                         ✔️                         |                             ✔️                              |                     ✔️                     |
-| Support for custom leakage models      |     ✔️     |                        ✔️                         |                         ❌                         |                              ❌                              |                     ❌                      |
-| Works without source or recompilation  |     ✔️     |                        ✔️                         |                         ✔️                         |                              ❌                              |                     ❌                      |
-| Forced deterministic execution         |     ✔️     |                        ✔️                         |                         ✔️                         |                              ❌                              |                     ❌                      |
-| Ability to learn optimal leakage model |     ✔️     |                        ❌                         |                         ❌                         |                              ❌                              |                     ❌                      |
-| Cross-architecture support             |     ✔️     |                        ❌                         |                         ❌                         |                             ✔️                              |                     ✔️                     |
-| Actively Maintained [1]                |     ✔️     |                        ✔️                         |                         ❌                         |                              ❌                              |                     ❌                      |
-| High level API and easy to use         |     ✔️     |                        ❌                         |                         ❌                         |                             ✔️                              |                     ✔️                     |
-| Customizable leakage granularity       |     ✔️     |                        ❌                         |                          ✔                        |                             ? ️                             |                     ?️                     |
+```
+pip install .
+```
 
-[1]: Active contributions in the last 3 months
+Run the example:
+
+```
+python docs/examples/openssl.py
+```
+
+### Sample Report:
+
+A sample markdown report can be consulted [here](results/sample-report/results.md).
 
 ### Examples
 
@@ -84,9 +82,10 @@ binLoader = BinaryLoader(
     rootfs=jailroot,
     # openssl_hex_key_generator generates hex secrets, these will replace the
     # @ symbol in the arg list during emulation.
-    rndGen=openssl_hex_key_generator(128),
+    rndGen=openssl_hex_key_generator(keylen=128, nbTraces=10),
     sharedObjects=sharedObjects
 )
+if binaryLoader.configure(): # something went wrong
 ```
 
 Now all that remains is to create an `SCDetector` object and pass any required detection modules. Calling the `.exec()` function will run the analysis.
@@ -127,6 +126,10 @@ pip install -e .
 ### Contributing
 
 Contributions are very welcome and actively encouraged.
+
+### Evaluation Scripts
+
+The scripts used for evaluating different frameworks are stored in the `eval-scripts` directory.
 
 ### License
 

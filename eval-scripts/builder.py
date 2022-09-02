@@ -7,7 +7,9 @@ builder.py <toolchain> <framework> <commit> <optlvl> <compiler>
 
 example:
 
-python3 builder.py x86-64-core-i7--glibc--stable-2018.11-1 openssl 8e0cb23c2e5dde8ef23a0292f4dfb962943742a5 -O3 gcc
+python3 builder.py x86-64-core-i7--glibc--stable-2018.11-1 openssl fed8dbea27b7e01ee934951b25c6ffd40ad1d5c3 -O3 gcc
+
+python3 builder.py powerpc-440fp--musl--stable-2021.11-1 compare local -O3 clang
 
 primitives to test are located in the algomap.json file. Must contain data in the following form:
 
@@ -88,7 +90,7 @@ def analyze(lib, algname, keylen, extensions):
         print(f'- Creating tmp files')
         result = subprocess.run('echo "AAAAAAAAAAAAAAA" > input', stderr=subprocess.PIPE, shell=True)
         checkretcode(result)
-        fct = hex_key_generator(keylen)
+        fct = hex_key_generator(keylen=keylen, nbTraces=8)
         result = subprocess.run('touch output', stderr=subprocess.PIPE, shell=True)
         checkretcode(result)
         args = f"0 input output {algname} SHA1 @".split()

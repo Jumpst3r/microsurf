@@ -16,3 +16,12 @@ Evaluation scripts for the microsurf tool
 
 `framework-builder/`: driver source code for the different frameworks
 
+## Examples:
+
+```
+python3 builder.py x86-64-core-i7--glibc--stable-2018.11-1 openssl fed8dbea27b7e01ee934951b25c6ffd40ad1d5c3 -O3 gcc
+```
+
+```
+python3 builder.py powerpc-440fp--musl--stable-2021.11-1 compare local -O3 clang
+```

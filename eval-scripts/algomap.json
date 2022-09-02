@@ -2,5 +2,9 @@
 {
 	"algo": "aes-cbc",
 	"keylen": 128
+},
+{
+	"algo": "ct_select_v1",
+	"keylen": 1
 }
 ]

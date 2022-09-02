@@ -6,7 +6,7 @@ _This page describes how secrets are generated for use with the Microsurf framew
 
 Cryptographic frameworks expect secrets in various different formats. Sometimes they can be directly passed has hexadecimal strings in a command line argument list. Sometimes a utility will expect a path to a file containing the secret in a binary format.
 
-Microsurf is designed to accomodate both cases. Secret generators are classes which produce a specific secret, either to be included directly in a list of command line arguments or to be written to a file. The path to the file will then be passed as a command line arguments.
+Microsurf is designed to acomodate both cases. Secret generators are classes which produce a specific secret, either to be included directly in a list of command line arguments or to be written to a file. The path to the file will then be passed as a command line arguments.
 
 ## Existing Generators
 
@@ -20,19 +20,11 @@ A number of common cases are covered with predefined secret generators. This sec
 ```
 
 ```{eval-rst}
-.. autoclass:: microsurf.utils.generators.DSAPrivateKeyGenerator
-```
-
-```{eval-rst}
 .. autoclass:: microsurf.utils.generators.ECDSAPrivateKeyGenerator
 ```
 
 ```{eval-rst}
 .. autoclass:: microsurf.utils.generators.hex_key_generator
-```
-
-```{eval-rst}
-.. autoclass:: microsurf.utils.generators.hex_file
 ```
 
 
@@ -90,6 +82,10 @@ class RSAPrivKeyGenerator(SecretGenerator):
 The numerical result of the getSecret method will be used to estimated key bit dependencies. This can be used to analyze selective leakages on parts of the secret (say a single coefficient in RSA) or to force a custom leakage model by returning a masked version of the secret.
 ```
 
+```{hint}
+The existing generators provided in the framework are a bit more complex, since they ensure that the same secrets are used for secret-dependent memory detection and control flow operations.
+```
+
 ### Using the secret generator
 
 The secret generator has to be passed to the `BinaryLoader` as an argument:
@@ -99,9 +95,9 @@ binLoader = BinaryLoader(
         path=binpath,
         args=opensslArgs,
         rootfs=jailroot,
-        rndGen=RSAPrivKeyGenerator(2048),
+        rndGen=RSAPrivKeyGenerator(2048, nbTraces=10),
         sharedObjects=sharedObjects,
     )
 ```
 
-Note that a keysize has to be passed. The resulting object is a then called during emulation to create different secrets.
+Note that a keysize and a number of traces to collect has to be passed. The resulting object is a then called during emulation to create different secrets.

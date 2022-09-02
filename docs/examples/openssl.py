@@ -2,7 +2,7 @@
 @file openssl.py
 
 This is an example on how to use the microsurf library
-to analyze the openssl camellia-128-ecb 128 implementation for secret-dependent memory accesses and control flow operations.
+to analyze the OpenSSL camellia-128-ecb 128 implementation for secret-dependent memory accesses and control flow operations.
 
 openssl camellia-128-ecb -e -in input.bin -out output.bin -nosalt -K hexdata
 """
@@ -19,16 +19,7 @@ if __name__ == "__main__":
 
     # the arguments to pass to the binary.
     # the secret is marked with a '@' placeholder
-    '''
-    aes-128-ecb 128
-    bf-ecb 128
-    camellia-128-ecb 128
-    cast5-ecb 128
-    des-ecb 64
-    des3 192
-    '''
     opensslArgs = "camellia-128-ecb -in input.bin -out output.bin -nosalt -K @".split()
-
     # list of objects to trace (the command line utility and the libcrypto library.)
     sharedObjects = ['libcrypto', 'openssl']
 
@@ -36,7 +27,7 @@ if __name__ == "__main__":
         path=binaryPath,
         args=opensslArgs,
         rootfs=emulationDir,
-        rndGen=hex_key_generator(keylen=128, nbTraces=5),
+        rndGen=hex_key_generator(keylen=128, nbTraces=8),
         sharedObjects=sharedObjects,
     )
 

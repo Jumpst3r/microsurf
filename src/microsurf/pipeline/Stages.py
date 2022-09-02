@@ -62,7 +62,7 @@ class BinaryLoader:
             args: List[str],
             rootfs: str,
             rndGen: SecretGenerator,
-            x8664Extensions : List[str] = ["DEFAULT", "AESNI", "SSE", "SSE2", "SSE3", "AVX"],
+            x8664Extensions : List[str] = ["DEFAULT", "AESNI"],
             sharedObjects: List[str] = [],
             deterministic: bool = True,
             resultDir: str = "results",
