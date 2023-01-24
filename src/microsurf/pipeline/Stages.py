@@ -66,6 +66,7 @@ class BinaryLoader:
             sharedObjects: List[str] = [],
             deterministic: bool = True,
             resultDir: str = "results",
+            name: str = "default"
     ) -> None:
         self.binPath = Path(path)
         self.x8664Extensions = x8664Extensions
@@ -75,6 +76,7 @@ class BinaryLoader:
         self.sharedObjects = sharedObjects
         self.deterministic = deterministic
         self.resultDir = resultDir
+        self.name = name
         self.ignoredObjects = []
         self.newArgs = self.args.copy()
         self.mappings = None

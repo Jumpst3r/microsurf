@@ -108,7 +108,7 @@ class ReportGenerator:
             f.writelines(mergedDF.loc[:,["CF Leak Count", "Memory Leak Count"]].sum().to_json())
        
         fig = ax.get_figure()
-        fig.savefig(f"{self.loader.resultDir}/assets/functions.png", dpi=300)
+        fig.savefig(f"{self.loader.resultDir}/assets/{self.loader.name}-functions.png", dpi=300)
         #self.mdString += f'\n\n <img align="right" src="assets/functions.png" width=300 /> \n\n'
         self.mdString += mergedDF.to_markdown(index=False)
         self.mdString += "\n\n"
@@ -153,9 +153,9 @@ class ReportGenerator:
                     if not self.quickscan:
                         self.mdString += "\nKey bit dependencies (estimated):"
                         if Path(
-                                f"{self.loader.resultDir}/assets/saliency-map-{row[['Runtime Addr']].values[0][0]}.png"
+                                f"{self.loader.resultDir}/assets/{self.loader.name}-saliency-map-{row[['Runtime Addr']].values[0][0]}.png"
                         ).is_file():
-                            self.mdString += f"\n\n![saliency map](assets/saliency-map-{row[['Runtime Addr']].values[0][0]}.png)\n\n"
+                            self.mdString += f"\n\n![saliency map](assets/{self.loader.name}-saliency-map-{row[['Runtime Addr']].values[0][0]}.png)\n\n"
                         else:
                             self.mdString += "\n\n MI not significant enough to estimate dependencies. \n\n"
 
@@ -173,13 +173,13 @@ class ReportGenerator:
     def saveMD(self):
         self.generateHeaders()
         self.generateResults()
-        with open(f"{self.loader.resultDir}/results.md", "w") as f:
+        with open(f"{self.loader.resultDir}/{self.loader.name}-results.md", "w") as f:
             f.writelines(self.mdString)
             log.info(f"Markdown report saved: {f.name} !")
         html = markdown.markdown(self.mdString,  extensions=['markdown.extensions.tables', 'markdown.extensions.toc', 'markdown.extensions.fenced_code'])
-        with open(f"{self.loader.resultDir}/results.html", "w") as f:
+        with open(f"{self.loader.resultDir}/{self.loader.name}-results.html", "w") as f:
             f.writelines(html)
             log.info(f"HTML report saved: {f.name} !")
-        with open(f"{self.loader.resultDir}/results.json", "w") as f:
+        with open(f"{self.loader.resultDir}/{self.loader.name}-results.json", "w") as f:
             f.writelines(self.results.loc[:, ['Runtime Addr', "offset", 'Comment', 'Symbol Name', 'Detection Module', 'Object Name']].to_json())
             log.info(f"json report saved: {f.name} !")
