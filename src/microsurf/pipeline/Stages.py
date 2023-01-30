@@ -221,8 +221,8 @@ class BinaryLoader:
         except Exception as e:
             log.error(f"Emulation dry run failed: {str(e)}")
             tback = traceback.format_exc()
-            sys.stdout.fileno = lambda: False
-            sys.stderr.fileno = lambda: False
+            # sys.stdout.fileno = lambda: False
+            # sys.stderr.fileno = lambda: False
             if "cur_thread" in tback and "spawn" not in str(e):
                 log.info("re-running with threading support enabled")
                 try:
@@ -438,8 +438,8 @@ class MemWatcher:
             args = nargs
         else:
             args[args.index("@")] = secretString
-        sys.stdout.fileno = lambda: False
-        sys.stderr.fileno = lambda: False
+        # sys.stdout.fileno = lambda: False
+        # sys.stderr.fileno = lambda: False
         self.QLEngine = Qiling(
             [str(self.binPath), *[str(a) for a in args]],
             str(self.rootfs),
@@ -605,8 +605,8 @@ class CFWatcher:
         else:
             args[args.index("@")] = secretString
 
-        sys.stdout.fileno = lambda: False
-        sys.stderr.fileno = lambda: False
+        # sys.stdout.fileno = lambda: False
+        # sys.stderr.fileno = lambda: False
 
         self.QLEngine = Qiling(
             [str(self.binPath), *args],
