@@ -143,8 +143,8 @@ class BinaryLoader:
             log.info(fileinfo)
             log.error("Target architecture not implemented")
             exit(1)
-        self.uuid = f"{str(uuid.uuid4())[:6]}-{self.binPath.name}-{self.ARCH}"
-        self.resultDir += f"/{self.uuid}"
+        # self.uuid = f"{str(uuid.uuid4())[:6]}-{self.binPath.name}-{self.ARCH}"
+        # self.resultDir += f"/{self.uuid}"
         os.makedirs(self.resultDir + "/" + "assets", exist_ok=True)
         os.makedirs(self.resultDir + "/" + "traces", exist_ok=True)
         if "dynamic" in fileinfo:
