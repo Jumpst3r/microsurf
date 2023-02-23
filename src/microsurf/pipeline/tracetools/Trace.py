@@ -223,6 +223,8 @@ class PCTraceCollection(TraceCollection):
 
     def __init__(self, traces: list[PCTrace], possibleLeaks=None, flagVariableHitCount=False):
         super().__init__(traces)
+        global MARK
+        MARK = dict() # reset global variable
         self.flagVariableHitCount = flagVariableHitCount
         self.results = {}
         if possibleLeaks:
