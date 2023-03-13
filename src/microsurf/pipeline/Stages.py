@@ -391,12 +391,24 @@ class MemWatcher:
 
     def _trace_mem(self, ql: Qiling, access, addr, size, value):
         pc = ql.arch.regs.arch_pc
+        # New disassemble routine (old is in hook_code)
+        if self.getAssembly and hex(pc) not in self.asm:
+            if size < 16:
+                size = 16
+            buf = ql.mem.read(pc, size)
+            pcs = []
+            asm = []
+            for insn in ql.arch.disassembler.disasm(buf, pc):
+                self.asm[hex(insn.address)] = f"{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}"
         if self.locations is None:
             self.currenttrace.add(pc, addr)
         elif pc in self.locations:
             self.currenttrace.add(pc, addr)
 
     def _hook_code(self, ql: Qiling, address: int, size: int):
+        # This is just to synchronize the pc
+        return
+        # Old disassemble code
         if not self.getAssembly:
             return
         pc = ql.arch.regs.arch_pc
@@ -459,6 +471,8 @@ class MemWatcher:
         self.QLEngine.hook_mem_write(self._trace_mem)
 
 
+        # Unicorn and QEMU do not always synchronize the PC. 
+        # With hook_code the sync is forced.
         # no code hooks on x86, as the PC is always correct in the memread hook (not given on other archs)
         if self.arch != CS_ARCH_X86 and not self.getAssembly:
             for (s, e) in self.codeRanges:
@@ -578,18 +592,26 @@ class CFWatcher:
             addrs.append(insn.address)
             if self.getAssembly:
                 asm.append(f"{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}")
-        loc = addrs[-1]
+        # Very specific workaround for MIPS
+        # The branch delay slot of MIPS is included in a code block
+        # Therefore, the second last instruction in a block is the CF isntruction
+        if self.arch == CS_ARCH_MIPS and len(addrs) >= 2:
+            loc = addrs[-2]
+            asm_instr = asm[-2]
+        else:
+            loc = addrs[-1]
+            asm_instr = asm[-1]
         if self.getAssembly:
-            self.asm[hex(addrs[-1])] = asm[-1]
+            self.asm[hex(loc)] = asm_instr
         if not self.locations:
-            self.currenttrace.add(addrs[-1])
+            self.currenttrace.add(loc)
             return
         if loc in self.locations or self.saveNext:
             if loc in self.locations:
                 self.saveNext = True
             else:
                 self.saveNext = False
-            self.currenttrace.add(addrs[-1])
+            self.currenttrace.add(loc)
 
     def exec(self, secretString, asFile, secret):
         args = self.args.copy()
@@ -625,10 +647,12 @@ class CFWatcher:
 
         self.currenttrace = PCTrace(secret)
         for (s, e) in self.tracedObjects:
-            if self.arch != CS_ARCH_X86 and not self.getAssembly:
-                self.QLEngine.hook_code(self._hook_code)
-            elif self.getAssembly:
-                self.QLEngine.hook_code(self._hook_code, begin=s, end=e)
+            # With hook_block we already get the address that we have to disassemble
+            # So we do not have to do a hook_code
+            # if self.arch != CS_ARCH_X86 and not self.getAssembly:
+            #     self.QLEngine.hook_code(self._hook_code)
+            # elif self.getAssembly:
+            #     self.QLEngine.hook_code(self._hook_code, begin=s, end=e)
 
             self.QLEngine.hook_block(self._trace_block, begin=s, end=e)
         if self.deterministic:
