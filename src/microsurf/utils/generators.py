@@ -166,3 +166,27 @@ class hex_key_generator(SecretGenerator):
 
     def getSecret(self) -> int:
         return int(self.secrets[(self.index - 1)  % self.nbTraces], 16)
+
+import random
+
+class hex_key_generator_fixed(SecretGenerator):
+    """
+    Generates a hexadecimal secret string. Not saved to file (directly substituted in the argument list).
+
+        Args:
+            keylen: The length of the key in bits.
+    """
+    def __init__(self, keylen:int, nbTraces=8):
+        super().__init__(keylen, asFile=False, nbTraces=nbTraces)
+        random.seed(10)
+
+    def __call__(self, *args, **kwargs) -> str:
+        if self.index < self.nbTraces:
+            self.hexstr = f"{int.from_bytes(random.randbytes(self.keylen // 8), byteorder='big'):0{self.keylen // 8 * 2}x}"
+            self.secrets.append(self.hexstr)
+        secret = self.secrets[self.index % self.nbTraces]
+        self.index += 1
+        return secret
+
+    def getSecret(self) -> int:
+        return int(self.secrets[(self.index - 1)  % self.nbTraces], 16)
