@@ -176,9 +176,9 @@ class hex_key_generator_fixed(SecretGenerator):
         Args:
             keylen: The length of the key in bits.
     """
-    def __init__(self, keylen:int, nbTraces=8):
+    def __init__(self, keylen:int, nbTraces=8, seed=1000):
         super().__init__(keylen, asFile=False, nbTraces=nbTraces)
-        random.seed(10)
+        random.seed(seed)
 
     def __call__(self, *args, **kwargs) -> str:
         if self.index < self.nbTraces:
