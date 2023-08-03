@@ -1,6 +1,8 @@
+import numpy as np
 import pickle
 from collections import defaultdict
 from typing import Dict, List, Set
+from enum import Enum
 
 import pandas as pd
 from rich.progress import track
@@ -83,8 +85,6 @@ class MemTrace(Trace):
         return self.trace[item]
 
 
-import numpy as np
-
 MARKMEM = dict()
 
 
@@ -141,7 +141,7 @@ class MemTraceCollection(TraceCollection):
             # skip df creation in it fails
             # The emulator has a quick of marking pop instructions as mem reads, this filters that case:
             if nparr.shape[1] > 800 and len(np.unique(nparr)) <= 2:
-                continue 
+                continue
             uniqueRows, indices = np.unique(nparr, axis=0, return_index=True)
             secrets = np.array(secrets)[indices]
             # remove columns with zero variance
@@ -171,6 +171,7 @@ class MemTraceCollection(TraceCollection):
             trace = t.trace
             for k in trace.keys():
                 trace[k] = [e ^ (e & mask) for e in trace[k]]
+
 
 class PCTrace(Trace):
     """Represents a single Program Counter (PC) Trace object.
@@ -224,7 +225,7 @@ class PCTraceCollection(TraceCollection):
     def __init__(self, traces: list[PCTrace], possibleLeaks=None, flagVariableHitCount=False):
         super().__init__(traces)
         global MARK
-        MARK = dict() # reset global variable
+        MARK = dict()  # reset global variable
         self.flagVariableHitCount = flagVariableHitCount
         self.results = {}
         if possibleLeaks:
@@ -302,24 +303,74 @@ class PCTraceCollection(TraceCollection):
         for k in self.possibleLeaks:
             self.results[hex(k)] = -1
 
+    def find_merge(self, indices):
+        length = len(indices)
+
+        # indices = [indices[i] + 1 for i in range(0, length)]
+
+        merge_point = [self.traces[i][indices[i]] for i in range(0, length)]
+        potential_index = [indices.copy() for i in range(0, length)]
+
+        class Status(Enum):
+            RUNNING = 1
+            MERGE_FOUND = 2
+            OUT_OF_INDEX = 3
+
+        merge_found = [[Status.RUNNING for _ in range(0, length)] for _ in range(0, length)]
+
+        for i in range(0, length):
+            merge_found[i][i] = Status.MERGE_FOUND
+
+        while any(merge_found[i][j] == Status.RUNNING for i in range(0, length) for j in range(0, length)):
+            for candidate in range(0, length):
+                for other_candidate in range(0, length):
+                    # skip combinations that have already been found or out of index
+                    if merge_found[candidate][other_candidate] == Status.RUNNING:
+                        index = potential_index[candidate][other_candidate]
+                        if self.traces[other_candidate][index] == merge_point[candidate]:
+                            # found merge
+                            merge_found[candidate][other_candidate] = Status.MERGE_FOUND
+                        else:
+                            # did not yet find merge point
+                            # increment index
+                            if index + 1 < len(self.traces[other_candidate]):
+                                potential_index[candidate][other_candidate] += 1
+                            else:
+                                merge_found[candidate][other_candidate] = Status.OUT_OF_INDEX
+                if all(merge_found[candidate][i] == Status.MERGE_FOUND for i in range(0, length)):
+                    # found all merge points
+                    if any(self.traces[i][potential_index[candidate][i]] != merge_point[candidate] for i in range(0, length)):
+                        print("huh???")
+                    return potential_index[candidate]
+            
+        # raise "Could not find merge point"
+        return [len(self.traces[i]) for i in range(0, length)]
+        
+            
+
     def find_secret_dep_nodes(self):
         T = defaultdict(lambda: defaultdict(list))
         global MARK
 
-        for t in self.traces:
-            for idx, v in enumerate(t):
-                if idx + 1 < len(t):
-                    T[v][t].append(t[idx + 1])
-        for k, v in T.items():
-            normVec = list(v.values())[0]
-            for vec in v.values():
-                if len(vec) == len(normVec):
-                    if normVec and vec != normVec:
-                        MARK[k] = "secret dep. branch"
-                else:
-                    a = normVec if len(normVec) < len(vec) else vec
-                    b = normVec if len(normVec) > len(vec) else vec
-                    if b[: len(a)] == a:
-                        if self.flagVariableHitCount:
-                            MARK[k] = "secret dep. hit count"
+        indices = [0 for _ in range(0, len(self.traces))]
+        # print(indices)
+        # print([len(self.traces[i]) for i in range(0, len(self.traces))])
+        while all(indices[i] < len(self.traces[i]) for i in range(0, len(self.traces))):
+            value = self.traces[0][indices[0]]
+            if any(self.traces[0][indices[0]-1] != self.traces[i][indices[i]-1] for i in range(0, len(indices))):
+                print("\n\n\t\tthis should not happen")
+                print(f"{[hex(self.traces[i][indices[i]-1]) for i in range (0, len(indices))]}")
+                print(f"{[hex(self.traces[i][indices[i]-0]) for i in range (0, len(indices))]}")
+                print("huh3")
+            if any(value != self.traces[k][indices[k]] for k in range(0, len(self.traces))):
+                MARK[self.traces[0][indices[0]-1]] = "secret dep. branch"
+                # Split found
+                # looking for merge at this point
+                indices = self.find_merge(indices).copy()
+                if any(indices[i] >= len(self.traces[i]) for i in range(0, len(indices))):
+                    # Reached the end of the trace
+                    break
+            for i in range(0, len(indices)):
+                indices[i] += 1
+
         return
