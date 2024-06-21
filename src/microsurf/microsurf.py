@@ -21,7 +21,6 @@ from xmlrpc.client import Boolean
 import pandas as pd
 
 from .pipeline.DetectionModules import Detector
-from .pipeline.Stages import LeakageClassification
 from .pipeline.tracetools.Trace import MARK, MARKMEM
 from .utils.elf import getfnname, getCodeSnippet
 from .utils.logger import getConsole, getLogger
@@ -92,17 +91,9 @@ class SCDetector:
             log.info(f"Identified {len(collection.results)} possible leaks")
             # If requested, analyze the leaks for MI estimates and key bit dependencies
             if not self.quickscan:
-                log.info(
-                    f"performing in-depth analysis for {len(self.addrList) if self.addrList else len(collection.results)}/{len(collection.results)} leaks"
+                log.error(
+                    f"in-depth analysis is no longer supported"
                 )
-                rndTraces, _ = module.recordTraces(
-                    self.ITER_COUNT,
-                    pcList=self.addrList if self.addrList else collection.possibleLeaks,
-                )
-                lc = LeakageClassification(rndTraces, module.loader, module.miThreshold)
-                self.KEYLEN = lc.KEYLEN
-                lc.analyze()
-                self.results[str(module)] = (lc.results, asm)
         if not self.results:
             endtime = time.time()
             runtime = time.strftime("%H:%M:%S", time.gmtime(endtime - self.starttime))

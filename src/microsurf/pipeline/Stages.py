@@ -19,7 +19,6 @@ from qiling.const import QL_VERBOSE, QL_ARCH, QL_OS
 # ECX reg vals
 AESNI_ID = 0b00000010000000000000000000000000
 
-from .NeuralLeakage import NeuralLeakageModel
 from .tracetools.Trace import MemTrace, PCTrace, TraceCollection
 from ..utils.generators import SecretGenerator
 from ..utils.hijack import (
@@ -657,64 +656,3 @@ class CFWatcher:
     def getResults(self):
         self.currenttrace.finalize()
         return self.currenttrace, self.asm
-
-
-@ray.remote(num_cpus=1)
-def train(X, Y, leakAddr, keylen, reportDir, threshold, pba):
-    nleakage = NeuralLeakageModel(
-        X, Y, leakAddr, keylen, reportDir + "/assets", threshold
-    )
-    try:
-        nleakage.train()
-    except Exception as e:
-        log.error("worker encountered exception:")
-        log.error(str(e))
-        log.error(traceback.format_exc())
-        pba.update.remote(1)
-        return (-1, leakAddr)
-    pba.update.remote(1)
-    return (nleakage.MIScore, leakAddr)
-
-
-class LeakageClassification:
-    def __init__(
-            self,
-            rndTraceCollection: TraceCollection,
-            binaryLoader: BinaryLoader,
-            threshold,
-    ):
-        self.rndTraceCollection = rndTraceCollection
-        self.possibleLeaks = rndTraceCollection.possibleLeaks
-        self.loader = binaryLoader
-        self.results: Dict[str, float] = {}
-        self.KEYLEN = self.loader.rndGen.keylen
-        self.threshold = threshold
-
-    def analyze(self):
-        log.info("Estimating scores and key bit dependencies")
-        futures = []
-        num_ticks = 0
-        for k, v in self.rndTraceCollection.DF.items():
-            num_ticks += 1
-        if num_ticks == 0:
-            return self.results
-        pb = ProgressBar(num_ticks)
-        actor = pb.actor
-        for k, v in self.rndTraceCollection.DF.items():
-            futures.append(
-                train.remote(
-                    v.loc[:, v.columns != "secret"].values,
-                    v.loc[:, "secret"].to_numpy(),
-                    k,
-                    self.KEYLEN,
-                    self.loader.resultDir,
-                    self.threshold,
-                    actor,
-                )
-            )
-
-        pb.print_until_done()
-        results = ray.get(futures)
-        for r in results:
-            (MIScore, leakAddr) = r
-            self.results[hex(leakAddr)] = MIScore
