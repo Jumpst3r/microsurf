@@ -10,7 +10,6 @@ from functools import lru_cache
 from pathlib import Path, PurePath
 from typing import Dict, List
 import magic
-import ray
 from capstone import CS_ARCH_ARM, CS_ARCH_PPC, CS_ARCH_RISCV, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_ARCH_ARM64, CS_MODE_ARM, CS_MODE_MIPS32, \
     CS_ARCH_MIPS, CS_MODE_RISCV64, Cs
 from qiling import Qiling
@@ -33,7 +32,6 @@ from ..utils.hijack import (
     syscall_futex
 )
 from ..utils.logger import getConsole, getLogger, getQilingLogger, LOGGING_LEVEL
-from ..utils.rayhelpers import ProgressBar
 
 console = getConsole()
 log = getLogger()
@@ -347,7 +345,6 @@ class BinaryLoader:
             self.QLEngine.add_fs_mapper("/dev/random", "/dev/random")
             self.QLEngine.add_fs_mapper("/dev/arandom", "/dev/arandom")
 
-@ray.remote
 class MemWatcher:
     """
     Hooks memory reads
@@ -510,12 +507,12 @@ class MemWatcher:
             if self.getlibname(t) in self.ignoredObjects:
                 dropset.append(t)
         self.currenttrace.remove(dropset)
+        return self.getResults()
 
     def getResults(self):
         return self.currenttrace, self.asm
 
 
-@ray.remote
 class CFWatcher:
     """
     records the sequence of IPs to determine CF leaks
@@ -678,6 +675,8 @@ class CFWatcher:
             self.QLEngine.os.set_syscall("futex", syscall_futex)
         self.QLEngine.run()
         self.QLEngine.stop()
+
+        return self.getResults()
 
     def getResults(self):
         self.currenttrace.finalize()
