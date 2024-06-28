@@ -85,7 +85,6 @@ class DataLeakDetector(Detector):
                     raise e
 
         mt = MemTraceCollection(mt_list, possibleLeaks=pcList, granularity=self.granularity)
-        print("mt: {}".format(mt))
         return mt, dict(ChainMap(*asm))
 
     def __str__(self):
