@@ -2,7 +2,7 @@ import multiprocessing
 from collections import ChainMap
 from typing import List
 
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from itertools import repeat
 from rich.progress import track
 
@@ -69,14 +69,20 @@ class DataLeakDetector(Detector):
         asm = []
 
         with ProcessPoolExecutor(max_workers=NB_CORES) as executor:
-            for m, a in executor.map(MemWatcher.exec, 
-                memWatchers,
-                repeat(self.loader.rndGen(), NB_CORES),
-                repeat(self.loader.rndGen.asFile, NB_CORES),
-                repeat(self.loader.rndGen.getSecret(), NB_CORES)
-                ):
-                asm.append(a)
-                mt_list.append(m)
+            futures = [executor.submit(m.exec, self.loader.rndGen(), 
+                                       self.loader.rndGen.asFile,
+                                       self.loader.rndGen.getSecret())
+                                       for m in memWatchers]
+
+            for future in as_completed(futures):
+                try:
+                    m, a = future.result()
+                    asm.append(a)
+                    mt_list.append(m)
+                except Exception as e:
+                    # usually a OOM exception
+                    print("Error in process: {}".format(str(e)))
+                    raise e
 
         mt = MemTraceCollection(mt_list, possibleLeaks=pcList, granularity=self.granularity)
         print("mt: {}".format(mt))
@@ -126,14 +132,20 @@ class CFLeakDetector(Detector):
         asm = []
 
         with ProcessPoolExecutor(max_workers=NB_CORES) as executor:
-            for m, a in executor.map(CFWatcher.exec, 
-                cfWatchers,
-                repeat(self.loader.rndGen(), NB_CORES),
-                repeat(self.loader.rndGen.asFile, NB_CORES),
-                repeat(self.loader.rndGen.getSecret(), NB_CORES)
-                ):
-                asm.append(a)
-                mt_list.append(m)
+            futures = [executor.submit(m.exec, self.loader.rndGen(), 
+                                       self.loader.rndGen.asFile,
+                                       self.loader.rndGen.getSecret())
+                                       for m in cfWatchers]
+
+            for future in as_completed(futures):
+                try:
+                    m, a = future.result()
+                    asm.append(a)
+                    mt_list.append(m)
+                except Exception as e:
+                    # usually a OOM exception
+                    print("Error in process: {}".format(str(e)))
+                    raise e
 
         mt = PCTraceCollection(mt_list, possibleLeaks=pcList,
                                flagVariableHitCount=self.flagVariableHitCount)
