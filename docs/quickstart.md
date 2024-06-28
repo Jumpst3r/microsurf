@@ -258,9 +258,9 @@ scd.exec()
 
 This will search for any data and control flow side channels in the target application.
 
-```{note}
+<!-- ```{note}
 Per default, the `SCDetector` will execute a quick analysis. Key bit dependency estimation is not performed by default. Refer to [advanced](advanced.md) usage to learn how to estimate key-bit dependencies.
-```
+``` -->
 
 By default a report will be created in the `reports` directory. If not present, it will be created. If you wish to continue
 working and processing results with python, you can access the underlying pandas dataframe like so:

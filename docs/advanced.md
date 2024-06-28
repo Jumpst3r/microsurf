@@ -1,7 +1,7 @@
 # Advanced Usage (Key-Bit Dependency Estimation)
 
 ```{note}
-Make sure you [installed](installation.md) the framework if you wish to follow along.
+This usage estimation is no longer supported.
 ```
 
 In the [Quickstart](quickstart.md) section, we went over how to use the microsurf library in an end-to-end manner.
