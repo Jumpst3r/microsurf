@@ -69,14 +69,15 @@ class DataLeakDetector(Detector):
         asm = []
 
         with ProcessPoolExecutor(max_workers=NB_CORES) as executor:
-            futures = [executor.submit(m.exec, self.loader.rndGen(), 
+            futures = {executor.submit(m.exec, self.loader.rndGen(), 
                                        self.loader.rndGen.asFile,
                                        self.loader.rndGen.getSecret())
-                                       for m in memWatchers]
+                                       : m for m in memWatchers}
 
             for future in as_completed(futures):
                 try:
                     m, a = future.result()
+                    futures.pop(future)
                     asm.append(a)
                     mt_list.append(m)
                 except Exception as e:
@@ -131,14 +132,15 @@ class CFLeakDetector(Detector):
         asm = []
 
         with ProcessPoolExecutor(max_workers=NB_CORES) as executor:
-            futures = [executor.submit(m.exec, self.loader.rndGen(), 
+            futures = {executor.submit(m.exec, self.loader.rndGen(), 
                                        self.loader.rndGen.asFile,
-                                       self.loader.rndGen.getSecret())
-                                       for m in cfWatchers]
+                                       self.loader.rndGen.getSecret()): 
+                                       m for m in cfWatchers}
 
             for future in as_completed(futures):
                 try:
                     m, a = future.result()
+                    futures.pop(future)
                     asm.append(a)
                     mt_list.append(m)
                 except Exception as e:
