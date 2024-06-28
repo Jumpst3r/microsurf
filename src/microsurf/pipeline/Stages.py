@@ -596,7 +596,8 @@ class CFWatcher:
             asm_instr = asm[-2]
         else:
             loc = addrs[-1]
-            asm_instr = asm[-1]
+            if self.getAssembly:
+                asm_instr = asm[-1]
         if self.getAssembly:
             self.asm[hex(loc)] = asm_instr
         if not self.locations:
