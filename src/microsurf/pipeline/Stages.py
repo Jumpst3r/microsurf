@@ -593,7 +593,8 @@ class CFWatcher:
         # Therefore, the second last instruction in a block is the CF isntruction
         if self.arch == CS_ARCH_MIPS and len(addrs) >= 2:
             loc = addrs[-2]
-            asm_instr = asm[-2]
+            if self.getAssembly:
+                asm_instr = asm[-2]
         else:
             loc = addrs[-1]
             if self.getAssembly:
