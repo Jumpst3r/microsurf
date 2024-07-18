@@ -12,6 +12,10 @@
 - **Easy to use**. Provides a high level API for developers and users alike
 - **Fast.** Optimized for parallel execution
 
+### Evaluation Scripts
+
+The scripts used for evaluating different cryptographic frameworks are stored in the [microsurf-eval-infro](https://github.com/Jumpst3r/microsurf-eval-infra) repository.
+
 ### Quickstart
 
 Install the framework (requires python 3.9 or 3.10):
