@@ -1,0 +1,3 @@
+[submodule "microsurf-eval-infra"]
+	path = microsurf-eval-infra
+	url = git@github.com:Jumpst3r/microsurf-eval-infra.git
