@@ -2,7 +2,8 @@ import multiprocessing
 from collections import ChainMap
 from typing import List
 
-import ray
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from itertools import repeat
 from rich.progress import track
 
 from microsurf.pipeline.Stages import MemWatcher, BinaryLoader, CFWatcher
@@ -47,7 +48,7 @@ class DataLeakDetector(Detector):
         NB_CORES = min(self.NB_CORES, n)
         log.debug(f"Using {NB_CORES} cores")
         memWatchers = [
-            MemWatcher.remote(
+            MemWatcher(
                 self.loader.binPath,
                 self.loader.args,
                 self.loader.rootfs,
@@ -64,17 +65,27 @@ class DataLeakDetector(Detector):
             )
             for _ in range(NB_CORES)
         ]
-        resList = []
-        for _ in track(
-                range(0, n, NB_CORES),
-                description=f"Collecting {n} traces ",
-        ):
-            [m.exec.remote(secretString=self.loader.rndGen(), asFile=self.loader.rndGen.asFile, secret=self.loader.rndGen.getSecret()) for m in memWatchers]
-            futures = [m.getResults.remote() for m in memWatchers]
-            res = ray.get(futures)
-            resList += [r for r in res]
-        asm = [r[1] for r in resList]
-        mt = MemTraceCollection([r[0] for r in resList[:n]], possibleLeaks=pcList, granularity=self.granularity)
+        mt_list = []
+        asm = []
+
+        with ProcessPoolExecutor(max_workers=NB_CORES) as executor:
+            futures = {executor.submit(m.exec, self.loader.rndGen(), 
+                                       self.loader.rndGen.asFile,
+                                       self.loader.rndGen.getSecret())
+                                       : m for m in memWatchers}
+
+            for future in as_completed(futures):
+                try:
+                    m, a = future.result()
+                    futures.pop(future)
+                    asm.append(a)
+                    mt_list.append(m)
+                except Exception as e:
+                    # usually a OOM exception
+                    print("Error in process: {}".format(str(e)))
+                    raise e
+
+        mt = MemTraceCollection(mt_list, possibleLeaks=pcList, granularity=self.granularity)
         return mt, dict(ChainMap(*asm))
 
     def __str__(self):
@@ -102,7 +113,7 @@ class CFLeakDetector(Detector):
     ) -> PCTraceCollection:
         NB_CORES = min(self.NB_CORES, n)
         cfWatchers = [
-            CFWatcher.remote(
+            CFWatcher(
                 binpath=self.loader.binPath,
                 args=self.loader.args,
                 rootfs=self.loader.rootfs,
@@ -117,17 +128,27 @@ class CFLeakDetector(Detector):
             )
             for _ in range(NB_CORES)
         ]
-        resList = []
-        for _ in track(
-                range(0, n, NB_CORES),
-                description=f"Collecting {n} traces",
-        ):
-            [m.exec.remote(secretString=self.loader.rndGen(), asFile=self.loader.rndGen.asFile, secret=self.loader.rndGen.getSecret()) for m in cfWatchers]
-            futures = [m.getResults.remote() for m in cfWatchers]
-            res = ray.get(futures)
-            resList += [r for r in res]
-        asm = [r[1] for r in resList]
-        mt = PCTraceCollection([r[0] for r in resList], possibleLeaks=pcList,
+        mt_list = []
+        asm = []
+
+        with ProcessPoolExecutor(max_workers=NB_CORES) as executor:
+            futures = {executor.submit(m.exec, self.loader.rndGen(), 
+                                       self.loader.rndGen.asFile,
+                                       self.loader.rndGen.getSecret()): 
+                                       m for m in cfWatchers}
+
+            for future in as_completed(futures):
+                try:
+                    m, a = future.result()
+                    futures.pop(future)
+                    asm.append(a)
+                    mt_list.append(m)
+                except Exception as e:
+                    # usually a OOM exception
+                    print("Error in process: {}".format(str(e)))
+                    raise e
+
+        mt = PCTraceCollection(mt_list, possibleLeaks=pcList,
                                flagVariableHitCount=self.flagVariableHitCount)
         return mt, dict(ChainMap(*asm))
 

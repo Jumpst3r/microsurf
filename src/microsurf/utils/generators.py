@@ -144,7 +144,35 @@ class ECDSAPrivateKeyGenerator(SecretGenerator):
     def getSecret(self) -> int:
         return self.secrets[(self.index - 1) % self.nbTraces][1].private_numbers().private_value
 
+class ECPrivateKeyGeneratorDER(SecretGenerator):
+    """
+    Generates EC privat keys with DER encoding and PKCS8 (SECP256K1). 
+        
+        Args:
+            keylen: The length of the private key in bits.
+    """
+    def __init__(self, keylen:int, nbTraces=8):
+        super().__init__(keylen, asFile=True, nbTraces=nbTraces)
 
+    def __call__(self, *args, **kwargs) -> str:
+        if self.index < self.nbTraces:
+            self.pkey =  ec.generate_private_key(ec.SECP256R1())
+            kbytes = self.pkey.private_bytes(
+                encoding=serialization.Encoding.DER,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            )
+            tempfile.tempdir = '/tmp'
+            keyfile = tempfile.NamedTemporaryFile(prefix="microsurf_key_gen", suffix=".key").name
+            with open(keyfile, 'wb') as f:
+                f.write(kbytes)
+            self.secrets.append((keyfile, self.pkey))
+        secret = self.secrets[self.index % self.nbTraces][0]
+        self.index += 1
+        return secret
+
+    def getSecret(self) -> int:
+        return self.secrets[(self.index - 1) % self.nbTraces][1].private_numbers().private_value
 
 class hex_key_generator(SecretGenerator):
     """
@@ -159,6 +187,30 @@ class hex_key_generator(SecretGenerator):
     def __call__(self, *args, **kwargs) -> str:
         if self.index < self.nbTraces:
             self.hexstr = f"{int.from_bytes(os.urandom(self.keylen // 8), byteorder='big'):0{self.keylen // 8 * 2}x}"
+            self.secrets.append(self.hexstr)
+        secret = self.secrets[self.index % self.nbTraces]
+        self.index += 1
+        return secret
+
+    def getSecret(self) -> int:
+        return int(self.secrets[(self.index - 1)  % self.nbTraces], 16)
+
+import random
+
+class hex_key_generator_fixed(SecretGenerator):
+    """
+    Generates a hexadecimal secret string. Not saved to file (directly substituted in the argument list).
+
+        Args:
+            keylen: The length of the key in bits.
+    """
+    def __init__(self, keylen:int, nbTraces=8, seed=1000):
+        super().__init__(keylen, asFile=False, nbTraces=nbTraces)
+        random.seed(seed)
+
+    def __call__(self, *args, **kwargs) -> str:
+        if self.index < self.nbTraces:
+            self.hexstr = f"{int.from_bytes(random.randbytes(self.keylen // 8), byteorder='big'):0{self.keylen // 8 * 2}x}"
             self.secrets.append(self.hexstr)
         secret = self.secrets[self.index % self.nbTraces]
         self.index += 1

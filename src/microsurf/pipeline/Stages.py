@@ -10,7 +10,6 @@ from functools import lru_cache
 from pathlib import Path, PurePath
 from typing import Dict, List
 import magic
-import ray
 from capstone import CS_ARCH_ARM, CS_ARCH_PPC, CS_ARCH_RISCV, CS_ARCH_X86, CS_MODE_32, CS_MODE_64, CS_ARCH_ARM64, CS_MODE_ARM, CS_MODE_MIPS32, \
     CS_ARCH_MIPS, CS_MODE_RISCV64, Cs
 from qiling import Qiling
@@ -33,7 +32,6 @@ from ..utils.hijack import (
     syscall_futex
 )
 from ..utils.logger import getConsole, getLogger, getQilingLogger, LOGGING_LEVEL
-from ..utils.rayhelpers import ProgressBar
 
 console = getConsole()
 log = getLogger()
@@ -65,6 +63,7 @@ class BinaryLoader:
             sharedObjects: List[str] = [],
             deterministic: bool = True,
             resultDir: str = "results",
+            name: str = "default"
     ) -> None:
         self.binPath = Path(path)
         self.x8664Extensions = x8664Extensions
@@ -74,6 +73,7 @@ class BinaryLoader:
         self.sharedObjects = sharedObjects
         self.deterministic = deterministic
         self.resultDir = resultDir
+        self.name = name
         self.ignoredObjects = []
         self.newArgs = self.args.copy()
         self.mappings = None
@@ -140,8 +140,8 @@ class BinaryLoader:
             log.info(fileinfo)
             log.error("Target architecture not implemented")
             exit(1)
-        self.uuid = f"{str(uuid.uuid4())[:6]}-{self.binPath.name}-{self.ARCH}"
-        self.resultDir += f"/{self.uuid}"
+        # self.uuid = f"{str(uuid.uuid4())[:6]}-{self.binPath.name}-{self.ARCH}"
+        # self.resultDir += f"/{self.uuid}"
         os.makedirs(self.resultDir + "/" + "assets", exist_ok=True)
         os.makedirs(self.resultDir + "/" + "traces", exist_ok=True)
         if "dynamic" in fileinfo:
@@ -218,8 +218,8 @@ class BinaryLoader:
         except Exception as e:
             log.error(f"Emulation dry run failed: {str(e)}")
             tback = traceback.format_exc()
-            sys.stdout.fileno = lambda: False
-            sys.stderr.fileno = lambda: False
+            # sys.stdout.fileno = lambda: False
+            # sys.stderr.fileno = lambda: False
             if "cur_thread" in tback and "spawn" not in str(e):
                 log.info("re-running with threading support enabled")
                 try:
@@ -345,7 +345,6 @@ class BinaryLoader:
             self.QLEngine.add_fs_mapper("/dev/random", "/dev/random")
             self.QLEngine.add_fs_mapper("/dev/arandom", "/dev/arandom")
 
-@ray.remote
 class MemWatcher:
     """
     Hooks memory reads
@@ -388,12 +387,24 @@ class MemWatcher:
 
     def _trace_mem(self, ql: Qiling, access, addr, size, value):
         pc = ql.arch.regs.arch_pc
+        # New disassemble routine (old is in hook_code)
+        if self.getAssembly and hex(pc) not in self.asm:
+            if size < 16:
+                size = 16
+            buf = ql.mem.read(pc, size)
+            pcs = []
+            asm = []
+            for insn in ql.arch.disassembler.disasm(buf, pc):
+                self.asm[hex(insn.address)] = f"{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}"
         if self.locations is None:
             self.currenttrace.add(pc, addr)
         elif pc in self.locations:
             self.currenttrace.add(pc, addr)
 
     def _hook_code(self, ql: Qiling, address: int, size: int):
+        # This is just to synchronize the pc
+        return
+        # Old disassemble code
         if not self.getAssembly:
             return
         pc = ql.arch.regs.arch_pc
@@ -435,8 +446,8 @@ class MemWatcher:
             args = nargs
         else:
             args[args.index("@")] = secretString
-        sys.stdout.fileno = lambda: False
-        sys.stderr.fileno = lambda: False
+        # sys.stdout.fileno = lambda: False
+        # sys.stderr.fileno = lambda: False
         self.QLEngine = Qiling(
             [str(self.binPath), *[str(a) for a in args]],
             str(self.rootfs),
@@ -456,6 +467,8 @@ class MemWatcher:
         self.QLEngine.hook_mem_write(self._trace_mem)
 
 
+        # Unicorn and QEMU do not always synchronize the PC. 
+        # With hook_code the sync is forced.
         # no code hooks on x86, as the PC is always correct in the memread hook (not given on other archs)
         if self.arch != CS_ARCH_X86 and not self.getAssembly:
             for (s, e) in self.codeRanges:
@@ -494,12 +507,12 @@ class MemWatcher:
             if self.getlibname(t) in self.ignoredObjects:
                 dropset.append(t)
         self.currenttrace.remove(dropset)
+        return self.getResults()
 
     def getResults(self):
         return self.currenttrace, self.asm
 
 
-@ray.remote
 class CFWatcher:
     """
     records the sequence of IPs to determine CF leaks
@@ -575,18 +588,28 @@ class CFWatcher:
             addrs.append(insn.address)
             if self.getAssembly:
                 asm.append(f"{insn.address:#x}| : {insn.mnemonic:10s} {insn.op_str}")
-        loc = addrs[-1]
+        # Very specific workaround for MIPS
+        # The branch delay slot of MIPS is included in a code block
+        # Therefore, the second last instruction in a block is the CF isntruction
+        if self.arch == CS_ARCH_MIPS and len(addrs) >= 2:
+            loc = addrs[-2]
+            if self.getAssembly:
+                asm_instr = asm[-2]
+        else:
+            loc = addrs[-1]
+            if self.getAssembly:
+                asm_instr = asm[-1]
         if self.getAssembly:
-            self.asm[hex(addrs[-1])] = asm[-1]
+            self.asm[hex(loc)] = asm_instr
         if not self.locations:
-            self.currenttrace.add(addrs[-1])
+            self.currenttrace.add(loc)
             return
         if loc in self.locations or self.saveNext:
             if loc in self.locations:
                 self.saveNext = True
             else:
                 self.saveNext = False
-            self.currenttrace.add(addrs[-1])
+            self.currenttrace.add(loc)
 
     def exec(self, secretString, asFile, secret):
         args = self.args.copy()
@@ -602,8 +625,8 @@ class CFWatcher:
         else:
             args[args.index("@")] = secretString
 
-        sys.stdout.fileno = lambda: False
-        sys.stderr.fileno = lambda: False
+        # sys.stdout.fileno = lambda: False
+        # sys.stderr.fileno = lambda: False
 
         self.QLEngine = Qiling(
             [str(self.binPath), *args],
@@ -622,10 +645,12 @@ class CFWatcher:
 
         self.currenttrace = PCTrace(secret)
         for (s, e) in self.tracedObjects:
-            if self.arch != CS_ARCH_X86 and not self.getAssembly:
-                self.QLEngine.hook_code(self._hook_code)
-            elif self.getAssembly:
-                self.QLEngine.hook_code(self._hook_code, begin=s, end=e)
+            # With hook_block we already get the address that we have to disassemble
+            # So we do not have to do a hook_code
+            # if self.arch != CS_ARCH_X86 and not self.getAssembly:
+            #     self.QLEngine.hook_code(self._hook_code)
+            # elif self.getAssembly:
+            #     self.QLEngine.hook_code(self._hook_code, begin=s, end=e)
 
             self.QLEngine.hook_block(self._trace_block, begin=s, end=e)
         if self.deterministic:
@@ -652,6 +677,8 @@ class CFWatcher:
             self.QLEngine.os.set_syscall("futex", syscall_futex)
         self.QLEngine.run()
         self.QLEngine.stop()
+
+        return self.getResults()
 
     def getResults(self):
         self.currenttrace.finalize()

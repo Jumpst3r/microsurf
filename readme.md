@@ -1,21 +1,4 @@
-<img align="center" width="700" height="230" src="docs/figures/logo.png" alt="application project app icon" style="zoom: 50%;" >
-
-
-
-
-<p align="center">
-  <a href="#About">About</a> •
-  <a href="#Features">Features</a> •
-  <a href="#Examples">Examples</a> •
-  <a href="#Documentation">Documentation</a> •
-  <a href="#Installation">Installation</a> •
-  <a href="#Contributing">Contributing</a> •
-  <a href="#License">License</a>
-</p>
-
-
-
-------
+# Microsurf
 
 ### About
 
@@ -24,16 +7,10 @@
 
 - **Cross-architecture** support (tested on `i386`, `x86_64`, `arm32`, `arm64`, `riscv`, `mips`)
 - **No source code required** - black-box testing and analysis
-- Leverages **machine learning** to learn optimal leakage model
-- Estimates **dependency of every secret bit** on the leakage
-- Provides a **convenient visualization** of said dependencies
 - Human-readable **markdown reports**, parsable **json reports** or directly as pandas **dataframes**
 - Forced deterministic execution by hooking sources of randomness (**less false positives**)
 - **Easy to use**. Provides a high level API for developers and users alike
 - **Fast.** Optimized for parallel execution
-
-![](doc/figures/header.png)
-
 
 ### Quickstart
 
@@ -101,8 +78,7 @@ scd = SCDetector(modules=[
 scd.exec()
 ```
 
-The results will be saved to disk in Markdown format. Advanced usage such key bit dependency and MI estimation are
-described in the documentation.
+The results will be saved to disk in Markdown format.
 
 ### Documentation
 
