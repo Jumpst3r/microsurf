@@ -41,7 +41,8 @@ def getfnname(file: str, loc: int):
             symtab: SymbolTableSection = elf.get_section_by_name(".symtab")
             for i in range(symtab.num_symbols()):
                 symbol = symtab.get_symbol(i)
-                tmp[symbol["st_value"]] = symbol.name
+                if symbol.name != '' and not symbol.name.startswith('.L'):
+                    tmp[symbol["st_value"]] = symbol.name
         ELFSYBOLS[file] = collections.OrderedDict(
             sorted(tmp.items(), key=lambda t: t[0])
         )
