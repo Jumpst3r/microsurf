@@ -107,9 +107,9 @@ pip install -e .
 
 Contributions are very welcome and actively encouraged.
 
-### Evaluation Scripts
+### Citing us
 
-The scripts used for evaluating different frameworks are stored in the `eval-scripts` directory.
+See the [citation](CITATION.bib) file.
 
 ### License
 

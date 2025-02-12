@@ -8,7 +8,6 @@ refer to the class SCDetector documentation for further information.
 """
 
 __all__ = ["SCDetector"]
-__author__ = "Nicolas Dutly"
 __version__ = "1.0"
 
 import glob

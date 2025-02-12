@@ -18,8 +18,7 @@ import sphinx_rtd_theme
 # -- Project information -----------------------------------------------------
 
 project = 'microsurf'
-copyright = '2022, Nicolas Dutly'
-author = 'Nicolas Dutly'
+author = 'Various Contributors'
 version = '1.0'
 
 # -- General configuration ---------------------------------------------------
