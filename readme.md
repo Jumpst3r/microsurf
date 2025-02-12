@@ -14,7 +14,7 @@
 
 ### Evaluation Scripts
 
-The scripts used for evaluating different cryptographic frameworks are stored in the [microsurf-eval-infro](https://github.com/Jumpst3r/microsurf-eval-infra) repository.
+The scripts used for evaluating different cryptographic frameworks are stored in the [breaking-bad-eval-infra](https://github.com/Jumpst3r/breaking-bad-eval-infra) repository.
 
 ### Quickstart
 
